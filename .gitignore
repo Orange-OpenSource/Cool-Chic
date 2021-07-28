@@ -1,0 +1,10 @@
+# Ignore some files
+*.bin
+*.yuv
+*.png
+*.pt
+*.pyc
+*.mp4
+
+src/.vscode/settings.json
+src/tmp_bitstream_working_dir/*
