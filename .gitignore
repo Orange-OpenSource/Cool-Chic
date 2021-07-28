@@ -9,3 +9,7 @@
 src/.vscode/settings.json
 src/tmp_bitstream_working_dir/*
 src/tmp_out_bistream/*
+
+models/*
+raw_video/*
+compressed/*
