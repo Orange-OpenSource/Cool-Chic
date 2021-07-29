@@ -10,6 +10,12 @@
 src/.vscode/settings.json
 src/tmp_bitstream_working_dir/*
 src/tmp_out_bistream/*
+src/logs/*
+
+tmp_bitstream_working_dir/*
+tmp_out_bistream/*
+logs/*
+
 
 # Don't add videos or models...
 models/*
@@ -18,13 +24,13 @@ compressed/*
 
 # ... Except these ones
 # Models
-!model/ms_ssim-2021cc-1/0_model.pt
-!model/ms_ssim-2021cc-2/0_model.pt
-!model/ms_ssim-2021cc-3/0_model.pt
-!model/ms_ssim-2021cc-4/0_model.pt
-!model/ms_ssim-2021cc-5/0_model.pt
-!model/ms_ssim-2021cc-6/0_model.pt
-!model/ms_ssim-2021cc-7/0_model.pt
+!models/ms_ssim-2021cc-1/0_model.pt
+!models/ms_ssim-2021cc-2/0_model.pt
+!models/ms_ssim-2021cc-3/0_model.pt
+!models/ms_ssim-2021cc-4/0_model.pt
+!models/ms_ssim-2021cc-5/0_model.pt
+!models/ms_ssim-2021cc-6/0_model.pt
+!models/ms_ssim-2021cc-7/0_model.pt
 
 # Video samples
 !raw_videos/BlowingBubbles_416x240_50_420.yuv
