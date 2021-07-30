@@ -21,6 +21,7 @@ logs/*
 models/*
 raw_video/*
 compressed/*
+scripts/*
 
 # ... Except these ones
 # Models

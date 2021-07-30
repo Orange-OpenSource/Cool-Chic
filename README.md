@@ -48,8 +48,8 @@ $ docker build -t aivc .
 
 Finally, launch an interactive container of the aivc docker image
 
-```
-$ docker run -it aivc bash
+```bash
+$ docker run -it -v <path_to_aivc>:<path_to_aivc> aivc bash # <path_to_aivc> is the path where the repo is cloned
 ```
 
 ### Sanity check
@@ -61,7 +61,14 @@ $ cd AIVC/src
 $ ./sanity_script.sh
 ```
 
-This scripts encodes, decodes and measures the size and quality of the compressed video.
+This scripts encodes, decodes and measures the size and quality of the compressed video. It should return
+
+```
+PSNR    [dB]: 26.72133
+MS-SSIM     : 0.93531
+MS-SSIM [dB]: 11.89147
+Size [bytes]: 28429
+```
 
 ## Usage
 
@@ -70,7 +77,7 @@ This scripts encodes, decodes and measures the size and quality of the compresse
 The script ```aivc.py``` performs 3 tasks
 1. It encodes a .yuv video into a bitstream
 2. It decodes a bitstream into a .yuv video
-3. It measures the size of the bitstream and the quality (MS-SSIM and PSNR) of the compressed video. (_Quality measure derives from the [CLIC video track](http://compression.cc/))
+3. It measures the size of the bitstream and the quality (MS-SSIM and PSNR) of the compressed video. (_Quality measure derives from the [CLIC video track](http://compression.cc/)_)
 
 ### Data format
 
@@ -84,13 +91,13 @@ The ```sanity_script.sh``` provides an example of how to compress a video.
 python aivc.py \
     -i ../raw_videos/BlowingBubbles_416x240_50_420 \
     -o ../compressed.yuv \
-    --bitsream_out ../bitstream.bin \
+    --bitstream_out ../bitstream.bin \
     --start_frame 0 \
     --end_frame 100 \
     --coding_config RA \
     --gop_size 16 \
     --intra_period 32 \
-    --model ms_ssim-6
+    --model ms_ssim-2021cc-6
 ```
 
 | Option          | Description                                                | Usage                                                                                                     | Example                                                                                            |
@@ -103,9 +110,29 @@ python aivc.py \
 | --coding_config | Desired coding configuration                               | RA for Random Access (I, P and B-frames) LDP for Low-delay P (I and P-frames) AI for All Intra (I-frames) | --coding_configuration RA                                                                          |
 | --gop_size      | Number of frames within a hierarchical GOP (RA only)       | Must be a power of two. Min: 2, Max: 64.  This is different from the intra period! See example below.     | --gop_size 16                                                                                      |
 | --intra_period  | Number of inter-frames between two intra (RA and LDP only) | Must be a power of two (RA and LDP) Must be a multiple of gop size (RA) Min: 2, Max: 64.                  | --intra_period 32                                                                                  |
-| --model         | Model used to perform encoding and decoding.               | ms_ssim-X where X in [1, 7]. 1 is the highest rate, 7 the lowest rate.                                    | --model ms_ssim-6                                                                                  |
+| --model         | Model used to perform encoding and decoding.               | ms_ssim-2021cc-X where X in [1, 7]. 1 is the highest rate, 7 the lowest rate.                                    | --model ms_ssim-2021cc-6                                                                                  |
 | --cpu           | Run on CPU                                                 |                                                                                                           | --cpu                                                                                              |
 
+## Coding structures
+
+### Random Access
+
+This is a random access coding structure
+   * Intra period: 16
+   * GOP size 8
+
+![RA](doc/coding_structures/RA_big.png)
+
+### Low-delay P
+
+This is a low-delay P coding structure
+   * Intra period: 16
+
+![RA](doc/coding_structures/LDP_big.png)
+
+### All Intra
+
+Plain image coding for all the frames
 
 ## Contribute
 
