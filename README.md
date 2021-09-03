@@ -121,20 +121,20 @@ This is a random access coding structure
    * Intra period: 16
    * GOP size 8
 
-![RA](doc/coding_structures/RA_big.png)
+<img src="doc/coding_structures/RA_big.png" alt="RA" height="178"/>
 
 ### Low-delay P
 
 This is a low-delay P coding structure
    * Intra period: 16
 
-![LDP](doc/coding_structures/LDP_big.png)
+<img src="doc/coding_structures/LDP_big.png" alt="LDP" height="150"/>
 
 ### All Intra
 
 Plain image coding for all the frames
 
-![AI](doc/coding_structures/AI.png)
+<img src="doc/coding_structures/AI.png" alt="AI" height="135"/>
 
 ## Contribute
 
