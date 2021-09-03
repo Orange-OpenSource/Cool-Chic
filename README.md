@@ -128,11 +128,13 @@ This is a random access coding structure
 This is a low-delay P coding structure
    * Intra period: 16
 
-![RA](doc/coding_structures/LDP_big.png)
+![LDP](doc/coding_structures/LDP_big.png)
 
 ### All Intra
 
 Plain image coding for all the frames
+
+![AI](doc/coding_structures/AI.png)
 
 ## Contribute
 
