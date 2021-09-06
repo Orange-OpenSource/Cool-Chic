@@ -8,15 +8,50 @@ __AIVC__ is a practical learned video coder which offers
 
 AIVC is an refined version of the system described in our ICLR 21 paper: [_Conditional Coding for Flexible Learned Video Compression_, Ladune _et al._](https://arxiv.org/abs/2104.09103)
 
-__Performance screenshot goes here!__
+## Rate-distortion performance
+
+---
+
+### HEVC Class B (1080p)
+
+<img width="400" alt="BasketballDrive" src="doc/rd_performance/BasketballDrive_1920x1080_50_420.png"> <img width="400" alt="BQTerrace_RD" src="doc/rd_performance/BQTerrace_1920x1080_60_420.png">
+
+<img width="400" alt="Cactus_RD" src="doc/rd_performance/Cactus_1920x1080_50_420.png"> <img width="400" alt="Kimono_RD" src="doc/rd_performance/Kimono_1920x1080_24_420.png"> 
+
+<p align="center">
+    <img width="400" alt="ParkScene_RD" src="doc/rd_performance/ParkScene_1920x1080_24_420.png">
+</p>
+
+---
+
+### HEVC Class C (480p)
+
+<img width="400" alt="RaceHorses_RD" src="doc/rd_performance/RaceHorses_832x480_30_420.png"> <img width="400" alt="BQMall_RD" src="doc/rd_performance/BQMall_832x480_60_420.png">
+
+<img width="400" alt="PartyScene_RD" src="doc/rd_performance/PartyScene_832x480_50_420.png"> <img width="400" alt="BasketballDrill_RD" src="doc/rd_performance/BasketballDrill_832x480_50_420.png"> 
 
 
-<!-- 
-You should add a [link to the full documentation]()
+---
 
-_{Only if that makes sense, add a nice screen-shot as below}_
+### HEVC Class D (240p)
 
-![Software Screen-shot](http://placekitten.com/g/320/240 "software screen-shot") -->
+<img width="400" alt="RaceHorses_RD" src="doc/rd_performance/RaceHorses_416x240_30_420.png"> <img width="400" alt="BQSquare_RD" src="doc/rd_performance/BQSquare_416x240_60_420.png">
+
+<img width="400" alt="BlowingBubbles_RD" src="doc/rd_performance/BlowingBubbles_416x240_50_420.png"> <img width="400" alt="BasketballPass_RD" src="doc/rd_performance/BasketballPass_416x240_50_420.png"> 
+
+---
+
+### HEVC Class E (720p videoconferencing)
+
+<img width="400" alt="FourPeople_RD" src="doc/rd_performance/FourPeople_1280x720_60_420.png"> <img width="400" alt="Johnny_RD" src="doc/rd_performance/Johnny_1280x720_60_420.png">
+
+<img width="400" alt="KristenAndSara_RD" src="doc/rd_performance/KristenAndSara_1280x720_60_420.png">
+
+---
+
+### CLIC 2021 video track, validation set
+
+<img width="400" alt="CLIC_RD" src="doc/rd_performance/clic21.png">
 
 ## Quick start
 
