@@ -34,53 +34,68 @@ With two different coding configurations
 | Test configuration  | Bi-directional prediction | Intra Period | GOP size |
 | :---:               | :-:                       |  :-:         |  :-:     |
 | Random Access (RA)  | ✅                        |     32       | 32       |
-| Low-delay P (LDP )  | ❌                        |     32$^\dagger$   | /        |
+| Low-delay P (LDP )  | ❌                        |     32<sup>*</sup>  | /        |
 
-$^\dagger$ _set to 8 for AIVC and 32 for HEVC_
+<sup>*</sup>  _set to 8 for AIVC and 32 for HEVC_
 
 Additionally, we present All Intra (pure image coding) results for the CLIC dataset.
 
 ---
 
 ### CLIC 2021 video track, validation set
-<p align="center"><img width="500" alt="CLIC_RD" src="doc/rd_performance/clic21.png"></p>
+<p align="center"><img width="450" alt="CLIC_RD" src="doc/rd_performance/clic21.png"></p>
 ---
 
 ### HEVC Class B (1080p)
 
-<img width="500" alt="BasketballDrive" src="doc/rd_performance/BasketballDrive_1920x1080_50_420.png"> <img width="500" alt="BQTerrace_RD" src="doc/rd_performance/BQTerrace_1920x1080_60_420.png">
-
-<img width="500" alt="Cactus_RD" src="doc/rd_performance/Cactus_1920x1080_50_420.png"> <img width="500" alt="Kimono_RD" src="doc/rd_performance/Kimono_1920x1080_24_420.png"> 
+<p align="center">
+<img width="450" alt="BasketballDrive" src="doc/rd_performance/BasketballDrive_1920x1080_50_420.png"> <img width="450" alt="BQTerrace_RD" src="doc/rd_performance/BQTerrace_1920x1080_60_420.png">
+</p>
 
 <p align="center">
-    <img width="500" alt="ParkScene_RD" src="doc/rd_performance/ParkScene_1920x1080_24_420.png">
+<img width="450" alt="Cactus_RD" src="doc/rd_performance/Cactus_1920x1080_50_420.png"> <img width="450" alt="Kimono_RD" src="doc/rd_performance/Kimono_1920x1080_24_420.png"> 
+</p>
+
+<p align="center">
+    <img width="450" alt="ParkScene_RD" src="doc/rd_performance/ParkScene_1920x1080_24_420.png">
 </p>
 
 ---
 
 ### HEVC Class C (480p)
 
-<img width="500" alt="RaceHorses_RD" src="doc/rd_performance/RaceHorses_832x480_30_420.png"> <img width="500" alt="BQMall_RD" src="doc/rd_performance/BQMall_832x480_60_420.png">
+<p align="center">
+<img width="450" alt="RaceHorses_RD" src="doc/rd_performance/RaceHorses_832x480_30_420.png"> <img width="450" alt="BQMall_RD" src="doc/rd_performance/BQMall_832x480_60_420.png">
+</p>
 
-<img width="500" alt="PartyScene_RD" src="doc/rd_performance/PartyScene_832x480_50_420.png"> <img width="500" alt="BasketballDrill_RD" src="doc/rd_performance/BasketballDrill_832x480_50_420.png"> 
+<p align="center">
+<img width="450" alt="PartyScene_RD" src="doc/rd_performance/PartyScene_832x480_50_420.png"> <img width="450" alt="BasketballDrill_RD" src="doc/rd_performance/BasketballDrill_832x480_50_420.png"> 
+</p>
 
 
 ---
 
 ### HEVC Class D (240p)
 
-<img width="500" alt="RaceHorses_RD" src="doc/rd_performance/RaceHorses_416x240_30_420.png"> <img width="500" alt="BQSquare_RD" src="doc/rd_performance/BQSquare_416x240_60_420.png">
+<p align="center">
+<img width="450" alt="RaceHorses_RD" src="doc/rd_performance/RaceHorses_416x240_30_420.png"> <img width="450" alt="BQSquare_RD" src="doc/rd_performance/BQSquare_416x240_60_420.png">
+</p>
 
-<img width="500" alt="BlowingBubbles_RD" src="doc/rd_performance/BlowingBubbles_416x240_50_420.png"> <img width="500" alt="BasketballPass_RD" src="doc/rd_performance/BasketballPass_416x240_50_420.png"> 
+<p align="center">
+<img width="450" alt="BlowingBubbles_RD" src="doc/rd_performance/BlowingBubbles_416x240_50_420.png"> <img width="450" alt="BasketballPass_RD" src="doc/rd_performance/BasketballPass_416x240_50_420.png"> 
+</p>
 
 ---
 
 ### HEVC Class E (720p videoconferencing)
 
-<img width="500" alt="FourPeople_RD" src="doc/rd_performance/FourPeople_1280x720_60_420.png"> <img width="500" alt="Johnny_RD" src="doc/rd_performance/Johnny_1280x720_60_420.png">
+<p align="center">
+<img width="450" alt="FourPeople_RD" src="doc/rd_performance/FourPeople_1280x720_60_420.png"> <img width="450" alt="Johnny_RD" src="doc/rd_performance/Johnny_1280x720_60_420.png">
+</p>
 
-<img width="500" alt="KristenAndSara_RD" src="doc/rd_performance/KristenAndSara_1280x720_60_420.png">
-
+<p align="center">
+<img width="450" alt="KristenAndSara_RD" src="doc/rd_performance/KristenAndSara_1280x720_60_420.png">
+</p>
 ---
 
 ## Quick start
@@ -135,8 +150,6 @@ MS-SSIM [dB]: 11.89147
 Size [bytes]: 28429
 ```
 
----
-
 ## Usage
 
 ### Structure
@@ -180,8 +193,6 @@ python aivc.py \
 | --model         | Model used to perform encoding and decoding.               | ms_ssim-2021cc-X where X in [1, 7]. 1 is the highest rate, 7 the lowest rate.                                    | --model ms_ssim-2021cc-6                                                                                  |
 | --cpu           | Run on CPU                                                 |                                                                                                           | --cpu                                                                                              |
 
----
-
 ## Coding structures
 
 ### Random Access
@@ -205,13 +216,11 @@ Plain image coding for all the frames
 
 <img src="doc/coding_structures/AI.png" alt="AI" height="135"/>
 
----
 
 ## Contribute
 
 Questions, remarks, bug reports can be posted on the [AIVC google group](https://groups.google.com/g/aivc).
 
----
 
 ## Changelog
 
@@ -219,7 +228,6 @@ Questions, remarks, bug reports can be posted on the [AIVC google group](https:/
   * Initial release of the code
   * Models
 
----
 
 ## Contact
 
