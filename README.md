@@ -1,15 +1,49 @@
 # AIVC: _Artificial Intelligence for Video Coding_
 
-__AIVC__ is a practical learned video coder which offers
+<!-- __AIVC__ is a practical learned video coder which offers
 * All the usual coding configurations: All Intra, Low-delay P and Random Access, with a tunable intra-period (up to 64) and GOP size
 * Different rate targets, from a few hundred of kbit/s to several Mbit/s (equivalent to QP from 25 to 40 in traditional coding)
 * Performance on par with the HM (HEVC Test Model) for all configurations and rate constraints. 
-* Compress high-resolution videos (up to 1080p)
+* Compress high-resolution videos (up to 1080p) -->
+
+
+__AIVC__ is a practical learned video coder which offers:
+
+| Features                | #1  |
+| :---:                   | :-: |
+| Coding configurations   | Random Access (RA), Low-delay P (LDP) , All Intra (AI) |
+| Tunable Intra Period    | Up to 64
+| Tunable GOP size        | Up to 64
+| 7 Different rates target   | 1 MBit/s to 20 MBit/s (for 1080p videos)
+| Competitive performances| On par with HM (HEVC Test Model)
 
 AIVC is an refined version of the system described in our ICLR 21 paper: [_Conditional Coding for Flexible Learned Video Compression_, Ladune _et al._](https://arxiv.org/abs/2104.09103)
 
+A descriptive factsheet will be available soon!
+
+
 ## Rate-distortion performance
 
+Rate-distortion results of the models are presented on different datasets:
+
+* [CLIC 21 video track](www.compression.cc), validation set (720p)
+* HEVC Class B (1080p), C (480p), D (240p) and E (720p)
+
+With two different coding configurations
+
+| Test configuration  | Bi-directional prediction | Intra Period | GOP size |
+| :---:               | :-:                       |  :-:         |  :-:     |
+| Random Access (RA)  | ✅                        |     32       | 32       |
+| Low-delay P (LDP )  | ❌                        |     32$^\dagger$   | /        |
+
+$^\dagger$ _set to 8 for AIVC and 32 for HEVC_
+
+Additionally, we present All Intra (pure image coding) results for the CLIC dataset.
+
+---
+
+### CLIC 2021 video track, validation set
+<p align="center"><img width="500" alt="CLIC_RD" src="doc/rd_performance/clic21.png"></p>
 ---
 
 ### HEVC Class B (1080p)
@@ -48,10 +82,6 @@ AIVC is an refined version of the system described in our ICLR 21 paper: [_Condi
 <img width="500" alt="KristenAndSara_RD" src="doc/rd_performance/KristenAndSara_1280x720_60_420.png">
 
 ---
-
-### CLIC 2021 video track, validation set
-
-<img width="500" alt="CLIC_RD" src="doc/rd_performance/clic21.png">
 
 ## Quick start
 
@@ -105,6 +135,8 @@ MS-SSIM [dB]: 11.89147
 Size [bytes]: 28429
 ```
 
+---
+
 ## Usage
 
 ### Structure
@@ -148,6 +180,8 @@ python aivc.py \
 | --model         | Model used to perform encoding and decoding.               | ms_ssim-2021cc-X where X in [1, 7]. 1 is the highest rate, 7 the lowest rate.                                    | --model ms_ssim-2021cc-6                                                                                  |
 | --cpu           | Run on CPU                                                 |                                                                                                           | --cpu                                                                                              |
 
+---
+
 ## Coding structures
 
 ### Random Access
@@ -171,15 +205,28 @@ Plain image coding for all the frames
 
 <img src="doc/coding_structures/AI.png" alt="AI" height="135"/>
 
+---
+
 ## Contribute
 
 Questions, remarks, bug reports can be posted on the [AIVC google group](https://groups.google.com/g/aivc).
 
+---
+
 ## Changelog
 
-* July 2021
+* September 2021
   * Initial release of the code
   * Models
+
+---
+
+## Contact
+
+* [Personal page](https://theoladune.github.io/)
+* E-mail: theo.ladune@orange.com
+
+---
 
 ## License
 
@@ -209,8 +256,3 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
 ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-## Contact
-
-* [Personal page](https://theoladune.github.io/)
-* E-mail: theo.ladune@orange.com
