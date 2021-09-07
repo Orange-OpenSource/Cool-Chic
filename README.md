@@ -44,6 +44,7 @@ Additionally, we present All Intra (pure image coding) results for the CLIC data
 
 ### CLIC 2021 video track, validation set
 <p align="center"><img width="400" alt="CLIC_RD" src="doc/rd_performance/clic21.png"></p>
+
 ---
 
 ### HEVC Class B (1080p)
