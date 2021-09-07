@@ -7,7 +7,7 @@
 * Compress high-resolution videos (up to 1080p) -->
 
 
-__AIVC__ is a practical learned video coder which offers:
+__AIVC__ is a **fully-learned video coder**. It offers many practical features and great flexibility:
 
 | Features                | What's inside?  |
 | :---:                   | :-: |
@@ -97,6 +97,7 @@ Additionally, we present All Intra (pure image coding) results for the CLIC data
 <p align="center">
 <img width="400" alt="KristenAndSara_RD" src="doc/rd_performance/KristenAndSara_1280x720_60_420.png">
 </p>
+
 ---
 
 ## Quick start
