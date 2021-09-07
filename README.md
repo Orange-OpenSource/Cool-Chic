@@ -9,7 +9,7 @@
 
 __AIVC__ is a practical learned video coder which offers:
 
-| Features                | #1  |
+| Features                | What's inside?  |
 | :---:                   | :-: |
 | Coding configurations   | Random Access (RA), Low-delay P (LDP) , All Intra (AI) |
 | Tunable Intra Period    | Up to 64
@@ -43,21 +43,21 @@ Additionally, we present All Intra (pure image coding) results for the CLIC data
 ---
 
 ### CLIC 2021 video track, validation set
-<p align="center"><img width="450" alt="CLIC_RD" src="doc/rd_performance/clic21.png"></p>
+<p align="center"><img width="400" alt="CLIC_RD" src="doc/rd_performance/clic21.png"></p>
 ---
 
 ### HEVC Class B (1080p)
 
 <p align="center">
-<img width="450" alt="BasketballDrive" src="doc/rd_performance/BasketballDrive_1920x1080_50_420.png"> <img width="450" alt="BQTerrace_RD" src="doc/rd_performance/BQTerrace_1920x1080_60_420.png">
+<img width="400" alt="BasketballDrive" src="doc/rd_performance/BasketballDrive_1920x1080_50_420.png"> <img width="400" alt="BQTerrace_RD" src="doc/rd_performance/BQTerrace_1920x1080_60_420.png">
 </p>
 
 <p align="center">
-<img width="450" alt="Cactus_RD" src="doc/rd_performance/Cactus_1920x1080_50_420.png"> <img width="450" alt="Kimono_RD" src="doc/rd_performance/Kimono_1920x1080_24_420.png"> 
+<img width="400" alt="Cactus_RD" src="doc/rd_performance/Cactus_1920x1080_50_420.png"> <img width="400" alt="Kimono_RD" src="doc/rd_performance/Kimono_1920x1080_24_420.png"> 
 </p>
 
 <p align="center">
-    <img width="450" alt="ParkScene_RD" src="doc/rd_performance/ParkScene_1920x1080_24_420.png">
+    <img width="400" alt="ParkScene_RD" src="doc/rd_performance/ParkScene_1920x1080_24_420.png">
 </p>
 
 ---
@@ -65,11 +65,11 @@ Additionally, we present All Intra (pure image coding) results for the CLIC data
 ### HEVC Class C (480p)
 
 <p align="center">
-<img width="450" alt="RaceHorses_RD" src="doc/rd_performance/RaceHorses_832x480_30_420.png"> <img width="450" alt="BQMall_RD" src="doc/rd_performance/BQMall_832x480_60_420.png">
+<img width="400" alt="RaceHorses_RD" src="doc/rd_performance/RaceHorses_832x480_30_420.png"> <img width="400" alt="BQMall_RD" src="doc/rd_performance/BQMall_832x480_60_420.png">
 </p>
 
 <p align="center">
-<img width="450" alt="PartyScene_RD" src="doc/rd_performance/PartyScene_832x480_50_420.png"> <img width="450" alt="BasketballDrill_RD" src="doc/rd_performance/BasketballDrill_832x480_50_420.png"> 
+<img width="400" alt="PartyScene_RD" src="doc/rd_performance/PartyScene_832x480_50_420.png"> <img width="400" alt="BasketballDrill_RD" src="doc/rd_performance/BasketballDrill_832x480_50_420.png"> 
 </p>
 
 
@@ -78,11 +78,11 @@ Additionally, we present All Intra (pure image coding) results for the CLIC data
 ### HEVC Class D (240p)
 
 <p align="center">
-<img width="450" alt="RaceHorses_RD" src="doc/rd_performance/RaceHorses_416x240_30_420.png"> <img width="450" alt="BQSquare_RD" src="doc/rd_performance/BQSquare_416x240_60_420.png">
+<img width="400" alt="RaceHorses_RD" src="doc/rd_performance/RaceHorses_416x240_30_420.png"> <img width="400" alt="BQSquare_RD" src="doc/rd_performance/BQSquare_416x240_60_420.png">
 </p>
 
 <p align="center">
-<img width="450" alt="BlowingBubbles_RD" src="doc/rd_performance/BlowingBubbles_416x240_50_420.png"> <img width="450" alt="BasketballPass_RD" src="doc/rd_performance/BasketballPass_416x240_50_420.png"> 
+<img width="400" alt="BlowingBubbles_RD" src="doc/rd_performance/BlowingBubbles_416x240_50_420.png"> <img width="400" alt="BasketballPass_RD" src="doc/rd_performance/BasketballPass_416x240_50_420.png"> 
 </p>
 
 ---
@@ -90,11 +90,11 @@ Additionally, we present All Intra (pure image coding) results for the CLIC data
 ### HEVC Class E (720p videoconferencing)
 
 <p align="center">
-<img width="450" alt="FourPeople_RD" src="doc/rd_performance/FourPeople_1280x720_60_420.png"> <img width="450" alt="Johnny_RD" src="doc/rd_performance/Johnny_1280x720_60_420.png">
+<img width="400" alt="FourPeople_RD" src="doc/rd_performance/FourPeople_1280x720_60_420.png"> <img width="400" alt="Johnny_RD" src="doc/rd_performance/Johnny_1280x720_60_420.png">
 </p>
 
 <p align="center">
-<img width="450" alt="KristenAndSara_RD" src="doc/rd_performance/KristenAndSara_1280x720_60_420.png">
+<img width="400" alt="KristenAndSara_RD" src="doc/rd_performance/KristenAndSara_1280x720_60_420.png">
 </p>
 ---
 
