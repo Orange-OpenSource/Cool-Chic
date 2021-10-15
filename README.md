@@ -234,7 +234,7 @@ Questions, remarks, bug reports can be posted on the [AIVC google group](https:/
 ## Contact
 
 * [Personal page](https://theoladune.github.io/)
-* E-mail: theo.ladune@orange.com
+* E-mail: theo.ladune@gmail.com
 
 ---
 
