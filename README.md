@@ -19,7 +19,7 @@ __AIVC__ is a **fully-learned video coder**. It offers many practical features a
 
 AIVC is an refined version of the system described in our ICLR 21 paper: [_Conditional Coding for Flexible Learned Video Compression_, Ladune _et al._](https://arxiv.org/abs/2104.09103)
 
-Some slides presenting AIVC are avaiulable [_here_](https://theoladune.github.io/AIVC-Seminar/).
+Some slides presenting AIVC are available [_here_](https://theoladune.github.io/AIVC-Seminar/).
 
 A descriptive factsheet will be available soon!
 
