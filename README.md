@@ -106,6 +106,13 @@ Additionally, we present All Intra (pure image coding) results for the CLIC data
 
 ### Download
 
+Some (big) files are stored using Git LFS which has to be installed prior to cloning the repository:
+
+```
+$ sudo apt-get install git-lfs
+$ git lfs install
+```
+
 Clone the repositories from GitHub:
 
 ```
