@@ -1,12 +1,5 @@
 # AIVC: _Artificial Intelligence for Video Coding_
 
-<!-- __AIVC__ is a practical learned video coder which offers
-* All the usual coding configurations: All Intra, Low-delay P and Random Access, with a tunable intra-period (up to 64) and GOP size
-* Different rate targets, from a few hundred of kbit/s to several Mbit/s (equivalent to QP from 25 to 40 in traditional coding)
-* Performance on par with the HM (HEVC Test Model) for all configurations and rate constraints. 
-* Compress high-resolution videos (up to 1080p) -->
-
-
 __AIVC__ is a **fully-learned video coder**. It offers many practical features and great flexibility:
 
 | Features                | What's inside?  |
@@ -16,6 +9,7 @@ __AIVC__ is a **fully-learned video coder**. It offers many practical features a
 | Tunable GOP size        | Up to 64
 | 7 Different rates target   | 1 MBit/s to 20 MBit/s (for 1080p videos)
 | Competitive performances| On par with HM (HEVC Test Model)
+| Convenient input format | 8-bit YUV 4:2:0 videos
 
 AIVC is an refined version of the system described in our ICLR 21 paper: [_Conditional Coding for Flexible Learned Video Compression_, Ladune _et al._](https://arxiv.org/abs/2104.09103)
 
