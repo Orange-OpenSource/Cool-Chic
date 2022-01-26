@@ -1,6 +1,12 @@
-# AIVC: _Artificial Intelligence for Video Coding_
+# AIVC: _Artificial Intelligence-based Video Coding_
 
-__AIVC__ is a **fully-learned video coder**. It offers many practical features and great flexibility:
+## In a few words
+
+AIVC is a neural-based video codec offering competitive performance and a lot of flexibility.
+
+Many more details are available @ [https://orange-opensource.github.io/AIVC/](https://orange-opensource.github.io/AIVC/)
+
+<!-- __AIVC__ is a **fully-learned video coder**. It offers many practical features and great flexibility:
 
 | Features                | What's inside?  |
 | :---:                   | :-: |
@@ -15,10 +21,10 @@ AIVC is an refined version of the system described in our ICLR 21 paper: [_Condi
 
 Some slides presenting AIVC are available [_here_](https://theoladune.github.io/AIVC-Seminar/).
 
-A descriptive factsheet will be available soon!
+A descriptive factsheet will be available soon! -->
 
 
-## Rate-distortion performance
+<!-- ## Rate-distortion performance
 
 Rate-distortion results of the models are presented on different datasets:
 
@@ -94,7 +100,7 @@ Additionally, we present All Intra (pure image coding) results for the CLIC data
 <img width="400" alt="KristenAndSara_RD" src="doc/rd_performance/KristenAndSara_1280x720_60_420.png">
 </p>
 
----
+--- -->
 
 ## Quick start
 
