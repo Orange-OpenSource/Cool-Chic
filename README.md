@@ -6,6 +6,9 @@ AIVC is a neural-based video codec offering competitive performance and a lot of
 
 Many more details are available @ [https://orange-opensource.github.io/AIVC/](https://orange-opensource.github.io/AIVC/)
 
+A paper describing AIVC is available @ [_AIVC: Artificial Intelligence based Video Codec_, Ladune _et al._](https://arxiv.org/abs/2202.04365)
+
+
 <!-- __AIVC__ is a **fully-learned video coder**. It offers many practical features and great flexibility:
 
 | Features                | What's inside?  |
