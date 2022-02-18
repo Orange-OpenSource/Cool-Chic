@@ -15,7 +15,7 @@ src/logs/*
 tmp_bitstream_working_dir/*
 tmp_out_bistream/*
 logs/*
-tmp/
+tmp/*
 
 # Don't add videos or models...
 models/*

@@ -202,8 +202,8 @@ python aivc.py \
 | --start_frame   | Index of the first frame to compress                       | An integer, 0 corresponds to the very first frame                                                         | --start_frame 0                                                                                    |
 | --end_frame     | Index of the last frame to compress                        | An integer, the last frame is included. Use -1 to compress until the last frame.                          | --end_frame 100                                                                                    |
 | --coding_config | Desired coding configuration                               | RA for Random Access (I, P and B-frames) LDP for Low-delay P (I and P-frames) AI for All Intra (I-frames) | --coding_configuration RA                                                                          |
-| --gop_size      | Number of frames within a hierarchical GOP (RA only)       | Must be a power of two. Min: 2, Max: 64.  This is different from the intra period! See example below.     | --gop_size 16                                                                                      |
-| --intra_period  | Number of inter-frames between two intra (RA and LDP only) | Must be a power of two (RA and LDP) Must be a multiple of gop size (RA) Min: 2, Max: 64.                  | --intra_period 32                                                                                  |
+| --gop_size      | Number of frames within a hierarchical GOP (RA only)       | Must be a power of two. Min: 2, Max: 65535.  This is different from the intra period! See example below.     | --gop_size 16                                                                                      |
+| --intra_period  | Number of inter-frames between two intra (RA and LDP only) | Must be a multiple of gop size (RA) Min: 2, Max: 65535.                  | --intra_period 32                                                                                  |
 | --model         | Model used to perform encoding and decoding.               | ms_ssim-2021cc-X where X in [1, 7]. 1 is the highest rate, 7 the lowest rate.                                    | --model ms_ssim-2021cc-6                                                                                  |
 | --cpu           | Run on CPU                                                 |                                                                                                           | --cpu                                                                                              |
 
@@ -238,6 +238,9 @@ Questions, remarks, bug reports can be posted on the [AIVC google group](https:/
 
 ## Changelog
 
+* February 2022
+  * Fix memory leak
+  * Allow for more coding configurations
 * September 2021
   * Initial release of the code
   * Models
