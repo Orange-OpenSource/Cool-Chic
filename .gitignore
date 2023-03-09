@@ -1,0 +1,13 @@
+.vscode/
+images/
+venv/
+*.bin
+*.pyc
+*.pt
+*.png
+*.txt
+*.out
+!requirements.txt
+!samples/code_image_cpu.sh
+!samples/code_image_gpu.sh
+!samples/biville.png
