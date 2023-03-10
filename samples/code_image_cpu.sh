@@ -6,7 +6,7 @@ python3 src/encode.py                               \
     --decoded_img_path=samples/decoded.png          \
     --model_save_path=samples/model.pt              \
     --enc_results_path=samples/encoder_results.txt  \
-    --lmbda=0.001                                   \
+    --lmbda=0.0002                                  \
     --start_lr=1e-2                                 \
     --n_itr=1000                                    \
     --layers_synthesis=12,12                        \

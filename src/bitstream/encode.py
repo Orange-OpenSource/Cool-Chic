@@ -45,7 +45,7 @@ def get_ac_max_val_nn(model: CoolChicEncoder, q_step_nn: DescriptorCoolChic) -> 
 
         # Retrieve all the weights and biases for the ARM MLP
         for k, v in module_to_encode.named_parameters():
-            if not 'mlp' in k:
+            if 'mlp' not in k:
                 continue
 
             if k.endswith('.w'):
@@ -118,7 +118,6 @@ def encode(
         int: Rate in **byte**
     """
 
-
     start_time = time.time()
     # Ensure encoding/decoding replicability on different hardware
     torch.backends.cudnn.deterministic = True
@@ -127,7 +126,9 @@ def encode(
     # Run on CPU for more reliability (particularly the ARM module)
     model = model.eval().to('cpu')
 
-    subprocess.call(f'rm {bitstream_path}', shell=True)
+    if os.path.exists(bitstream_path):
+        print(f'Found an already existing bitstream at {bitstream_path}... deleting!')
+        subprocess.call(f'rm {bitstream_path}', shell=True)
 
     # ================= Encode the MLP into a bitstream file ================ #
     ac_max_val_nn = get_ac_max_val_nn(model, q_step_nn)

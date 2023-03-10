@@ -90,9 +90,6 @@ if __name__ == '__main__':
 
         model = start_model
 
-    for m,v in model.named_parameters():
-        print(f"training parameters :{m}  {v.shape} requires gradient: {v.requires_grad}")
-
     print(model)
     print(model.print_nb_parameters())
     print(model.print_nb_mac())
@@ -162,30 +159,11 @@ if __name__ == '__main__':
         str_keys += f'{k},'
         str_vals += f'{v},'
 
-    # str_keys += 'loss_quant,loss_float,'
-    # str_vals += f'{loss_quantized:8.6f},{loss_float:8.6f},'
-
-    # for k in q_step:
-    #     str_keys += f'Q_step_{k},'
-    #     str_vals += f'{q_step.get(k):7.6f},'
-
-    # for k in ['arm', 'synthesis']:
-    #     str_keys += f'rate_{k}_bpp,'
-    #     str_vals += f'{rate_mlp.get(k) / n_pixels:8.6f},'
-
     for k, v in training_stat_logs.items():
         if k == 'loss':
             continue
         str_keys += f'{k},'
         str_vals += f'{v:7.1f},'
-
-    # for k, v in model.get_nb_mac().items():
-    #     str_keys += f'{k},'
-    #     str_vals += f'{v:7.1f},'
-
-    # sequence_name = args.input.split('/')[-1].split('.')[0]
-    # str_keys += 'H,W,lmbda,sequence_name,'
-    # str_vals += f'{img.size()[-2]},{img.size()[-1]},{args.lmbda:8.6f},{sequence_name},'
 
     # Remove coma at the end
     str_keys = str_keys.rstrip(',')

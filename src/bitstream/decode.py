@@ -167,9 +167,6 @@ def pad_to_unpad_index_1d(idx_w_pad: Tensor, pad: int, W_pad: int) -> Tensor:
     Returns:
         Tensor: 1d tensor of the **non-padded** indices
     """
-    # We remove pad columns of zero pixel on both side of the padded feature map
-    W = W_pad - 2 * pad
-
     idx = idx_w_pad - pad - pad * W_pad - ((idx_w_pad - pad * W_pad) // W_pad) * 2 * pad
     #                  ^        ^                    ^
     #                  |        |                    |_________ Each additional new rows after the first padded ones
