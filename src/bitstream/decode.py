@@ -465,6 +465,7 @@ def decode(bitstream_path: str, device: str = 'cpu') -> Tensor:
         # Count the number of decoded values to iterate within the
         # flat_index_coding_order array.
         cnt = 0
+        n_ctx_row_col = header_info.get('n_ctx_rowcol')
         for index_coding in range(flat_coding_order.max() + 1):
             cur_context = fast_get_neighbor(
                 current_y, mask_size, offset_index_arm,
@@ -478,7 +479,17 @@ def decode(bitstream_path: str, device: str = 'cpu') -> Tensor:
             cur_mu, cur_scale = get_mu_scale(cur_raw_proba_param)
 
             # Decode and store the value at the proper location within current_y
-            current_y[coding_order == index_coding] = range_coder.decode(cur_mu, cur_scale)
+            x_delta = n_ctx_row_col+1
+            if index_coding < w_grid:
+                start_y = 0
+                start_x = index_coding
+            else:
+                start_y = (index_coding-w_grid)//x_delta+1
+                start_x = w_grid - x_delta + (index_coding-w_grid)%x_delta
+
+            x = range_coder.decode(cur_mu, cur_scale)
+            current_y[ [ (w_grid+2*pad)*(pad+start_y+i)+(pad+start_x-x_delta*i) for i in range(len(x)) ] ] = x
+
 
             # Increment the counter of loaded value
             cnt += occurrence_coding_order[index_coding]
