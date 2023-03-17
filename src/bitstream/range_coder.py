@@ -157,7 +157,7 @@ class RangeCoder:
 
         # Edge case: we have an image whose width is smaller than the number of
         # context row/column in this case: no wavefront
-        if W < n_ctx_rowcol:
+        if W <= n_ctx_rowcol:
             coding_order = torch.arange(0, H * W).view(1, H, W).repeat(C, 1, 1).view(1, C, H, W)
             return coding_order
 
