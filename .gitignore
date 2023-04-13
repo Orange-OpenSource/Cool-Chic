@@ -1,7 +1,6 @@
 .vscode/
 images/
 venv/
-*.bin
 *.pyc
 *.pt
 *.png
