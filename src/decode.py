@@ -18,9 +18,9 @@ from bitstream.decode import decode
 if __name__ == '__main__':
     # =========================== Parse arguments =========================== #
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input', help='Path of the bitstream to decode.', type=str)
-    parser.add_argument('-o', '--output', help='Path to save the decoded image.', type=str)
-    parser.add_argument('--device', help='"cpu" or "cuda:0"', type=str, default='cuda:0')
+    parser.add_argument('-i', '--input', help='Path of the bitstream to decode.', type=str, required=True)
+    parser.add_argument('-o', '--output', help='Path to save the decoded image.', type=str, required=True)
+    parser.add_argument('--device', help='"cpu" or "cuda:0"', type=str, default='cpu')
     args = parser.parse_args()
     # =========================== Parse arguments =========================== #
 
