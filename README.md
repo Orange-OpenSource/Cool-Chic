@@ -23,7 +23,7 @@ We provide bitstream for the images of the kodak dataset in
 ```results/kodak/bitstreams/```. This permits to reproduce the results presented
 in the paper. Bitstream can be decoded as follows:
 
-    >>> python3 src/decode.py -i results/kodak/bitstreams/kodim13-lambda004.bin -o kodim13-lambda004.png --device=cpu
+    >>> python3 src/decode.py -i results/kodak/bitstreams/kodim19-lambda0001.bin -o kodim19-lambda0001.png --device=cpu
 
 The results of the decoding of all bitstreams are given in
 ```results/kodak/raw_results.tsv``` and ```results/kodak/average_results.tsv```.
