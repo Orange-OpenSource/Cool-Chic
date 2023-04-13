@@ -222,6 +222,8 @@ class CoolChicEncoder(nn.Module):
         # ! Order of the operations are important as these are asynchronous
         # ! CUDA operations. Some ordering are faster than other...
 
+        self.non_zero_pixel_ctx_index = self.non_zero_pixel_ctx_index.to(self.latent_grids[0].device)
+
         # ====================== Get sent latent codes ====================== #
         # Two different types of quantization. quantize() function uses the usual
         # noise addition proxy if self.training is True and the actual round

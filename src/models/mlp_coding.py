@@ -22,8 +22,7 @@ from torch import nn, Tensor
 from torch.distributions import Laplace
 
 from model_management.trainer import loss_fn
-from utils.constants import MIN_SCALE_NN_WEIGHTS_BIAS, POSSIBLE_Q_STEP_NN
-
+from utils.constants import MIN_SCALE_NN_WEIGHTS_BIAS, POSSIBLE_Q_STEP_ARM_NN, POSSIBLE_Q_STEP_SYN_NN, MAX_AC_MAX_VAL, FIXED_POINT_FRACTIONAL_MULT
 
 def quantize_param(x: Tensor, q_step: float) -> Tensor:
     """Quantize a tensor with a specified q_step
@@ -35,7 +34,10 @@ def quantize_param(x: Tensor, q_step: float) -> Tensor:
     Returns:
         tensor: quantized tensor
     """
-    return torch.round(x / q_step) * q_step
+    x = torch.round(x/q_step)
+    if torch.abs(x).max() > MAX_AC_MAX_VAL:
+        return None # Reject quantization
+    return x * q_step
 
 
 def measure_gnd_truth_entropy(x: Tensor) -> float:
@@ -81,7 +83,7 @@ def measure_laplace_rate(x: Tensor, q_step: float) -> float:
     return rate
 
 
-def quantize_model(fp_model: nn.Module, q_step_weight: float, q_step_bias: float) -> Tuple:
+def quantize_model(fp_model: nn.Module, q_step_weight: float, q_step_bias: float, integerise: bool) -> Tuple:
     """Quantize a full precision model fp_model at a given q_step. Return
     the quantized model and a 1D tensor gathering the quantized weights.
     !It only quantizes the MLP parameters!
@@ -90,6 +92,7 @@ def quantize_model(fp_model: nn.Module, q_step_weight: float, q_step_bias: float
         fp_model (nn.Module): full precision model
         q_step_weight (float): quantization step for the weights
         q_step_bias (float): quantization step for the bias
+        integerise (bool): move from float to fixed point representation in the model
 
     Returns:
         Tuple: quantized model and 1d tensor of the quantized weights and biases
@@ -102,11 +105,14 @@ def quantize_model(fp_model: nn.Module, q_step_weight: float, q_step_bias: float
             # if k ends with '.w' it's a weight. If it's '.b' it's a bias
             if k.endswith('.w') or k.endswith('.weight'):
                 q_v = quantize_param(v, q_step_weight)
+                if q_v is None:
+                    return None, None, None # Reject this quantization as too fine.
                 q_weights.append(q_v.view(-1).cpu())
             if k.endswith('.b') or k.endswith('.bias'):
                 q_v = quantize_param(v, q_step_bias)
+                if q_v is None:
+                    return None, None, None # Reject this quantization as too fine.
                 q_bias.append(q_v.view(-1).cpu())
-
             q_model_param[k] = q_v
         else:
             q_model_param[k] = v
@@ -115,10 +121,12 @@ def quantize_model(fp_model: nn.Module, q_step_weight: float, q_step_bias: float
     q_bias = torch.cat(q_bias, dim=0)
     # fp_model is now a quantized model
     fp_model.load_state_dict(q_model_param)
+    if integerise:
+        fp_model.set_quant(FIXED_POINT_FRACTIONAL_MULT)
     return fp_model, q_weights, q_bias
 
 
-@torch.no_grad()
+# @torch.no_grad()
 def greedy_quantization(
     fp_model: nn.Module,
     img: Tensor,
@@ -159,7 +167,11 @@ def greedy_quantization(
         first_line_print = True
 
         # Try out different quantization step
-        Q_STEP_LIST = POSSIBLE_Q_STEP_NN
+        if current_module == 'arm':
+            Q_STEP_LIST = POSSIBLE_Q_STEP_ARM_NN
+        else:
+            Q_STEP_LIST = POSSIBLE_Q_STEP_SYN_NN
+
         for q_step_weight, q_step_bias in itertools.product(Q_STEP_LIST, Q_STEP_LIST):
             # Reload the full precision model
             fp_model.load_state_dict(fp_model_param)
@@ -169,8 +181,10 @@ def greedy_quantization(
 
             # Quantize the module and measure its rate
             q_module, q_module_w, q_module_b = quantize_model(
-                fp_module, q_step_weight, q_step_bias
+                fp_module, q_step_weight, q_step_bias, current_module == "arm"
             )
+            if q_module is None:
+                continue # Quantization too fine, try next.
             # Sum the rate of the bias and the weights
             rate_module = measure_laplace_rate(q_module_w, q_step_weight)
             rate_module += measure_laplace_rate(q_module_b, q_step_bias)
@@ -179,7 +193,11 @@ def greedy_quantization(
             # Set attribute fp_model.<current_module> = q_module
             setattr(fp_model, current_module, q_module)
 
-            fp_model = fp_model.eval()
+            if current_module == "arm" or "arm_weight" in best_q_step:
+                # We have seen an arm test, and it is now quantized.  Needs to be on cpu.
+                fp_model = fp_model.eval().to('cpu') # for now.
+                fp_model.arm.set_quant(FIXED_POINT_FRACTIONAL_MULT)
+                img = img.to('cpu') # for now
             model_out = fp_model()
             # Compute results
             loss, logs = loss_fn(model_out, img, lmbda, compute_logs=verbose, rate_mlp=rate_module)
@@ -205,9 +223,11 @@ def greedy_quantization(
 
         # Load best quantized parameters
         fp_model.load_state_dict(best_model)
+        if 'arm_weight' in best_q_step:
+            fp_model.arm.set_quant(FIXED_POINT_FRACTIONAL_MULT)
 
     msg = f'Time Q_step greedy search: {time.time() - start_time:4.1f} seconds'
-    msg += f' for {2 * (len(Q_STEP_LIST) ** 2)} combinations'
+    msg += f' for {(len(POSSIBLE_Q_STEP_ARM_NN) **2) +  (len(POSSIBLE_Q_STEP_SYN_NN) **2)} combinations'
     print(f'\n{msg}\n')
 
     return fp_model, best_q_step, best_rate_mlp

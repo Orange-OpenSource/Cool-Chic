@@ -132,7 +132,7 @@ if __name__ == '__main__':
         model_out = model()
 
         # Compute results
-        _, metrics = loss_fn(model_out, img, args.lmbda, compute_logs=True, rate_mlp=total_mlp_rate)
+        _, metrics = loss_fn(model_out, img.to('cpu'), args.lmbda, compute_logs=True, rate_mlp=total_mlp_rate) # cpu for now.
         loss_quantized = metrics.get('loss').item()
 
     print('=' * 120)

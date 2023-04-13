@@ -18,7 +18,7 @@ from bitstream.header import DescriptorNN, read_header
 from bitstream.range_coder import RangeCoder
 from models.arm import ArmMLP, get_mu_scale, get_neighbor
 from models.synthesis import SynthesisMLP, get_synthesis_input_latent
-from utils.constants import POSSIBLE_Q_STEP_NN, POSSIBLE_SCALE_NN
+from utils.constants import POSSIBLE_Q_STEP_ARM_NN, POSSIBLE_Q_STEP_SYN_NN, POSSIBLE_SCALE_NN, Q_EXP_SCALE, FIXED_POINT_FRACTIONAL_MULT
 
 
 def compute_offset(x: Tensor, mask_size: int) -> Tensor:
@@ -369,14 +369,14 @@ def decode(bitstream_path: str, device: str = 'cpu') -> Tensor:
 
     # ARM on CPU for encoding / decoding reproducibility
     arm = decode_network(
-        ArmMLP(non_zero_pixel_ctx, header_info.get('layers_arm')),  # Empty module
+        ArmMLP(non_zero_pixel_ctx, header_info.get('layers_arm'), FIXED_POINT_FRACTIONAL_MULT),  # Empty module
         DescriptorNN(
             weight = f'{bitstream_path}_arm_weight',
             bias = f'{bitstream_path}_arm_bias',
         ),
         DescriptorNN (
-            weight = POSSIBLE_Q_STEP_NN[header_info['q_step_index_nn']['arm']['weight']],
-            bias = POSSIBLE_Q_STEP_NN[header_info['q_step_index_nn']['arm']['bias']],
+            weight = POSSIBLE_Q_STEP_ARM_NN[header_info['q_step_index_nn']['arm']['weight']],
+            bias = POSSIBLE_Q_STEP_ARM_NN[header_info['q_step_index_nn']['arm']['bias']],
         ),
         DescriptorNN (
             weight = POSSIBLE_SCALE_NN[header_info['scale_index_nn']['arm']['weight']],
@@ -384,6 +384,7 @@ def decode(bitstream_path: str, device: str = 'cpu') -> Tensor:
         ),
         header_info.get('ac_max_val_nn'),
     )
+    arm.set_quant(FIXED_POINT_FRACTIONAL_MULT)
 
     # Synthesis can happen on GPU has it is less sensitive than ARM
     synthesis = decode_network(
@@ -395,8 +396,8 @@ def decode(bitstream_path: str, device: str = 'cpu') -> Tensor:
             bias = f'{bitstream_path}_synthesis_bias',
         ),
         DescriptorNN (
-            weight = POSSIBLE_Q_STEP_NN[header_info['q_step_index_nn']['synthesis']['weight']],
-            bias = POSSIBLE_Q_STEP_NN[header_info['q_step_index_nn']['synthesis']['bias']],
+            weight = POSSIBLE_Q_STEP_SYN_NN[header_info['q_step_index_nn']['synthesis']['weight']],
+            bias = POSSIBLE_Q_STEP_SYN_NN[header_info['q_step_index_nn']['synthesis']['bias']],
         ),
         DescriptorNN (
             weight = POSSIBLE_SCALE_NN[header_info['scale_index_nn']['synthesis']['weight']],
@@ -476,6 +477,7 @@ def decode(bitstream_path: str, device: str = 'cpu') -> Tensor:
             # Compute proba param from context
             cur_raw_proba_param = arm(cur_context.cpu())
             cur_mu, cur_scale = get_mu_scale(cur_raw_proba_param)
+            cur_scale = torch.round(cur_scale*Q_EXP_SCALE)/Q_EXP_SCALE
 
             # Decode and store the value at the proper location within current_y
             x_delta = n_ctx_row_col+1

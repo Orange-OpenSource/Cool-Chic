@@ -56,6 +56,7 @@ Limitations:
 import os
 from typing import Dict, List, Tuple, Union, TypedDict
 from models.cool_chic import CoolChicEncoder
+from utils.constants import MAX_AC_MAX_VAL
 
 
 class DescriptorNN(TypedDict, total=False):
@@ -169,14 +170,14 @@ def write_header(
     else:
         byte_to_write += model.layers_synthesis[0].to_bytes(1, byteorder='big', signed=False)
 
-    if ac_max_val_nn > 2 ** 16 - 1:
+    if ac_max_val_nn > MAX_AC_MAX_VAL:
         print(f'AC_MAX_VAL NN is too big!')
-        print(f'Found {ac_max_val_nn}, should be smaller than {2 ** 16 - 1}')
+        print(f'Found {ac_max_val_nn}, should be smaller than {MAX_AC_MAX_VAL}')
         print(f'Exiting!')
         return
-    if ac_max_val_latent > 2 ** 16 - 1:
+    if ac_max_val_latent > MAX_AC_MAX_VAL:
         print(f'AC_MAX_VAL latent is too big!')
-        print(f'Found {ac_max_val_latent}, should be smaller than {2 ** 16 - 1}')
+        print(f'Found {ac_max_val_latent}, should be smaller than {MAX_AC_MAX_VAL}')
         print(f'Exiting!')
         return
 
@@ -196,9 +197,9 @@ def write_header(
     for nn_name in ['arm', 'synthesis']:
         for nn_param in ['weight', 'bias']:
             cur_n_bytes = n_bytes_nn.get(nn_name).get(nn_param)
-            if cur_n_bytes > 2 ** 16 - 1:
+            if cur_n_bytes > MAX_AC_MAX_VAL:
                 print(f'Number of bytes for {nn_name} {nn_param} is too big!')
-                print(f'Found {cur_n_bytes}, should be smaller than {2 ** 16 - 1}')
+                print(f'Found {cur_n_bytes}, should be smaller than {MAX_AC_MAX_VAL}')
                 print(f'Exiting!')
                 return
             byte_to_write += cur_n_bytes.to_bytes(2, byteorder='big', signed=False)

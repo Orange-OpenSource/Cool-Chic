@@ -18,7 +18,7 @@ from models.linear_layers import CustomLinear, CustomLinearResBlock
 
 
 class ArmMLP(torch.jit.ScriptModule):
-    def __init__(self, input_ft: int, layers_dim: List[int]):
+    def __init__(self, input_ft: int, layers_dim: List[int], fpfm: int = 0):
         """Instantiate an ARM MLP. It always has 3 (mu, log scale) output features.
 
         Args:
@@ -28,22 +28,35 @@ class ArmMLP(torch.jit.ScriptModule):
                 if no hidden layer (i.e. linear systems).
         """
         super().__init__()
+        self.FPFM = fpfm # FIXED_POINT_FRACTIONAL_MULT # added for decode_network with torchscript.
 
         # ======================== Construct the MLP ======================== #
         layers_list = nn.ModuleList()
 
         for out_ft in layers_dim:
             if input_ft == out_ft:
-                layers_list.append(CustomLinearResBlock(input_ft, out_ft))
+                layers_list.append(CustomLinearResBlock(input_ft, out_ft, self.FPFM))
             else:
-                layers_list.append(CustomLinear(input_ft, out_ft))
+                layers_list.append(CustomLinear(input_ft, out_ft, self.FPFM))
             layers_list.append(nn.ReLU())
             input_ft = out_ft
 
         # Construct the output layer. It always has 2 outputs (mu and log scale)
-        layers_list.append(CustomLinear(input_ft, 2))
+        layers_list.append(CustomLinear(input_ft, 2, self.FPFM))
         self.mlp = nn.Sequential(*layers_list)
         # ======================== Construct the MLP ======================== #
+
+    def set_quant(self, fpfm: int = 0):
+        # Non-zero fpfm implies we're in fixed point mode. weights and biases are integers.
+        self.FPFM = fpfm
+        # Convert from float to fixed point int.
+        for l in self.mlp.children():
+            if isinstance(l, CustomLinearResBlock) or isinstance(l, CustomLinear) \
+                or l.original_name == "CustomLinearResBlock" or l.original_name == "CustomLinear":
+                l.scale = self.FPFM
+                # shadow fixed point weights and biases.
+                l.qw = torch.round(l.w*l.scale).to(torch.int32)
+                l.qb = torch.round(l.b*l.scale*l.scale).to(torch.int32)
 
     def forward(self, x: Tensor) -> Tensor:
         """Perform the forward pass for the Synthesis MLP.
@@ -57,8 +70,28 @@ class ArmMLP(torch.jit.ScriptModule):
         Returns:
             Tensor: A [B, 2] tensor.
         """
-        return self.mlp(x)
+        if self.FPFM == 0:
+            # Pure float processing.
+            for l in self.mlp.children():
+                x = l(x)
+            return x
 
+#        if False:
+#            # Run in fp mode and clamp.
+#            for l in self.mlp.children():
+#                x = l(x)
+#                x = torch.round(x*self.FPFM) / self.FPFM
+#            return x
+
+        # integer mode.
+        xint = x.clone().detach()
+        xint = xint.to(torch.int32)*self.FPFM
+
+        for l in self.mlp.children():
+            xint = l(xint)
+
+        x = xint / self.FPFM
+        return x
 
 def get_neighbor(x: Tensor, mask_size: int, non_zero_pixel_ctx_idx: Tensor) -> Tensor:
     """Use the unfold function to extract the neighbors of each pixel in x.

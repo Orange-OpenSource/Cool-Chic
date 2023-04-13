@@ -13,12 +13,13 @@ import torch
 import constriction
 import numpy as np
 import torch
+from utils.constants import Q_PROBA_DEFAULT
 
 from typing import Optional, Tuple
 from torch import Tensor
 
 class RangeCoder:
-    def __init__(self, n_ctx_rowcol: int, AC_MAX_VAL: int, Q_PROBA: int = 5):
+    def __init__(self, n_ctx_rowcol: int, AC_MAX_VAL: int, Q_PROBA: int = Q_PROBA_DEFAULT):
         """Instantiate a range coder object.
 
         Args:

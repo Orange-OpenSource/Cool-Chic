@@ -22,8 +22,7 @@ from bitstream.range_coder import RangeCoder
 from models.arm import ArmMLP
 from models.cool_chic import CoolChicEncoder
 from models.synthesis import SynthesisMLP
-from utils.constants import POSSIBLE_Q_STEP_NN, POSSIBLE_SCALE_NN
-
+from utils.constants import POSSIBLE_Q_STEP_ARM_NN, POSSIBLE_Q_STEP_SYN_NN, POSSIBLE_SCALE_NN, float_to_bin, Q_EXP_SCALE, FIXED_POINT_FRACTIONAL_MULT
 
 def get_ac_max_val_nn(model: CoolChicEncoder, q_step_nn: DescriptorCoolChic) -> int:
     """Return the maximum amplitude of the quantized model (i.e. weight / q_step).
@@ -48,33 +47,39 @@ def get_ac_max_val_nn(model: CoolChicEncoder, q_step_nn: DescriptorCoolChic) -> 
             if 'mlp' not in k:
                 continue
 
+            if cur_module_name == 'arm':
+                Q_STEPS = POSSIBLE_Q_STEP_ARM_NN
+            else:
+                Q_STEPS = POSSIBLE_Q_STEP_SYN_NN
+
             if k.endswith('.w'):
                 # Find the index of the closest quantization step in the list of
                 # the possible quantization step.
                 cur_q_step_index = int(torch.argmin(
-                    (POSSIBLE_Q_STEP_NN - q_step_nn[f'{cur_module_name}_weight']).abs()
+                    (Q_STEPS - q_step_nn[f'{cur_module_name}_weight']).abs()
                 ).item())
 
                 # Quantize the weight with the actual quantization step and add it
                 # to the list of (quantized) weights
-                model_param_quant.append(torch.round(v / POSSIBLE_Q_STEP_NN[cur_q_step_index]).flatten())
+                model_param_quant.append(torch.round(v / Q_STEPS[cur_q_step_index]).flatten())
 
             elif k.endswith('.b'):
                 # Find the index of the closest quantization step in the list of
                 # the possible quantization step.
                 cur_q_step_index = int(torch.argmin(
-                    (POSSIBLE_Q_STEP_NN - q_step_nn[f'{cur_module_name}_bias']).abs()
+                    (Q_STEPS - q_step_nn[f'{cur_module_name}_bias']).abs()
                 ).item())
 
                 # Quantize the bias with the actual quantization step and add it
                 # to the list of (quantized) bias
-                model_param_quant.append(torch.round(v / POSSIBLE_Q_STEP_NN[cur_q_step_index]).flatten())
+                model_param_quant.append(torch.round(v / Q_STEPS[cur_q_step_index]).flatten())
 
     # Gather them
     model_param_quant = torch.cat(model_param_quant).flatten()
 
-    # Compute AC_MAC_VAL
+    # Compute AC_MAX_VAL
     AC_MAX_VAL = int(torch.ceil(model_param_quant.abs().max() + 2).item())
+    print("AC_MAX_VAL for model is", AC_MAX_VAL)
     return AC_MAX_VAL
 
 
@@ -154,11 +159,16 @@ def encode(
             if not 'mlp' in k:
                 continue
 
+            if cur_module_name == 'arm':
+                Q_STEPS = POSSIBLE_Q_STEP_ARM_NN
+            else:
+                Q_STEPS = POSSIBLE_Q_STEP_SYN_NN
+
             if k.endswith('.w'):
                 # Find the index of the closest quantization step in the list of
                 # the possible quantization step.
                 cur_q_step_index = int(torch.argmin(
-                    (POSSIBLE_Q_STEP_NN - q_step_nn[f'{cur_module_name}_weight']).abs()
+                    (Q_STEPS - q_step_nn[f'{cur_module_name}_weight']).abs()
                 ).item())
 
                 # Store it into q_step_index_nn. It is overwritten for each
@@ -167,13 +177,13 @@ def encode(
 
                 # Quantize the weight with the actual quantization step and add it
                 # to the list of (quantized) weights
-                weights.append(torch.round(v / POSSIBLE_Q_STEP_NN[cur_q_step_index]).flatten())
+                weights.append(torch.round(v / Q_STEPS[cur_q_step_index]).flatten())
 
             elif k.endswith('.b'):
                 # Find the index of the closest quantization step in the list of
                 # the possible quantization step.
                 cur_q_step_index = int(torch.argmin(
-                    (POSSIBLE_Q_STEP_NN - q_step_nn[f'{cur_module_name}_bias']).abs()
+                    (Q_STEPS - q_step_nn[f'{cur_module_name}_bias']).abs()
                 ).item())
 
                 # Store it into q_step_index_nn. It is overwritten for each
@@ -182,7 +192,7 @@ def encode(
 
                 # Quantize the bias with the actual quantization step and add it
                 # to the list of (quantized) bias
-                bias.append(torch.round(v / POSSIBLE_Q_STEP_NN[cur_q_step_index]).flatten())
+                bias.append(torch.round(v / Q_STEPS[cur_q_step_index]).flatten())
 
         # Gather them
         weights = torch.cat(weights).flatten()
@@ -238,8 +248,10 @@ def encode(
     for module_name in ['arm', 'synthesis']:
         if module_name == 'arm':
             empty_module = ArmMLP(model.non_zero_pixel_ctx, model.layers_arm)
+            Q_STEPS = POSSIBLE_Q_STEP_ARM_NN
         elif module_name == 'synthesis':
             empty_module =  SynthesisMLP(model.latent_n_grids, model.layers_synthesis)
+            Q_STEPS = POSSIBLE_Q_STEP_SYN_NN
 
         loaded_module = decode_network(
             empty_module,
@@ -248,8 +260,8 @@ def encode(
                 bias = f'{bitstream_path}_{module_name}_bias',
             ),
             DescriptorNN (
-                weight = POSSIBLE_Q_STEP_NN[q_step_index_nn[module_name]['weight']],
-                bias = POSSIBLE_Q_STEP_NN[q_step_index_nn[module_name]['bias']],
+                weight = Q_STEPS[q_step_index_nn[module_name]['weight']],
+                bias = Q_STEPS[q_step_index_nn[module_name]['bias']],
             ),
             DescriptorNN (
                 weight = POSSIBLE_SCALE_NN[scale_index_nn[module_name]['weight']],
@@ -258,6 +270,8 @@ def encode(
             ac_max_val_nn,
         )
         setattr(model, module_name, loaded_module)
+
+    model.arm.set_quant(FIXED_POINT_FRACTIONAL_MULT)
 
     model.non_zero_pixel_ctx_index = model.non_zero_pixel_ctx_index.to('cpu')
 
@@ -275,6 +289,7 @@ def encode(
     for i in range(model.latent_n_grids):
         current_mu = encoder_output.get('mu')[i]
         current_scale = encoder_output.get('scale')[i]
+        current_scale = torch.round(current_scale*Q_EXP_SCALE)/Q_EXP_SCALE
         current_y = encoder_output.get('latent')[i]
 
         cur_latent_bitstream = f'{bitstream_path}_{i}'
