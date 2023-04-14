@@ -289,7 +289,7 @@ def decode(bitstream_path: str, device: str = 'cpu') -> Tensor:
             Either "cpu" or "cuda:0"
 
     Returns:
-        Tensor: The decoded image as a [1, C, H, W] tensor in [0, 1]
+        Tensor: The decoded image as a uint8 [1, C, H, W] tensor in [0, 255]
     """
 
     start_time = time.time()
@@ -507,6 +507,9 @@ def decode(bitstream_path: str, device: str = 'cpu') -> Tensor:
     # Reconstruct the output
     synthesis_input = get_synthesis_input_latent(decoded_y)
     x_hat = torch.clamp(synthesis(synthesis_input), 0., 1.)
+
+    # Cast to [0 255]
+    x_hat = torch.round(x_hat * 255).to(torch.uint8)
 
     # ================= Clean up the intermediate bitstream ================= #
     for cur_module_name in ['arm', 'synthesis']:

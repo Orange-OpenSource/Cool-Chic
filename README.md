@@ -20,13 +20,14 @@ More information available in the paper: [_COOL-CHIC: Coordinate-based Low Compl
 ## Decoding a bitstream \& reproducing results from the paper
 
 We provide bitstream for the images of the kodak dataset in
-```results/kodak/bitstreams/```. This permits to reproduce the results presented
-in the paper. Bitstream can be decoded as follows:
+```results/kodak/bitstreams/``` as well as for a sample image in
+```results/biville/bitstreams/```. This permits to reproduce the results
+presented in the paper. Bitstream can be decoded as follows:
 
-    >>> python3 src/decode.py -i results/kodak/bitstreams/kodim19-lambda0001.bin -o kodim19-lambda0001.png
+    >>> python3 src/decode.py -i results/biville/bitstreams/biville-lambda0001.bin -o biville-lambda0001.png
 
 The results of the decoding of all bitstreams are given in
-```results/kodak/raw_results.tsv``` and ```results/kodak/average_results.tsv```.
+```results/kodak/raw_results.tsv``` and ```results/biville/raw_results.tsv```.
 
 ## Encoding an image
 
@@ -45,7 +46,7 @@ found at ```decode.py```). The final results can be found at
 
 |         Name         |                                  Meaning                                  | Unit          |
 |:--------------------:|:-------------------------------------------------------------------------:|---------------|
-|         **psnr**        |              PSNR             | dB            |
+|         **psnr**        |              Encoder-side PSNR             | dB            |
 |    rate_latent_bpp   | Rate for the latent variables | bit per pixel |
 | rate_mlp_bpp         | Rate synthesis and ARM MLPs   | bit per pixel |
 | **rate_all_bpp**         | Total rate                    | bit per pixel |
@@ -54,7 +55,10 @@ found at ```decode.py```). The final results can be found at
 | decoder_rate_bpp     | Total rate (size of the bitstream)                                        | bit per pixel |
 | decoder_psnr_db      | PSNR of the image decoded from the bitstream                              | dB
 
-Results from the paper are obtained using the __psnr__ and __rate_all_bpp__ rows.
+Results may slightly differ between the encoder-side rate and decoder-side rate: the encoder measures the entropy of the data while the decoder retrieve the actual size of the bitstream.
+
+Similarly, the encoder-side PSNR is slightly better than the decoder-side one as the encoder does not take into account the rounding due to storing the image as an 8-bit RGB array.
+
 
 ## Arguments
 

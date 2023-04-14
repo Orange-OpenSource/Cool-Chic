@@ -186,8 +186,8 @@ if __name__ == '__main__':
     # Save decoded image
     to_pil_image(x_hat.cpu().squeeze(0)).save(args.decoded_img_path)
 
-    # Measure PSNR
-    real_psnr = -10 * torch.log10(((x_hat - img) ** 2).mean())
+    # Measure PSNR. Scale back the original image to 255
+    real_psnr = 10 * torch.log10(255 ** 2 / torch.mean((x_hat - img * 255) ** 2))
     print('\nDecoder-side performance:')
     print(f'rate_bpp\tpsnr_db')
     print(f'{real_rate_bpp:6.4f}\t{real_psnr: 7.4f}')
