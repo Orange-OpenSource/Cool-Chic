@@ -13,16 +13,17 @@ import os
 import subprocess
 import torch
 import time
-from typing import Dict
-from torch import Tensor
-from bitstream.decode import decode_network
 
-from bitstream.header import DescriptorCoolChic, DescriptorNN, write_header
+from bitstream.decode import decode_network
+from bitstream.header import write_header
 from bitstream.range_coder import RangeCoder
-from models.arm import ArmMLP
-from models.cool_chic import CoolChicEncoder
-from models.synthesis import SynthesisMLP
-from utils.constants import POSSIBLE_Q_STEP_ARM_NN, POSSIBLE_Q_STEP_SYN_NN, POSSIBLE_SCALE_NN, float_to_bin, Q_EXP_SCALE, FIXED_POINT_FRACTIONAL_MULT
+from models.arm import Arm
+from models.upsampling import Upsampling
+from models.cool_chic import CoolChicEncoder, to_device
+from models.synthesis import Synthesis
+from utils.constants import POSSIBLE_Q_STEP_ARM_NN, POSSIBLE_Q_STEP_SYN_NN, POSSIBLE_SCALE_NN, FIXED_POINT_FRACTIONAL_MULT
+from utils.data_structure import DescriptorNN, DescriptorCoolChic
+
 
 def get_ac_max_val_nn(model: CoolChicEncoder, q_step_nn: DescriptorCoolChic) -> int:
     """Return the maximum amplitude of the quantized model (i.e. weight / q_step).
@@ -39,20 +40,17 @@ def get_ac_max_val_nn(model: CoolChicEncoder, q_step_nn: DescriptorCoolChic) -> 
     """
     model_param_quant = []
 
-    for cur_module_name in ['arm', 'synthesis']:
+    for cur_module_name in ['arm', 'upsampling', 'synthesis']:
         module_to_encode = getattr(model, cur_module_name)
 
         # Retrieve all the weights and biases for the ARM MLP
         for k, v in module_to_encode.named_parameters():
-            if 'mlp' not in k:
-                continue
-
             if cur_module_name == 'arm':
                 Q_STEPS = POSSIBLE_Q_STEP_ARM_NN
             else:
                 Q_STEPS = POSSIBLE_Q_STEP_SYN_NN
 
-            if k.endswith('.w'):
+            if k.endswith('.w') or k.endswith('.weight'):
                 # Find the index of the closest quantization step in the list of
                 # the possible quantization step.
                 cur_q_step_index = int(torch.argmin(
@@ -63,7 +61,7 @@ def get_ac_max_val_nn(model: CoolChicEncoder, q_step_nn: DescriptorCoolChic) -> 
                 # to the list of (quantized) weights
                 model_param_quant.append(torch.round(v / Q_STEPS[cur_q_step_index]).flatten())
 
-            elif k.endswith('.b'):
+            elif k.endswith('.b') or k.endswith('.bias'):
                 # Find the index of the closest quantization step in the list of
                 # the possible quantization step.
                 cur_q_step_index = int(torch.argmin(
@@ -77,9 +75,8 @@ def get_ac_max_val_nn(model: CoolChicEncoder, q_step_nn: DescriptorCoolChic) -> 
     # Gather them
     model_param_quant = torch.cat(model_param_quant).flatten()
 
-    # Compute AC_MAX_VAL
+    # Compute AC_MAX_VAL.
     AC_MAX_VAL = int(torch.ceil(model_param_quant.abs().max() + 2).item())
-    print("AC_MAX_VAL for model is", AC_MAX_VAL)
     return AC_MAX_VAL
 
 
@@ -97,8 +94,8 @@ def get_ac_max_val_latent(model: CoolChicEncoder) -> int:
     # Setting visu to true allows to recover 2D mu, scale and latents
     # Don't specify AC_MAX_VAL now: we let the latents evolve freely to capture
     # their dynamic.
-    encoder_output = model.forward(get_proba_param = True, AC_MAX_VAL = -1)
-    latent = torch.cat([y_i.flatten() for y_i in encoder_output.get('latent')], dim=0)
+    encoder_output = model.forward(visu = True, AC_MAX_VAL = -1)
+    latent = torch.cat([y_i.flatten() for y_i in encoder_output.get('2d_y_latent')], dim=0)
 
     # Compute AC_MAC_VAL
     AC_MAX_VAL = int(torch.ceil(latent.abs().max() + 2).item())
@@ -106,34 +103,26 @@ def get_ac_max_val_latent(model: CoolChicEncoder) -> int:
 
 
 @torch.no_grad()
-def encode(
-    model: CoolChicEncoder,
-    bitstream_path: str,
-    q_step_nn: DescriptorCoolChic,
-) -> int:
-    """Encode an image learned by model into a bitstream.
+def encode(model: CoolChicEncoder, bitstream_path: str, q_step_nn: DescriptorCoolChic):
+    """Convert a model to a bistream located at <bistream_path>. The model is a quantized
+    model but in floating point e.g. 1.25 if q_step is 0.25. Consequently, the quantization
+    is provided to transform the NN weights into integer during their entropy coding.
 
     Args:
-        model (CoolChicEncoder): The trained overfitted encoder for the image.
-        bitstream_path (str): Where to write the bitstream.
-        q_step_nn (DescriptorCoolChic): Quantization step of the different NNs.
-            See in header.py for the details.
-
-    Returns:
-        int: Rate in **byte**
+        model (CoolChicEncoder): A trained and quantized model
+        bitstream_path (str): Where to save the bitstream
+        q_step_nn (DescriptorCoolChic): Describe the quantization steps used
+            for the weight and bias of the network.
     """
 
     start_time = time.time()
     # Ensure encoding/decoding replicability on different hardware
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
     torch.use_deterministic_algorithms(True)
     # Run on CPU for more reliability (particularly the ARM module)
-    model = model.eval().to('cpu')
+    model = model.eval()
+    model = to_device(model, 'cpu')
 
-    if os.path.exists(bitstream_path):
-        print(f'Found an already existing bitstream at {bitstream_path}... deleting!')
-        subprocess.call(f'rm {bitstream_path}', shell=True)
+    subprocess.call(f'rm {bitstream_path}', shell=True)
 
     # ================= Encode the MLP into a bitstream file ================ #
     ac_max_val_nn = get_ac_max_val_nn(model, q_step_nn)
@@ -145,7 +134,7 @@ def encode(
     scale_index_nn: DescriptorCoolChic = {}
     q_step_index_nn: DescriptorCoolChic = {}
     n_bytes_nn: DescriptorCoolChic = {}
-    for cur_module_name in ['arm', 'synthesis']:
+    for cur_module_name in ['arm', 'upsampling', 'synthesis']:
         # Prepare to store values dedicated to the current modules
         scale_index_nn[cur_module_name] = {}
         q_step_index_nn[cur_module_name] = {}
@@ -155,16 +144,15 @@ def encode(
 
         weights, bias = [], []
         # Retrieve all the weights and biases for the ARM MLP
+        q_step_index_nn[cur_module_name]['weight'] = -1
+        q_step_index_nn[cur_module_name]['bias'] = -1
         for k, v in module_to_encode.named_parameters():
-            if not 'mlp' in k:
-                continue
-
             if cur_module_name == 'arm':
                 Q_STEPS = POSSIBLE_Q_STEP_ARM_NN
             else:
                 Q_STEPS = POSSIBLE_Q_STEP_SYN_NN
 
-            if k.endswith('.w'):
+            if k.endswith('.w') or k.endswith('.weight'):
                 # Find the index of the closest quantization step in the list of
                 # the possible quantization step.
                 cur_q_step_index = int(torch.argmin(
@@ -179,9 +167,9 @@ def encode(
                 # to the list of (quantized) weights
                 weights.append(torch.round(v / Q_STEPS[cur_q_step_index]).flatten())
 
-            elif k.endswith('.b'):
+            elif k.endswith('.b') or k.endswith('.bias'):
                 # Find the index of the closest quantization step in the list of
-                # the possible quantization step.
+                # the Q_STEPS quantization step.
                 cur_q_step_index = int(torch.argmin(
                     (Q_STEPS - q_step_nn[f'{cur_module_name}_bias']).abs()
                 ).item())
@@ -196,29 +184,35 @@ def encode(
 
         # Gather them
         weights = torch.cat(weights).flatten()
-        bias = torch.cat(bias).flatten()
+        have_bias = len(bias) != 0
+        if have_bias:
+            bias = torch.cat(bias).flatten()
 
         floating_point_scale_weight = weights.std().item() / math.sqrt(2)
-        floating_point_scale_bias = bias.std().item() / math.sqrt(2)
+        if have_bias:
+            floating_point_scale_bias = bias.std().item() / math.sqrt(2)
 
         # Find the closest element to the actual scale in the POSSIBLE_SCALE_NN list
         scale_index_weight = int(
             torch.argmin((POSSIBLE_SCALE_NN - floating_point_scale_weight).abs()).item()
         )
-        scale_index_bias = int(
-            torch.argmin((POSSIBLE_SCALE_NN - floating_point_scale_bias).abs()).item()
-        )
+        if have_bias:
+            scale_index_bias = int(
+                torch.argmin((POSSIBLE_SCALE_NN - floating_point_scale_bias).abs()).item()
+            )
         # Store this information for the header
         scale_index_nn[cur_module_name]['weight'] = scale_index_weight
-        scale_index_nn[cur_module_name]['bias'] = scale_index_bias
+        scale_index_nn[cur_module_name]['bias'] = scale_index_bias if have_bias else -1
 
         scale_weight = POSSIBLE_SCALE_NN[scale_index_weight]
-        scale_bias = POSSIBLE_SCALE_NN[scale_index_bias]
+        if scale_index_bias >= 0:
+            scale_bias = POSSIBLE_SCALE_NN[scale_index_bias]
 
         # ----------------- Actual entropy coding
         # It happens on cpu
         weights = weights.cpu()
-        bias = bias.cpu()
+        if have_bias:
+            bias = bias.cpu()
 
         cur_bitstream_path = f'{bitstream_path}_{cur_module_name}_weight'
         range_coder_nn.encode(
@@ -231,66 +225,75 @@ def encode(
 
         n_bytes_nn[cur_module_name]['weight'] = os.path.getsize(cur_bitstream_path)
 
-        cur_bitstream_path = f'{bitstream_path}_{cur_module_name}_bias'
-        range_coder_nn.encode(
-            cur_bitstream_path,
-            bias,
-            torch.zeros_like(bias),
-            scale_bias * torch.ones_like(bias),
-            CHW = None,     # No wavefront coding for the bias
-        )
-        n_bytes_nn[cur_module_name]['bias'] = os.path.getsize(cur_bitstream_path)
+        if have_bias:
+            cur_bitstream_path = f'{bitstream_path}_{cur_module_name}_bias'
+            range_coder_nn.encode(
+                cur_bitstream_path,
+                bias,
+                torch.zeros_like(bias),
+                scale_bias * torch.ones_like(bias),
+                CHW = None,     # No wavefront coding for the bias
+            )
+            n_bytes_nn[cur_module_name]['bias'] = os.path.getsize(cur_bitstream_path)
+        else:
+            n_bytes_nn[cur_module_name]['bias'] = 0
     # ================= Encode the MLP into a bitstream file ================ #
 
     # =============== Encode the latent into a bitstream file =============== #
     # To ensure perfect reproducibility between the encoder and the decoder,
     # we load the the different sub-networks from the bitstream here.
-    for module_name in ['arm', 'synthesis']:
+    for module_name in ['arm', 'upsampling', 'synthesis']:
         if module_name == 'arm':
-            empty_module = ArmMLP(model.non_zero_pixel_ctx, model.layers_arm)
+            empty_module = Arm(model.non_zero_pixel_ctx, model.param.layers_arm)
             Q_STEPS = POSSIBLE_Q_STEP_ARM_NN
         elif module_name == 'synthesis':
-            empty_module =  SynthesisMLP(model.latent_n_grids, model.layers_synthesis)
+            empty_module =  Synthesis(model.param.latent_n_grids, model.param.layers_synthesis)
+            Q_STEPS = POSSIBLE_Q_STEP_SYN_NN
+        else:
+            empty_module = Upsampling(model.param.upsampling_kernel_size)
             Q_STEPS = POSSIBLE_Q_STEP_SYN_NN
 
+        have_bias = q_step_index_nn[module_name]['bias'] >= 0
         loaded_module = decode_network(
             empty_module,
             DescriptorNN(
                 weight = f'{bitstream_path}_{module_name}_weight',
-                bias = f'{bitstream_path}_{module_name}_bias',
+                bias = f'{bitstream_path}_{module_name}_bias' if have_bias else "",
             ),
             DescriptorNN (
                 weight = Q_STEPS[q_step_index_nn[module_name]['weight']],
-                bias = Q_STEPS[q_step_index_nn[module_name]['bias']],
+                bias = Q_STEPS[q_step_index_nn[module_name]['bias']] if have_bias else 0,
             ),
             DescriptorNN (
                 weight = POSSIBLE_SCALE_NN[scale_index_nn[module_name]['weight']],
-                bias = POSSIBLE_SCALE_NN[scale_index_nn[module_name]['bias']],
+                bias = POSSIBLE_SCALE_NN[scale_index_nn[module_name]['bias']] if have_bias else 0,
             ),
-            ac_max_val_nn,
+            ac_max_val_nn
         )
         setattr(model, module_name, loaded_module)
 
     model.arm.set_quant(FIXED_POINT_FRACTIONAL_MULT)
-
-    model.non_zero_pixel_ctx_index = model.non_zero_pixel_ctx_index.to('cpu')
+    # model.non_zero_pixel_ctx_index = model.non_zero_pixel_ctx_index.to('cpu')
+    model = to_device(model, 'cpu')
 
     ac_max_val_latent = get_ac_max_val_latent(model)
-    range_coder_latent = RangeCoder(model.n_ctx_rowcol, ac_max_val_latent)
+    range_coder_latent = RangeCoder(model.param.n_ctx_rowcol, ac_max_val_latent)
 
     # Setting visu to true allows to recover 2D mu, scale and latents
-    # Use AC_MAX_VAL to clamp the latent so they fit inside the expected range.
-    # ! It should not be needed the AC_MAX_VAL parameter is computed to be the maximum
-    # ! dynamic of the latent
-    encoder_output = model.forward(get_proba_param = True, AC_MAX_VAL = range_coder_latent.AC_MAX_VAL)
+    encoder_output = model.forward(visu = True, AC_MAX_VAL = range_coder_latent.AC_MAX_VAL)
 
     # Encode the different latent grids one after the other
     n_bytes_per_latent = []
-    for i in range(model.latent_n_grids):
-        current_mu = encoder_output.get('mu')[i]
-        current_scale = encoder_output.get('scale')[i]
-        current_scale = torch.round(current_scale*Q_EXP_SCALE)/Q_EXP_SCALE
-        current_y = encoder_output.get('latent')[i]
+    torch.set_printoptions(threshold=10000000)
+    for i in range(model.param.latent_n_grids):
+        current_mu = encoder_output.get('2d_y_mu')[i]
+        current_scale = encoder_output.get('2d_y_scale')[i]
+        current_y = encoder_output.get('2d_y_latent')[i]
+
+        # Nothing to send!
+        if current_y.abs().max() == 0:
+            n_bytes_per_latent.append(0)
+            continue
 
         cur_latent_bitstream = f'{bitstream_path}_{i}'
         range_coder_latent.encode(
@@ -312,7 +315,7 @@ def encode(
         scale_index_nn,
         n_bytes_nn,
         ac_max_val_nn,
-        ac_max_val_latent
+        ac_max_val_latent,
     )
 
     # Concatenate everything inside a single file
@@ -320,22 +323,26 @@ def encode(
     subprocess.call(f'cat {header_path} >> {bitstream_path}', shell=True)
     subprocess.call(f'rm -f {header_path}', shell=True)
 
-    for cur_module_name in ['arm', 'synthesis']:
+    for cur_module_name in ['arm', 'upsampling', 'synthesis']:
         for parameter_type in ['weight', 'bias']:
             cur_bitstream = f'{bitstream_path}_{cur_module_name}_{parameter_type}'
-            subprocess.call(f'cat {cur_bitstream} >> {bitstream_path}', shell=True)
-            subprocess.call(f'rm -f {cur_bitstream}', shell=True)
+            if os.path.exists(cur_bitstream):
+                subprocess.call(f'cat {cur_bitstream} >> {bitstream_path}', shell=True)
+                subprocess.call(f'rm -f {cur_bitstream}', shell=True)
 
-    for i in range(model.latent_n_grids):
-        cur_latent_bitstream = f'{bitstream_path}_{i}'
-        subprocess.call(f'cat {cur_latent_bitstream} >> {bitstream_path}', shell=True)
-        subprocess.call(f'rm -f {cur_latent_bitstream}', shell=True)
+    for i in range(model.param.latent_n_grids):
+        if n_bytes_per_latent[i] > 0:
+            cur_latent_bitstream = f'{bitstream_path}_{i}'
+            subprocess.call(f'cat {cur_latent_bitstream} >> {bitstream_path}', shell=True)
+            subprocess.call(f'rm -f {cur_latent_bitstream}', shell=True)
 
     real_rate_byte = os.path.getsize(bitstream_path)
-    real_rate_bpp = real_rate_byte * 8 / (model.img_size[-1] * model.img_size[-2])
+    real_rate_bpp = real_rate_byte * 8 / (model.param.img_size[-1] * model.param.img_size[-2])
     print(f'Real rate        [kBytes]: {real_rate_byte / 1000:9.3f}')
     print(f'Real rate           [bpp]: {real_rate_bpp :9.3f}')
 
     elapsed = time.time() - start_time
     print(f'Encoding time: {elapsed:4.3f} sec')
-    return real_rate_byte
+
+    # Encoding's done, we no longer need deterministic algorithms
+    torch.use_deterministic_algorithms(False)

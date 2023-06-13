@@ -9,67 +9,174 @@
 
 
 import torch
-import torch.nn.functional as F
 from torch import Tensor, nn
-from einops import rearrange
 from typing import List
-from models.linear_layers import CustomLinear, CustomLinearResBlock
 
+from models.quantizable_module import QuantizableModule
+from utils.constants import POSSIBLE_Q_STEP_SYN_NN
 
-class SynthesisMLP(torch.jit.ScriptModule):
-    def __init__(self, input_ft: int, layers_dim: List[int]):
-        """Instantiate a Synthesis MLP. It always has 3 (R, G, B) output features.
+class SynthesisLayer(nn.Module):
+    def __init__(self, input_ft: int, output_ft: int, kernel_size: int):
+        """Instantiate a synthesis layer.
 
         Args:
-            input_ft (int): Number of input dimensions. It corresponds to the number
-                of latent grids.
-            layers_dim (List[int]): List of the width of the hidden layers. Empty
-                if no hidden layer (i.e. linear systems).
+            input_ft (int): Input feature
+            output_ft (int): Output feature
+            kernel_size (int): Kernel size
         """
         super().__init__()
-        # ======================== Construct the MLP ======================== #
+
+        self.pad = nn.ReplicationPad2d(int((kernel_size - 1) / 2))
+        self.conv_layer = nn.Conv2d(
+            input_ft,
+            output_ft,
+            kernel_size
+        )
+
+        # More stable if initialized as a zero-bias layer with smaller variance
+        # for the weights.
+        with torch.no_grad():
+            self.conv_layer.weight.data = self.conv_layer.weight.data / output_ft ** 2
+            self.conv_layer.bias.data = self.conv_layer.bias.data * 0.
+
+    def forward(self, x: Tensor) -> Tensor:
+        return self.conv_layer(self.pad(x))
+
+
+class SynthesisResidualLayer(nn.Module):
+    def __init__(self, input_ft: int, output_ft: int, kernel_size: int):
+        """Instantiate a synthesis residual layer.
+
+        Args:
+            input_ft (int): Input feature
+            output_ft (int): Output feature
+            kernel_size (int): Kernel size
+        """
+        super().__init__()
+
+        assert input_ft == output_ft,\
+            f'Residual layer in/out dim must match. Input = {input_ft}, output = {output_ft}'
+
+        self.pad = nn.ReplicationPad2d(int((kernel_size - 1) / 2))
+        self.conv_layer = nn.Conv2d(
+            input_ft,
+            output_ft,
+            kernel_size
+        )
+
+        # More stable if a residual is initialized with all-zero parameters.
+        # This avoids increasing the output dynamic at the initialization
+        with torch.no_grad():
+            self.conv_layer.weight.data = self.conv_layer.weight.data * 0.
+            self.conv_layer.bias.data = self.conv_layer.bias.data * 0.
+
+    def forward(self, x: Tensor) -> Tensor:
+        return self.conv_layer(self.pad(x)) + x
+
+
+class SynthesisAttentionLayer(nn.Module):
+    def __init__(self, input_ft: int, output_ft: int, kernel_size: int):
+        """Instantiate a synthesis attention layer.
+
+        Args:
+            input_ft (int): Input feature
+            output_ft (int): Output feature
+            kernel_size (int): Kernel size
+        """
+        super().__init__()
+
+        assert input_ft == output_ft,\
+            f'Attention layer in/out dim must match. Input = {input_ft}, output = {output_ft}'
+
+        self.pad = nn.ReplicationPad2d(int((kernel_size - 1) / 2))
+
+        self.conv_layer_trunk = nn.Conv2d(
+            input_ft,
+            output_ft,
+            kernel_size
+        )
+        self.conv_layer_sigmoid = nn.Conv2d(
+            input_ft,
+            output_ft,
+            kernel_size
+        )
+
+        # Trunk is initialized as a residual block (i.e. all zero parameters)
+        # Sigmoid branch is initialized as a linear layer (i.e. no bias and smaller variance
+        # for the weights)
+        with torch.no_grad():
+            self.conv_layer_trunk.weight.data = self.conv_layer_trunk.weight.data * 0.
+            self.conv_layer_trunk.bias.data = self.conv_layer_trunk.bias.data * 0.
+            self.conv_layer_sigmoid.weight.data = self.conv_layer_sigmoid.weight.data / output_ft ** 2
+
+    def forward(self, x: Tensor) -> Tensor:
+        trunk = self.conv_layer_trunk(self.pad(x))
+        weight = torch.sigmoid(self.conv_layer_sigmoid(self.pad(x)))
+        return trunk * weight + x
+
+
+class Synthesis(QuantizableModule):
+    possible_non_linearity = {
+        'none': nn.Identity,
+        'relu': nn.ReLU,
+        'leakyrelu': nn.LeakyReLU,
+    }
+    possible_mode = {
+        'linear': SynthesisLayer,
+        'residual': SynthesisResidualLayer,
+        'attention': SynthesisAttentionLayer,
+    }
+
+    def __init__(self, input_ft: int, layers_dim: List[str]):
+        super().__init__(possible_q_steps=POSSIBLE_Q_STEP_SYN_NN)
         layers_list = nn.ModuleList()
 
         # Construct the hidden layer(s)
-        for out_ft in layers_dim:
-            if input_ft == out_ft:
-                layers_list.append(CustomLinearResBlock(input_ft, out_ft))
-            else:
-                layers_list.append(CustomLinear(input_ft, out_ft))
-            layers_list.append(nn.ReLU())
+        for layers in layers_dim:
+            out_ft, k_size, mode, non_linearity = layers.split('-')
+            out_ft = int(out_ft)
+            k_size = int(k_size)
+
+            # Check that mode and non linearity is correct
+            assert mode in Synthesis.possible_mode,\
+                f'Unknown mode. Found {mode}. Should be in {Synthesis.possible_mode.keys()}'
+
+            assert non_linearity in Synthesis.possible_non_linearity,\
+                f'Unknown non linearity. Found {non_linearity}. '\
+                f'Should be in {Synthesis.possible_non_linearity.keys()}'
+
+            # Instantiate them
+            layers_list.append(Synthesis.possible_mode[mode](input_ft, out_ft, k_size))
+            layers_list.append(Synthesis.possible_non_linearity[non_linearity]())
+
             input_ft = out_ft
 
-        # Construct the output layer. It always has 3 outputs (RGB)
-        layers_list.append(CustomLinear(input_ft, 3))
-        self.mlp = nn.Sequential(*layers_list)
-        # ======================== Construct the MLP ======================== #
+        self.layers = nn.Sequential(*layers_list)
 
     def forward(self, x: Tensor) -> Tensor:
-        """Perform the forward pass for the Synthesis MLP.
-        The input and output are 4D tensors. They are simply reshaped for the Linear
-        layers.
+        return self.layers(x)
 
-        Args:
-            x (Tensor): A [1, C, H, W] 4D tensor. With C the number of latent grids.
 
-        Returns:
-            Tensor: A [1, 3, H, W] tensor.
-        """
-        _, _, h, w = x.size()
-        # Convert 4D to 2D for the MLP...
-        x = rearrange(x, 'b c h w -> (b h w) c')
-        x = self.mlp(x)
-        # Go back from 2D to 4D. We output 3 features (i.e. RGB)
-        x = rearrange(x, '(b h w) c -> b c h w', c = 3, h = h, w = w)
-        return x
+class NoiseQuantizer(torch.autograd.Function):
+    noise_derivative: float = 100.
+
+    @staticmethod
+    def forward(ctx, x: torch.Tensor):
+        ctx.save_for_backward(x)
+        y = x + (torch.rand_like(x) - 0.5)
+        return y
+
+    @staticmethod
+    def backward(ctx, grad_out):
+        x, = ctx.saved_tensors
+        return grad_out * NoiseQuantizer.noise_derivative
 
 
 class STEQuantizer(torch.autograd.Function):
-    """Actual quantization in the forward and set gradient to one ine the backward."""
+    ste_derivative: float = 1e-2
+
     @staticmethod
-    def forward(ctx, x: torch.Tensor, training: bool):
-        # training is a dummy parameters used to have the same signature for both
-        # quantizer forward functions.
+    def forward(ctx, x: torch.Tensor):
         ctx.save_for_backward(x)
         y = torch.round(x)
         return y
@@ -77,51 +184,19 @@ class STEQuantizer(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_out):
         x, = ctx.saved_tensors
-        return grad_out, None  # No gradient with respect to <training> variable
+        return grad_out * STEQuantizer.ste_derivative
 
-
-class UniformNoiseQuantizer(torch.autograd.Function):
-    """If training: use noise addition. Otherwise use actual quantization. Gradient is always one."""
-    @staticmethod
-    def forward(ctx, x: torch.Tensor, training: bool):
-        ctx.save_for_backward(x)
-        if training:
-            y = x + (torch.rand_like(x) - 0.5) if training else torch.round(x)
-        else:
-            y = torch.round(x)
-        return y
-
-    @staticmethod
-    def backward(ctx, grad_out):
-        x, = ctx.saved_tensors
-        return grad_out, None   # No gradient with respect to <training> variable
-
-
-@torch.jit.script
-def get_synthesis_input_latent(decoder_side_latent: List[Tensor]) -> Tensor:
-    """From a list of C [1, 1, H_i, W_i] tensors, where H_i = H / 2 ** i abd
-    W_i = W / 2 ** i, upsample each tensor to H * W. Then return the values
-    as a 2d tensor [H * W, C]. This is the synthesis input
+def quantize(x: Tensor, training: bool) -> Tensor:
+    """Quantize a tensor with a unitary quantization step
 
     Args:
-        decoder_side_latent (List[Tensor]): a list of C latent variables
-            with resolution [1, 1, H_i, W_i].
+        x (Tensor): Tensor to be quantized
+        training (bool): True if we're training. In this case we use the
+            additive noise model. Otherwise, the actual quantization (round)
+            is used
+        log_2_gain (Tensor): Tensor of shape [1] containing the quantization gain.
 
     Returns:
-        Tensor: The [H * W, C] synthesis input.
+        Tensor: The quantized version of x.
     """
-    # Start from the lowest resolution latent variable N, upsampled it to match
-    # the size of the latent N - 1, concatenate them and do it again until all
-    # latents have the same spatial dimension
-    upsampled_latent: Tensor = decoder_side_latent[-1]
-    for i in range(len(decoder_side_latent) - 1, 0, -1):
-        target_tensor = decoder_side_latent[i - 1]
-        upsampled_latent = F.interpolate(
-            upsampled_latent,
-            size=target_tensor.size()[-2:],
-            mode='bicubic',
-            align_corners=False
-        )
-        upsampled_latent = torch.cat((target_tensor, upsampled_latent), dim=1)
-
-    return upsampled_latent
+    return x + (torch.rand_like(x) - 0.5) if training else torch.round(x)

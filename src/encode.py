@@ -8,40 +8,111 @@
 #          Pierrick Philippe <pierrick.philippe@orange.com>
 
 
+import os
+import sys
 import torch
 import subprocess
 import argparse
 
-from torch import Tensor
 from PIL import Image
-from torchvision.transforms.functional import to_tensor, to_pil_image
+from torchvision.transforms.functional import to_tensor
+
 from bitstream.encode import encode
 from bitstream.decode import decode
+from model_management.io import save_model
 
-from models.mlp_coding import greedy_quantization
-from models.cool_chic import CoolChicEncoder, to_device
+from model_management.presets import AVAILABLE_PRESET
+from model_management.trainer import do_warmup, one_training_phase
+from model_management.yuv import read_video, yuv_dict_to_device
+from models.cool_chic import CoolChicParameter, to_device
 
-from utils.logging import format_results_loss
-from model_management.trainer import loss_fn, train, save_model
+"""
+Use this file to encode an image.
+
+
+Syntax example for the synthesis:
+    12-1-linear,12-1-residual,3-1-linear,3-3-residual
+
+    This is a 4 layers synthesis. Now the output layer (computing the final RGB
+values) must be specified i.e. a 12,12 should now be called a 12,12,3. Each layer
+is described using the following syntax:
+
+        <output_dim>-<kernel_size>-<type>-<non_linearity>
+
+    <output_dim>    : Number of output features.
+    <kernel_size>   : Spatial dimension of the kernel. Use 1 to mimic an MLP.
+    <type>          :   - "linear" for a standard conv,
+                        - "residual" for a residual block i.e. layer(x) = x + conv(x)
+                        - "attention" for an attention block i.e.
+                            layer(x) = x + conv_1(x) * sigmoid(conv_2(x))
+    <non_linearity> :   - "none" for no non-linearity,
+                        - "relu" for a ReLU,
+                        - "leakyrelu" for a LeakyReLU,
+"""
+
 
 if __name__ == '__main__':
     # =========================== Parse arguments =========================== #
     parser = argparse.ArgumentParser()
-    parser.add_argument('--device', help='"cpu" or "cuda:0"', type=str, default='cuda:0')
+    parser.add_argument('--device', help='"cpu" or "cuda:0" or "mps:0"', type=str, default='cuda:0')
+    # I/O paths ------------------------------------------------------------- #
     parser.add_argument('-i', '--input', help='Path of the input image.', type=str)
     parser.add_argument('-o', '--output', type=str, default='./bitstream.bin', help='Bitstream path.')
-    parser.add_argument('--decoded_img_path', type=str, default='./decoded.png', help='Decoded image path.')
     parser.add_argument('--model_save_path', type=str, default='./model.pt', help='Save pytorch model here.')
     parser.add_argument('--enc_results_path', type=str, default='./encoder_results.txt', help='Save encoder-side results here.')
+    # Encoding parameters --------------------------------------------------- #
     parser.add_argument('--lmbda', help='Rate constraint', type=float, default=1e-3)
     parser.add_argument('--start_lr', help='Initial learning rate', type=float, default=1e-2)
     parser.add_argument('--n_itr', help='Number of maximum iterations', type=int, default=int(1e6))
-    parser.add_argument('--layers_synthesis', help='Format: 16,8,16', type=str, default='12,12')
-    parser.add_argument('--layers_arm', help='Format: 16,8,16', type=str, default='12,12')
+    parser.add_argument('--recipe', help='recipe type', type=str, default='slow')
+    # Architecture ---------------------------------------------------------- #
+    parser.add_argument(
+        '--layers_synthesis', help='See default.', type=str,
+        default='40-1-linear-relu,3-1-linear-relu,3-3-residual-relu,3-3-residual-none'
+    )
+    parser.add_argument('--layers_arm', help='Format: 16,8,16', type=str, default='24,24')
     parser.add_argument('--n_ctx_rowcol', help='Number of rows/columns for ARM', type=int, default=2)
     parser.add_argument('--latent_n_grids', help='Number of latent grids', type=int, default=7)
-    parser.add_argument('--n_trial_warmup', help='Number of warm-up trials', type=int, default=5)
+    parser.add_argument('--upsampling_kernel_size', help='upsampling kernel size (≥8)', type=int, default=8)
     args = parser.parse_args()
+    # =========================== Parse arguments =========================== #
+
+    # =========================== Parse arguments =========================== #
+    layers_synthesis = [x for x in args.layers_synthesis.split(',') if x != '']
+    layers_arm = [int(x) for x in args.layers_arm.split(',') if x != '']
+
+    # Parse arguments
+    layers_synthesis = [x for x in args.layers_synthesis.split(',') if x != '']
+    layers_arm = [int(x) for x in args.layers_arm.split(',') if x != '']
+    device = args.device
+    if device == 'cuda:0' and not torch.cuda.is_available():
+        print(f'No CUDA device available!')
+        sys.exit(1)
+
+    if args.input.endswith('.yuv'):
+        # For now, we always read the first frame
+        img = yuv_dict_to_device(read_video(args.input, frame_idx=0), device)
+        img_type = '_'.join(args.input.split('/')[-1].split('.')[0].split('_')[-2:])
+    else:
+        img = to_tensor(Image.open(args.input)).unsqueeze(0).to(device)
+        img_type = 'rgb444'
+
+    # Create a CoolChicParameter object to store all these parameters
+    cool_chic_param = CoolChicParameter(
+        lmbda=args.lmbda,
+        dist='mse',
+        img=img,
+        img_type=img_type,
+        layers_synthesis=layers_synthesis,
+        layers_arm=layers_arm,
+        n_ctx_rowcol=args.n_ctx_rowcol,
+        latent_n_grids=args.latent_n_grids,
+        upsampling_kernel_size = args.upsampling_kernel_size,
+        ste_derivative=0.01,
+    )
+
+    print(f'Image size: {cool_chic_param.img_size}')
+    print(f'Image type: {cool_chic_param.img_type}')
     # =========================== Parse arguments =========================== #
 
     # ====================== Torchscript JIT parameters ===================== #
@@ -51,155 +122,77 @@ if __name__ == '__main__':
     torch._C._jit_set_profiling_executor(False)
     torch._C._jit_set_texpr_fuser_enabled(False)
     torch._C._jit_set_profiling_mode(False)
+
+    if device == 'cpu':
+        # the number of cores is adjusted to the machine cpu count
+        n_cores = int(os.cpu_count())
+        print(f"Using {n_cores} cpu cores")
+
+        torch.set_flush_denormal(True)
+        torch.set_num_interop_threads(n_cores) # Inter-op parallelism
+        torch.set_num_threads(n_cores) # Intra-op parallelism
+
+        subprocess.call('export OMP_PROC_BIND=spread', shell=True)
+        subprocess.call('export OMP_PLACES=threads', shell=True)
+        subprocess.call('export OMP_SCHEDULE=static', shell=True)
+        subprocess.call(f'export OMP_NUM_THREADS={n_cores}', shell=True)
+        subprocess.call('export KMP_HW_SUBSET=1T', shell=True)
+
+    elif device == 'mps:0':
+        subprocess.call('export PYTORCH_ENABLE_MPS_FALLBACK=1', shell=True)
+        print(f'MS-SSIM computation does not work with YUV data on mps:0 device!')
     # ====================== Torchscript JIT parameters ===================== #
 
-    # =========================== Parse arguments =========================== #
-    layers_synthesis = [int(x) for x in args.layers_synthesis.split(',') if x != '']
-    layers_arm = [int(x) for x in args.layers_arm.split(',') if x != '']
-    # =========================== Parse arguments =========================== #
 
     # ===================== Initialize and train model ====================== #
-    img = to_tensor(Image.open(args.input)).unsqueeze(0).to(args.device)
-    print(f'Image size: {img.size()}')
+    # Retrieve the preset class and instantiate it with the desired argument
+    training_preset = AVAILABLE_PRESET.get(args.recipe)(start_lr=args.start_lr, dist='mse')
+    if training_preset is None:
+        print(f'Unknown training recipe. Found {args.recipe}')
+        print(f'Expected: {AVAILABLE_PRESET.keys()}')
+        print(f'Exiting')
+        sys.exit(1)
 
-    # Do some loops with few iterations to find the best starting point
-    best_loss = 1e6
-    N_WARM_UP = args.n_trial_warmup
-    for n_trial in range(N_WARM_UP):
-        model = to_device(
-            CoolChicEncoder(
-                img.size()[-2:],
-                layers_synthesis=layers_synthesis,
-                layers_arm=layers_arm,
-                n_ctx_rowcol=args.n_ctx_rowcol,
-                latent_n_grids=args.latent_n_grids,
-            ),
-            args.device
-        )
+    print(training_preset.to_string())
 
-        cur_model, training_stat_logs = train(
-            model, img, lmbda=args.lmbda, start_lr=args.start_lr, n_itr=200,
-        )
-        cur_loss = training_stat_logs['loss']
+    # Perform warm-up to fine the best starting point
+    model = do_warmup(cool_chic_param, training_preset, device=device)
+    # model is sent back to CPU at the end of do_warmup
+    model = to_device(model, device)
 
-        if cur_loss < best_loss:
-            best_loss = cur_loss
-            start_model = cur_model
+    # Do the different training phase
+    for idx_phase, phase in enumerate(training_preset.all_phases):
 
-        print(f'Warm-up trial {n_trial + 1: >3} / {N_WARM_UP} ; loss = {1000 * cur_loss:4.3f} ; best_loss = {1000 * best_loss:4.3f}')
+        print(f'\n{"#" * 40}    Training phase: {idx_phase:>2}    {"#" * 40}\n')
 
-        model = start_model
+        # 2. Actual training ------------------------------------------------ #
+        model, results = one_training_phase(model, phase)
 
-    print(model)
-    print(model.print_nb_parameters())
-    print(model.print_nb_mac())
+        print(f'\nPerformance at the end of the phase:')
+        print(results.to_string(mode='short', print_col_name=True))
 
-    model, training_stat_logs = train(
-        model, img, lmbda=args.lmbda, start_lr=args.start_lr, n_itr=int(args.n_itr)
-    )
-
-    # Save non quantized model at the end of the training
+    # Dump the results into a file and save the model
     save_model(model, args.model_save_path)
-    # ===================== Initialize and train model ====================== #
+    with open(args.enc_results_path, 'w') as f_out:
+        f_out.write(results.to_string(mode='all', print_col_name=True) + '\n')
 
-    # ========= Print full precision performance as a sanity check ========== #
-    with torch.no_grad():
-        model = model.eval()
-        model_out = model()
+    # Print the final results
+    print('\nFinal encoder-side results (quantized results):')
+    print('-------------------------------------------------')
+    print(results.to_string(mode='more', print_col_name=True))
 
-        # Compute results
-        _, metrics = loss_fn(model_out, img, args.lmbda, compute_logs=True)
-
-        loss_float = metrics.get('loss').item()
-        print('=' * 120)
-        print('Full precision results')
-        print(format_results_loss(metrics, col_name=True))
-        print('=' * 120)
-    # ========= Print full precision performance as a sanity check ========== #
-
-    # ======================== Quantize the network ========================= #
-    model, q_step, rate_mlp = greedy_quantization(model, img, args.lmbda, verbose=False)
-    # Rate in bit, not in bpp
-    total_mlp_rate = sum(v for _, v in rate_mlp.items())
-    n_pixels = img.size()[-2] * img.size()[-1]
-    print(f'Rate ARM        : {rate_mlp.get("arm") / n_pixels: 5.4f} bpp')
-    print(f'Rate Synthesis  : {rate_mlp.get("synthesis") / n_pixels:5.4f} bpp')
-    # ======================== Quantize the network ========================= #
-
-    # ================ Final forward to check the performance =============== #
-    with torch.no_grad():
-        model = model.eval()
-        model_out = model()
-
-        # Compute results
-        _, metrics = loss_fn(model_out, img.to('cpu'), args.lmbda, compute_logs=True, rate_mlp=total_mlp_rate) # cpu for now.
-        loss_quantized = metrics.get('loss').item()
-
-    print('=' * 120)
-    print('Final (quantized) results')
-    print(format_results_loss(metrics, col_name=True))
-    print('=' * 120)
-    # ================ Final forward to check the performance =============== #
-
-    # ======================= Log results into a file ======================= #
-    # Rate already in bpp in metrics
-    rate = {}
-    rate['rate_latent_bpp'] = metrics.get('rate_y')
-    rate['rate_mlp_bpp'] = metrics.get('rate_mlp')
-    rate['rate_all_bpp'] = sum(metrics.get(k) for k in ['rate_y', 'rate_mlp'])
-
-    str_keys, str_vals = '', ''
-    for k in ['psnr']:
-        str_keys += f'{k},'
-        str_vals += f'{metrics.get(k):8.6f},'
-
-    for k, v in rate.items():
-        if isinstance(v, Tensor):
-            v = v.detach().item()
-        str_keys += f'{k},'
-        str_vals += f'{v},'
-
-    for k, v in training_stat_logs.items():
-        if k == 'loss':
-            continue
-        str_keys += f'{k},'
-        str_vals += f'{v:7.1f},'
-
-    # Remove coma at the end
-    str_keys = str_keys.rstrip(',')
-    str_vals = str_vals.rstrip(',')
-
-    with open(args.enc_results_path, 'w') as f:
-        f.write(str_keys + '\n' + str_vals + '\n')
-    # ======================= Log results into a file ======================= #
-
-    # ======= Store the overfitted weights and latent into a bitstream ====== #
-    subprocess.call("export CUBLAS_WORKSPACE_CONFIG=:4096:8", shell=True)
-    subprocess.call("export CUBLAS_WORKSPACE_CONFIG=:16:8", shell=True)
-    real_rate_byte = encode(model, args.output, q_step_nn=q_step)
-    real_rate_bpp = real_rate_byte * 8 / n_pixels
-    # ======= Store the overfitted weights and latent into a bitstream ====== #
-
-    # === Perform decoding at the encoder-side to measure the performance === #
-    x_hat = decode(args.output, device=args.device)
-
-    # Save decoded image
-    to_pil_image(x_hat.cpu().squeeze(0)).save(args.decoded_img_path)
-
-    # Measure PSNR. Scale back the original image to 255
-    real_psnr = 10 * torch.log10(255 ** 2 / torch.mean((x_hat - img * 255) ** 2))
-    print('\nDecoder-side performance:')
-    print(f'rate_bpp\tpsnr_db')
-    print(f'{real_rate_bpp:6.4f}\t{real_psnr: 7.4f}')
-
-    # Append this to the encoder results file:
-
-    # Re-read the existing file
-    str_keys, str_vals = [x.rstrip('\n') for x in open(args.enc_results_path, 'r').readlines() if x]
-    str_keys += f',decoder_rate_bpp,decoder_psnr_db'
-    str_vals += f',{real_rate_bpp:7.5f},{real_psnr:8.5f}'
-
-    # Re-write the existing file
-    with open(args.enc_results_path, 'w') as f:
-        f.write(str_keys + '\n' + str_vals + '\n')
-    # === Perform decoding at the encoder-side to measure the performance === #
+    # ========================== Encode the network ========================= #
+    print("Encoding to", args.output)
+    encode(
+        model,
+        args.output,
+        {
+            'arm_weight':        results.q_step_arm_weight,
+            'arm_bias':          results.q_step_arm_bias,
+            'upsampling_weight': results.q_step_upsampling_weight,
+            'upsampling_bias':   results.q_step_upsampling_bias,
+            'synthesis_weight':  results.q_step_synthesis_weight,
+            'synthesis_bias':    results.q_step_synthesis_bias,
+        }
+    )
+    # ========================== Encode the network ========================= #

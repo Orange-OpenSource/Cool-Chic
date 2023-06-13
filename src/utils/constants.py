@@ -11,7 +11,12 @@
 import torch
 import struct
 
-LIST_POSSIBLE_DEVICES = ['cpu', 'cuda:0']
+LIST_POSSIBLE_DEVICES = ['cpu', 'cuda:0', 'mps:0']
+
+# True: ARM in pure integer mode (cpu only)
+# False: ARM in integer-in-float mode (gpu or cpu)
+# Both values should produce the same results.
+ARMINT = False
 
 # Avoid numerical instability when measuring the rate of the NN parameters
 MIN_SCALE_NN_WEIGHTS_BIAS = 1.0/1024.0
@@ -23,11 +28,13 @@ POSSIBLE_SCALE_NN = 2 ** torch.linspace(
 # List of all possible quantization steps when coding a MLP
 POSSIBLE_Q_STEP_ARM_NN = 2. ** torch.linspace(-7, 0, 8, device='cpu')
 POSSIBLE_Q_STEP_SYN_NN = 2. ** torch.linspace(-16, 0, 17, device='cpu')
+POSSIBLE_Q_STEP_UPS_NN = 2. ** torch.linspace(-16, 0, 17, device='cpu')
 
 Q_PROBA_DEFAULT = 128.0
-Q_EXP_SCALE = 1024.0
 
-FIXED_POINT_FRACTIONAL_BITS = 8
+FIXED_POINT_FRACTIONAL_BITS = 6 # 8 works fine in pure int mode (ARMINT True).
+                                # reduced to 6 for now for int-in-fp mode (ARMINT False)
+                                # that has less headroom (23-bit mantissa, not 32)
 FIXED_POINT_FRACTIONAL_MULT = 2**FIXED_POINT_FRACTIONAL_BITS
 
 MAX_AC_MAX_VAL = 65535 # 2**16 for 16-bit code in bitstream header.

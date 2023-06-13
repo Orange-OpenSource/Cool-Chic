@@ -9,31 +9,37 @@
 
 
 import argparse
+import os
 import subprocess
 import torch
 
-from torchvision.transforms.functional import to_pil_image
 from bitstream.decode import decode
 
 if __name__ == '__main__':
     # =========================== Parse arguments =========================== #
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input', help='Path of the bitstream to decode.', type=str, required=True)
-    parser.add_argument('-o', '--output', help='Path to save the decoded image.', type=str, required=True)
-    parser.add_argument('--device', help='"cpu" or "cuda:0"', type=str, default='cpu')
+    parser.add_argument('-i', '--input', help='Path of the bitstream to decode.', type=str)
+    parser.add_argument('-o', '--output', help='Path to save the decoded image.', type=str)
+    parser.add_argument('--device', help='"cpu" or "cuda:0" or "mps:0"', type=str, default='cpu')
     args = parser.parse_args()
     # =========================== Parse arguments =========================== #
 
-    # ====================== Torchscript JIT parameters ===================== #
-    # From https://github.com/pytorch/pytorch/issues/52286
-    # This is no longer the case with the with torch.jit.fuser
-    # ! This gives a small (-10 %) speed up
-    torch._C._jit_set_profiling_executor(False)
-    torch._C._jit_set_texpr_fuser_enabled(False)
-    torch._C._jit_set_profiling_mode(False)
-    # ====================== Torchscript JIT parameters ===================== #
+    if args.device == 'cpu':
+        # the number of cores is adjusted to the machine cpu count
+        n_cores = int(os.cpu_count())
+        print(f"Using {n_cores} cpu cores")
+
+        torch.set_flush_denormal(True)
+        torch.set_num_threads(n_cores) # Intra-op parallelism
+        torch.set_num_interop_threads(n_cores) # Inter-op parallelism
+
+        subprocess.call('export OMP_PROC_BIND=spread', shell=True)
+        subprocess.call('export OMP_PLACES=threads', shell=True)
+        subprocess.call('export OMP_SCHEDULE=static', shell=True)
+        subprocess.call(f'export OMP_NUM_THREADS={n_cores}', shell=True)
+        subprocess.call('export KMP_HW_SUBSET=1T', shell=True)
+
 
     subprocess.call("export CUBLAS_WORKSPACE_CONFIG=:4096:8", shell=True)
     subprocess.call("export CUBLAS_WORKSPACE_CONFIG=:16:8", shell=True)
-    x_hat = decode(args.input, device=args.device)
-    to_pil_image(x_hat.cpu().squeeze(0)).save(args.output)
+    decode(args.input, args.output, device=args.device)

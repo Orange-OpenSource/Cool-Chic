@@ -10,215 +10,254 @@
 
 import time
 import torch
-from typing import Tuple, Dict
+
+from typing import Tuple
 from collections import OrderedDict
-from torch import Tensor, nn
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch import nn
+from model_management.loss import loss_fn
+from model_management.presets import Preset, TrainerPhase
+from model_management.tester import CoolChicEncoderLogs, test
+from models.cool_chic import CoolChicEncoder, CoolChicParameter, to_device
 
-from models.cool_chic import EncoderOutput
-from utils.logging import format_results_loss
-
-def save_model(model: nn.Module, path: str):
-    """Save an entire model @ path
-
-    Args:
-        model (nn.Module): The model to save
-        path (str): Where to save
-    """
-    torch.save(model.state_dict(), path)
+from models.mlp_coding import greedy_quantization
 
 
-def load_model(model: nn.Module,path: str) -> nn.Module:
-    """Load a model from path
-
-    Args:
-        model (nn.Module): The model to fill with the pre-trained weights
-        path (str): Path of the file where the model is saved
-
-    Returns:
-        nn.Module: The loaded module
-    """
-    model.load_state_dict(torch.load(path))
-    return model
-
-
-@torch.jit.script
-def mse_fn(x: Tensor, y: Tensor) -> Tensor:
-    """Torch scripted version of the MSE. Compute the Mean Squared Error
-    of two tensors with arbitrary dimension.
-
-    Args:
-        x and y (Tensor): Compute the MSE of x and y.
-
-    Returns:
-        Tensor: One element tensor containing the MSE of x and y.
-    """
-    return torch.pow((x - y), 2.0).mean()
-
-
-def loss_fn(
-    out_forward: EncoderOutput,
-    target: Tensor,
-    lmbda: float,
-    compute_logs: bool = False,
-    rate_mlp: float = 0.,
-) -> Tuple:
-    """Compute the loss and other quantities from the network output out_forward
-
-    Args:
-        out_forward (EncoderOutput): Encoder-side output data.
-        target (tensor): [1, 3, H, W] tensor of the ground truth image
-        lmbda (float): Rate constraint
-        compute_logs (bool, Optional): If true compute additional quantities. This
-            includes the MS-SSIM Which in turn requires that out_forward describes the
-            entire image. Default to False.
-        rate_mlp (float, Optional): Rate of the network if it needs to be present in the
-            loss computation. Expressed in bit! Default to 0.
-
-    Returns:
-        Tuple: return loss and log dictionary (only if compute_logs)
-    """
-    x_hat = out_forward.get('x_hat')
-    n_pixels = x_hat.size()[-2] * x_hat.size()[-1]
-    mse = mse_fn(x_hat, target)
-    rate_bpp = (out_forward.get('rate_y') + rate_mlp) / n_pixels
-    loss = mse + lmbda * rate_bpp
-
-    if compute_logs:
-        logs = {
-            'loss': loss.detach() * 1000,
-            'psnr': 10. * torch.log10(1. / mse.detach()),
-            'rate_mlp': rate_mlp / n_pixels,        # Rate MLP in bpp
-        }
-
-        # Append the different rates (in bpp) to the log
-        for k, v in out_forward.items():
-            if 'rate' not in k:
-                continue
-            # Ignore lists which are due to the comprehensive rate_per_grid tensor
-            if isinstance(v, list):
-                continue
-            if isinstance(v, Tensor):
-                v = v.detach().item()
-            logs[k] = v / n_pixels
-
-        logs['rate_all_bpp'] = logs.get('rate_mlp') + logs.get('rate_y')
-
-    else:
-        logs = None
-
-    return loss, logs
-
-
-def train(
-    model: nn.Module,
-    target: Tensor,
-    n_itr: int = int(5e3),
-    start_lr: float = 1e-2,
-    lmbda: float = 5e-3,
-) -> Tuple[nn.Module, Dict[str, float]]:
+def one_training_phase(
+    model: CoolChicEncoder, trainer_phase: TrainerPhase
+    ) -> Tuple[CoolChicEncoder, CoolChicEncoderLogs]:
     """Train an INR codec
 
     Args:
-        model (nn.Module): INRCodec module already instantiated
-        target (tensor): [1, C, H, W] tensor representing the image to encode
-        n_itr (int, optional): Number of iterations. Defaults to int(5e3).
-        start_lr (float, optional): Initial learning rate. Defaults to 1e-2.
-        lmbda (float, optional): Rate constraint. Loss is D + lmbda * R. Defaults to 5e-3.
+        model (CoolChicEncoder): INRCodec module already instantiated
+        trainer_phase (TrainerPhase): All the training parameters for this learning phase
 
     Returns:
-        nn.Module: the trained model
+        Tuple[CoolChicEncoder, CoolChicEncoderLogs]: The trained model and its logs.
     """
+    start_time = time.time()
+
+    # The encoder knows the image to encode as well as the rate constraint
+    target = model.param.img
+    lmbda = model.param.lmbda
+
+    # === Keep track of the best loss and model for *THIS* current phase ==== #
+    # Perform a first test to get the current best logs (it includes the loss)
+    this_phase_best_results = test(model)
+    this_phase_init_results = this_phase_best_results
+    this_phase_best_model = OrderedDict(
+        (k, v.detach().clone()) for k, v in model.state_dict().items()
+    )
+    # === Keep track of the best loss and model for *THIS* current phase ==== #
 
     model = model.train()
 
-    # Logs some useful training statistics inside this dictionary
-    training_stat_logs = {}
+    # =============== Build the list of parameters to optimize ============== #
+    # Iteratively construct the list of required parameters... This is kind of a
+    # strange syntax, which has been found quite empirically
+    parameters_to_optimize = []
+    if 'arm' in trainer_phase.optimized_module:
+        parameters_to_optimize += [*model.arm.parameters()]
+    if 'upsampling' in trainer_phase.optimized_module:
+        parameters_to_optimize += [*model.upsampling.parameters()]
 
-    # Create optimizer (it takes a parameter list as inputs)
-    PATIENCE = 15
-    optimizer = torch.optim.Adam(model.parameters(), lr=start_lr)
-    scheduler = ReduceLROnPlateau(optimizer, factor=0.5, patience=PATIENCE, verbose=True)
+    if 'synthesis' in trainer_phase.optimized_module:
+        parameters_to_optimize += [*model.synthesis.parameters()]
 
-    # Keep track of the best model found during training
-    best_loss = 1e6
-    best_model = OrderedDict((k, v.detach().clone()) for k, v in model.state_dict().items())
+    if 'latent' in trainer_phase.optimized_module:
+        parameters_to_optimize += [*model.latent_grids.parameters(), model.log_2_encoder_gains]
 
-    # Use the uniform noise proxy for the quantization at the beginning of the training
-    use_ste_quant = False
+    if 'all' in trainer_phase.optimized_module:
+        parameters_to_optimize = model.parameters()
 
-    # Only for printing
-    first_line_print = True
+    optimizer = torch.optim.Adam(parameters_to_optimize, lr=trainer_phase.lr)
+    # =============== Build the list of parameters to optimize ============== #
 
-    start_time = time.time()
-    overall_start_time = start_time
-    for cnt in range(n_itr):
+    cnt_record = 0
+    previous_record_rate_latent_bpp = 50
+    previous_record_psnr_db = 0
+
+    # phase optimization
+    for cnt in range(trainer_phase.max_itr):
+        if cnt - cnt_record > trainer_phase.patience:
+            break
+
         # This is slightly faster than optimizer.zero_grad()
         for param in model.parameters():
-            param.grad = None
+           param.grad = None
 
-        out_forward = model(use_ste_quant = use_ste_quant)
-        loss, _ = loss_fn(out_forward, target, lmbda, compute_logs=False)
+        # forward / backward
+        out_forward = model(use_ste_quant=trainer_phase.ste)
+        loss, _ = loss_fn(out_forward, target, lmbda, dist_mode=trainer_phase.dist)
         loss.backward()
-        nn.utils.clip_grad_norm_(model.parameters(), 10., norm_type=2.0, error_if_nonfinite=False)
+        nn.utils.clip_grad_norm_(model.parameters(), 1e-1, norm_type=2.0, error_if_nonfinite=False)
         optimizer.step()
 
-        # Each 100 iteration, compute validation loss and log stuff
-        if (cnt + 1) % 100 == 0 or cnt == (n_itr - 1):
-            model = model.eval()
-            # Valid on the whole picture to feed the patience-based scheduler
-            with torch.no_grad():
-                out_forward = model()
-                loss, logs = loss_fn(out_forward, target, lmbda, compute_logs=True)
+        # Each freq_valid iteration or at the end of the phase, compute validation loss and log stuff
+        if ((cnt + 1) % trainer_phase.freq_valid == 0) or (cnt + 1 == trainer_phase.max_itr):
+            #  a. Update iterations counter and training time and test model
+            model.iterations_counter += trainer_phase.freq_valid
+            # Update the elapsed time and reset the start_time value
+            model.total_training_time_sec += time.time() - start_time
+            start_time = time.time()
 
-                n_bad_epoch_before = scheduler.num_bad_epochs
-                scheduler.step(loss)
-                n_bad_epoch_after = scheduler.num_bad_epochs
+            results = test(model)
 
-            if loss < best_loss:
+            # b. Store record ----------------------------------------------- #
+            flag_new_record = False
+
+            if results.loss < this_phase_best_results.loss:
+                # A record must have at least -0.001 bpp or + 0.001 dB. A smaller improvement
+                # does not matter.
+                delta_psnr = results.psnr_db - previous_record_psnr_db
+                delta_bpp  = results.rate_latent_bpp - previous_record_rate_latent_bpp
+                if delta_bpp < 0.001 or delta_psnr > 0.001:
+                    flag_new_record = True
+
+            if flag_new_record:
+                # Save best model
                 for k, v in model.state_dict().items():
-                    best_model[k].copy_(v)
-                best_loss = loss.detach()
-                log_new_record = '>>> New record!'
+                    this_phase_best_model[k].copy_(v)
+
+                # ========================= reporting ========================= #
+                this_phase_loss_gain =  100 * (results.loss - this_phase_init_results.loss) / this_phase_init_results.loss
+                this_phase_psnr_gain =  results.psnr_db - this_phase_init_results.psnr_db
+                this_phase_bpp_gain =  results.rate_latent_bpp - this_phase_init_results.rate_latent_bpp
+
+                log_new_record = f'{this_phase_loss_gain:+5.2f}% {this_phase_bpp_gain:+6.3f} bpp {this_phase_psnr_gain:+6.3f} db'
+                # ========================= reporting ========================= #
+
+                # Update new record
+                this_phase_best_results = results
+                previous_record_psnr_db = results.rate_latent_bpp
+                previous_record_rate_latent_bpp = results.psnr_db
+                cnt_record = cnt
+
             else:
                 log_new_record = ''
 
-            # If the counter of bad epochs is was equal to PATIENCE and then to 0
-            # it means that we're in two situations:
-            #       - We've reached the patience threshold and decreased the learning rate;
-            #       - We've just beaten our record at the last moment (and stored the best_model).
-            # In both case, we can reset our model to the last best one
-            if (n_bad_epoch_before == PATIENCE) and (n_bad_epoch_after == 0):
-                print('Resetting model to last best model')
-                model.load_state_dict(best_model)
+            # c. Print some logs -------------------------------------------- #
+            more_data_to_log = {
+                'STE': trainer_phase.ste,
+                'lr': trainer_phase.lr,
+                'optim':trainer_phase.optimized_module,
+                'patience': (trainer_phase.patience - cnt + cnt_record) // trainer_phase.freq_valid,
+                'gains': log_new_record
+            }
 
-            # ====================== Print some logs ====================== #
-            logs['iteration'] = cnt + 1
-            logs['time_sec'] = time.time() - start_time
-
-            print(format_results_loss(logs, col_name=first_line_print) + log_new_record)
-            first_line_print = False
-            start_time = time.time()
-            # ====================== Print some logs ====================== #
+            print(
+                results.to_string(
+                    mode='short',
+                    additional_data=more_data_to_log,
+                    # Print column on first row
+                    print_col_name= (cnt + 1 == trainer_phase.freq_valid) or (cnt + 1 == trainer_phase.max_itr)
+                )
+            )
 
             # Restore training mode
             model = model.train()
 
-        if not(use_ste_quant) and optimizer.param_groups[0]['lr'] < 9e-4:
-            print('Switching from uniform noise to STE for quantization')
-            use_ste_quant = True
+    # Load best model found for this encoding loop
+    model.load_state_dict(this_phase_best_model)
 
-        # Stop training if the learning rate becomes too small
-        if optimizer.param_groups[0]['lr'] < 4e-4:
-            break
+    # Quantize the model parameters at the end of the training phase
+    if trainer_phase.quantize_model:
+        model = greedy_quantization(model)
+    results = test(model)
 
-    # Load best model
-    model.load_state_dict(best_model)
+    return model, results
 
-    training_stat_logs = {
-        'training_time_second': time.time() - overall_start_time,
-        'n_iteration': cnt,
-        'loss': best_loss,
-    }
 
-    return model, training_stat_logs
+def do_warmup(cool_chic_param: CoolChicParameter, encoder_preset: Preset, device: str = 'cpu') -> CoolChicEncoder:
+    """Perform the warm-up stage i.e. a competition between different models in order to find the
+    best starting point.
+
+    Args:
+        cool_chic_param (CoolChicParameter): Model hyper parameters
+        encoder_preset (Preset): Encoder policy, describes (among other things) the
+            warm-up settings.
+        device (str, Optional): Either "cuda:0" or "cpu"
+
+    Returns:
+        CoolChicEncoder: The warm-up winner i.e. the best starting point
+    """
+    start_time = time.time()
+
+    print(f'Number of warm-up iterations: {encoder_preset.get_total_warmup_iterations()}')
+
+    _col_width = 14
+
+    cnt_warmup_itr = 0
+    for idx_warmup_phase, warmup_phase in enumerate(encoder_preset.all_warmups):
+        msg_start_end_phase = f'{"#" * 40}    Warm-up phase: {idx_warmup_phase:>2}    {"#" * 40}'
+        print('\n' + msg_start_end_phase)
+
+        # At the beginning of the first warmup phase, we must initialize all the models
+        if idx_warmup_phase == 0:
+            all_candidates = [
+                {'model': CoolChicEncoder(cool_chic_param), 'metrics': None, 'id': idx_model}
+                for idx_model in range(warmup_phase.candidates)
+            ]
+        # At the beginning of the other warm-up phases, keep the desired number of best candidates
+        else:
+            all_candidates = all_candidates[:warmup_phase.candidates]
+
+        # Construct the training phase object describing the options of this particular
+        # warm-up phase
+        training_phase = TrainerPhase(lr=warmup_phase.lr, max_itr=warmup_phase.iterations)
+
+        # ! idx_candidate is just the index of one candidate in the all_candidates list. It is **not** a
+        # ! unique identifier for this candidate. This is given by:
+        # !         all_candidates[idx_candidate].get('id')
+        # ! the all_candidates list gives the ordered list of the best performing models so its order may change.
+        for idx_candidate, candidate in enumerate(all_candidates):
+            print(f'\nCandidate n° {idx_candidate:<2}, ID = {candidate.get("id"):<2}:')
+            print(f'-------------------------\n')
+
+            # Send the old model to the required device for training
+            old_model = to_device(candidate.get('model'), device)
+            # Take into account the number of iterations and time spent by other candidates
+            old_model.iterations_counter = cnt_warmup_itr
+            old_model.total_training_time_sec = time.time() - start_time
+
+            # Perform one training phase to update the model and the results
+            updated_model, updated_metrics = one_training_phase(old_model, training_phase)
+            cnt_warmup_itr += training_phase.max_itr
+
+
+            # Bring back the updated model on cpu. This leaves only one model at a time
+            # on the GPU.
+            #updated_model = to_device(updated_model, 'cpu')
+
+            # Replace the updated model in the model list
+            all_candidates[idx_candidate] = {
+                'model': updated_model, 'metrics': updated_metrics, 'id': candidate.get('id')
+            }
+
+        # Sort all the models by ascending loss. The best one is all_candidates[0]
+        all_candidates = sorted(all_candidates, key=lambda x: x.get('metrics').loss)
+
+        # Print the results of this warm-up phase
+        s = f'\n\n'
+        s += f'{"ID":^{6}}|{"loss":^{_col_width}}|{"rate_bpp":^{_col_width}}|{"psnr_db":^{_col_width}}|\n'
+        for candidate in all_candidates:
+            s += f'{candidate.get("id"):^{6}}|'
+            s += f'{candidate.get("metrics").loss * 1e3:^{_col_width}.4f}|'
+            s += f'{candidate.get("metrics").rate_bpp:^{_col_width}.4f}|'
+            s += f'{candidate.get("metrics").psnr_db:^{_col_width}.4f}|'
+            s += '\n'
+        s += f'\n{msg_start_end_phase}\n'
+        print(s)
+
+    # Keep only the best model
+    best_model = all_candidates[0].get('model')
+    # We've already done that many iterations during warm-up
+    best_model.iterations_counter = encoder_preset.get_total_warmup_iterations()
+
+    # We've already worked for that many second during warm up
+    warmup_duration =  time.time() - start_time
+    best_model.total_training_time_sec = warmup_duration
+
+    print(f'\nWarm-up time [s]: {warmup_duration:.2f}')
+    print(f'Winner ID       : {all_candidates[0].get("id")}\n')
+
+    return best_model

@@ -7,6 +7,7 @@
 # Authors: Theo Ladune <theo.ladune@orange.com>
 #          Pierrick Philippe <pierrick.philippe@orange.com>
 
+
 import subprocess
 import torch
 import time
@@ -14,11 +15,15 @@ import math
 import torch.nn.functional as F
 
 from torch import nn, Tensor
-from bitstream.header import DescriptorNN, read_header
+from bitstream.header import read_header
 from bitstream.range_coder import RangeCoder
-from models.arm import ArmMLP, get_mu_scale, get_neighbor
-from models.synthesis import SynthesisMLP, get_synthesis_input_latent
-from utils.constants import POSSIBLE_Q_STEP_ARM_NN, POSSIBLE_Q_STEP_SYN_NN, POSSIBLE_SCALE_NN, Q_EXP_SCALE, FIXED_POINT_FRACTIONAL_MULT
+from model_management.yuv import convert_444_to_420, yuv_dict_clamp
+from models.arm import Arm, get_mu_scale
+from utils.data_structure import DescriptorNN
+from models.upsampling import Upsampling
+from models.synthesis import Synthesis
+from utils.constants import POSSIBLE_Q_STEP_ARM_NN, POSSIBLE_Q_STEP_SYN_NN, POSSIBLE_SCALE_NN, FIXED_POINT_FRACTIONAL_MULT, ARMINT
+from visu.decoded_image import save_png_or_yuv
 
 
 def compute_offset(x: Tensor, mask_size: int) -> Tensor:
@@ -60,15 +65,14 @@ def compute_offset(x: Tensor, mask_size: int) -> Tensor:
     H, W = x.size()[-2:]
     W_pad = W + 2 * pad
 
-
     # The four lines below are the equivalent of the following for loops:
     # For n_ctx_row_col = 3 we generate the following tensor:
     # idx_row = 3 - [0 0 0 0 0 0 0 1 1 1 1 1 1 1 2 2 2 2 2 2 2 3 3 3]
     # idx_col = 3 - [0 1 2 3 4 5 6 0 1 2 3 4 5 6 0 1 2 3 4 5 6 0 1 2]
     # Then, offset = idx_col + idx_row * W_pad indicates the offset, relative
     # to a current index, of the set of neighbor indices.
-    idx_row = pad - torch.arange(0, pad + 1).repeat_interleave(mask_size)
-    idx_col = pad - torch.arange(0, mask_size).repeat(pad + 1)
+    idx_row = pad - torch.arange(0, pad + 1, device=x.device).repeat_interleave(mask_size)
+    idx_col = pad - torch.arange(0, mask_size, device=x.device).repeat(pad + 1)
     idx_row = idx_row[:n_context_pixel]
     idx_col = idx_col[:n_context_pixel]
 
@@ -86,8 +90,6 @@ def compute_offset(x: Tensor, mask_size: int) -> Tensor:
     offset = idx_col + idx_row * W_pad
     return offset
 
-
-@torch.jit.script
 def unpad_to_pad_index_1d(idx: Tensor, pad: int, W: int) -> Tensor:
     """Convert a tensor of 1d indices for a flatten 2D feature map to
     the 1d indices for the same feature maps with padding.
@@ -131,7 +133,6 @@ def unpad_to_pad_index_1d(idx: Tensor, pad: int, W: int) -> Tensor:
     return idx_w_pad
 
 
-@torch.jit.script
 def pad_to_unpad_index_1d(idx_w_pad: Tensor, pad: int, W_pad: int) -> Tensor:
     """Inverse function of unpad_to_pad_index_1d:
         pad_to_unpad_index_1d(unpad_to_pad_index_1d(x)) = x
@@ -167,6 +168,8 @@ def pad_to_unpad_index_1d(idx_w_pad: Tensor, pad: int, W_pad: int) -> Tensor:
     Returns:
         Tensor: 1d tensor of the **non-padded** indices
     """
+    # # We remove pad columns of zero pixel on both side of the padded feature map
+    # W = W_pad - 2 * pad
     idx = idx_w_pad - pad - pad * W_pad - ((idx_w_pad - pad * W_pad) // W_pad) * 2 * pad
     #                  ^        ^                    ^
     #                  |        |                    |_________ Each additional new rows after the first padded ones
@@ -176,8 +179,6 @@ def pad_to_unpad_index_1d(idx_w_pad: Tensor, pad: int, W_pad: int) -> Tensor:
     #                  |_______________________________________ The first columns of padding
     return idx
 
-
-@torch.jit.script
 def fast_get_neighbor(x: Tensor, mask_size: int, offset: Tensor, idx: Tensor, w_grid: int) -> Tensor:
     """Use the unfold function to extract the neighbors of each pixel in x.
 
@@ -216,7 +217,7 @@ def decode_network(
     bitstream_path: DescriptorNN,
     q_step_nn: DescriptorNN,
     scale_nn: DescriptorNN,
-    ac_max_val_nn: int,
+    ac_max_val: int,
 ) -> nn.Module:
     """Decode a neural network from a bitstream. The idea is to iterate
     on all the parameters of <empty_module>, filling it with values read
@@ -231,36 +232,37 @@ def decode_network(
             for the weight and bias of the network.
         scale_nn (DescriptorNN): Describe the scale parameters used
             for entropy coding of the weight and bias of the network.
-        ac_max_val_nn (int): The range coder AC_MAX_VAL parameters for entropy coding the NNs
+        ac_max_val (int): Data are in [-ac_max_val, ac_max_val - 1]
 
     Returns:
         nn.Module: The decoded module
     """
+    have_bias = q_step_nn['bias'] > 0
+
     # Instantiate two range coder objects to decode simultaneously weight and bias
     range_coder_nn_weight = RangeCoder(
         0,      # 0 because we don't have a ctx_row_col
-        ac_max_val_nn
+        AC_MAX_VAL = ac_max_val
     )
-    range_coder_nn_bias = RangeCoder(
-        0,      # 0 because we don't have a ctx_row_col
-        ac_max_val_nn
-    )
-    range_coder_nn_weight.load_bitstream(bitstream_path.get('weight'))
-    range_coder_nn_bias.load_bitstream(bitstream_path.get('bias'))
+    range_coder_nn_weight.load_bitstream(bitstream_path['weight'])
+
+    if have_bias:
+        range_coder_nn_bias = RangeCoder(
+            0,      # 0 because we don't have a ctx_row_col
+            AC_MAX_VAL = ac_max_val
+        )
+        range_coder_nn_bias.load_bitstream(bitstream_path['bias'])
 
     loaded_param = {}
     for k, v in empty_module.named_parameters():
-        if not 'mlp' in k:
-            continue
-
-        if k.endswith('.w'):
+        if k.endswith('.w') or k.endswith('.weight'):
             cur_scale = scale_nn.get('weight')
             cur_q_step = q_step_nn.get('weight')
             cur_param = range_coder_nn_weight.decode(
                 torch.zeros_like(v.flatten()),
                 torch.ones_like(v.flatten()) * cur_scale
             )
-        elif k.endswith('.b'):
+        elif k.endswith('.b') or k.endswith('.bias'):
             cur_scale = scale_nn.get('bias')
             cur_q_step = q_step_nn.get('bias')
             cur_param = range_coder_nn_bias.decode(
@@ -268,7 +270,7 @@ def decode_network(
                 torch.ones_like(v.flatten()) * cur_scale
             )
         else:
-            # Ignore network parameters whose name does not end with '.w' or '.b'
+            # Ignore network parameters whose name does not end with '.w', '.b', '.weight', '.bias'
             continue
 
         # Don't forget inverse quantization!
@@ -277,26 +279,18 @@ def decode_network(
     empty_module.load_state_dict(loaded_param)
     return empty_module
 
-
 @torch.no_grad()
-def decode(bitstream_path: str, device: str = 'cpu') -> Tensor:
-    """Decode a bitstream located at <bitstream_path> and return the decoded
-    image as a [1, C, H, W] tensor.
+def decode(bitstream_path: str, output_path: str, device: str = 'cpu'):
+    """Decode a bitstream located at <bitstream_path> and save the decoded image
+    at <output_path>
 
     Args:
         bitstream_path (str): Absolute path of the bitstream.
+        output_path (str): Absolute path where to save the decoded image.
         device (str): Where the synthesis and get_neighbor functions run.
             Either "cpu" or "cuda:0"
-
-    Returns:
-        Tensor: The decoded image as a uint8 [1, C, H, W] tensor in [0, 255]
     """
-
     start_time = time.time()
-
-    # Ensure encoding/decoding replicability on different hardware
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
     torch.use_deterministic_algorithms(True)
 
     # ========================== Parse the header =========================== #
@@ -316,33 +310,34 @@ def decode(bitstream_path: str, device: str = 'cpu') -> Tensor:
     # For each module and each parameter type, keep the first bytes, write them
     # in a standalone file and keep the remainder of the bitstream in bitstream
     # Next parameter of next module will start at the first element of the bitstream.
-    for cur_module_name in ['arm', 'synthesis']:
+    for cur_module_name in ['arm', 'upsampling', 'synthesis']:
         for parameter_type in ['weight', 'bias']:
             cur_n_bytes = header_info.get('n_bytes_nn')[cur_module_name][parameter_type]
 
             # Write the first byte in a dedicated file
-            bytes_for_current_parameters = bitstream[:cur_n_bytes]
-            current_bitstream_file = f'{bitstream_path}_{cur_module_name}_{parameter_type}'
-            with open(current_bitstream_file, 'wb') as f_out:
-                f_out.write(bytes_for_current_parameters)
+            if cur_n_bytes > 0:
+                bytes_for_current_parameters = bitstream[:cur_n_bytes]
+                current_bitstream_file = f'{bitstream_path}_{cur_module_name}_{parameter_type}'
+                with open(current_bitstream_file, 'wb') as f_out:
+                    f_out.write(bytes_for_current_parameters)
 
-            # Keep the rest of the bitstream for next loop
-            bitstream = bitstream[cur_n_bytes: ]
+                # Keep the rest of the bitstream for next loop
+                bitstream = bitstream[cur_n_bytes: ]
 
     # For each latent grid: keep the first bytes to decode the current latent
     # and store the rest in bitstream. Latent i + 1 will start at the first
     # element of bitstream
     for i in range(header_info.get('latent_n_grids')):
         cur_n_bytes = header_info.get('n_bytes_per_latent')[i]
+        if cur_n_bytes > 0:
+            # Write the first bytes in a dedicated file
+            bytes_for_current_latent = bitstream[: cur_n_bytes]
+            current_bitstream_file = f'{bitstream_path}_{i}'
+            with open(current_bitstream_file, 'wb') as f_out:
+                f_out.write(bytes_for_current_latent)
 
-        # Write the first byte in a dedicated file
-        bytes_for_current_latent = bitstream[: cur_n_bytes]
-        current_bitstream_file = f'{bitstream_path}_{i}'
-        with open(current_bitstream_file, 'wb') as f_out:
-            f_out.write(bytes_for_current_latent)
-
-        # Keep the rest of the bitstream for next loop
-        bitstream = bitstream[cur_n_bytes: ]
+            # Keep the rest of the bitstream for next loop
+            bitstream = bitstream[cur_n_bytes: ]
     # =================== Split the intermediate bitstream ================== #
 
     # ========== Reconstruct some information from the header data ========== #
@@ -363,13 +358,14 @@ def decode(bitstream_path: str, device: str = 'cpu') -> Tensor:
     non_zero_pixel_ctx = int((mask_size ** 2 - 1) / 2)
     # ========== Reconstruct some information from the header data ========== #
 
-    # =========================== Decode the MLP ============================ #
-    # To decode the MLP, we first instantiate empty Module that we populate with
-    # the weights and biases decoded from the bitstream
+    # =========================== Decode the NNs ============================ #
+    # To decode each NN (arm, upsampling and synthesis):
+    #   1. Instantiate an empty Module
+    #   2. Populate it with the weights and biases decoded from the bitstream
+    #   3. Send it to the requested device.
 
-    # ARM on CPU for encoding / decoding reproducibility
     arm = decode_network(
-        ArmMLP(non_zero_pixel_ctx, header_info.get('layers_arm'), FIXED_POINT_FRACTIONAL_MULT),  # Empty module
+        Arm(non_zero_pixel_ctx, header_info.get('layers_arm'), FIXED_POINT_FRACTIONAL_MULT),  # Empty module
         DescriptorNN(
             weight = f'{bitstream_path}_arm_weight',
             bias = f'{bitstream_path}_arm_bias',
@@ -383,12 +379,36 @@ def decode(bitstream_path: str, device: str = 'cpu') -> Tensor:
             bias = POSSIBLE_SCALE_NN[header_info['scale_index_nn']['arm']['bias']],
         ),
         header_info.get('ac_max_val_nn'),
-    )
+    ).to(device)
+    # Set the desired quantization accuracy for the ARM
     arm.set_quant(FIXED_POINT_FRACTIONAL_MULT)
 
-    # Synthesis can happen on GPU has it is less sensitive than ARM
+    have_bias = header_info['q_step_index_nn']['upsampling']['bias'] >= 0
+    if have_bias:
+        # For the moment we do not expect this!  No bias for upsampling.
+        print("WHAT")
+        exit(1)
+    upsampling = decode_network(
+        Upsampling(
+            header_info.get('upsampling_kernel_size')
+        ),  # Empty module
+        DescriptorNN(
+            weight = f'{bitstream_path}_upsampling_weight',
+            bias = "", # f'{bitstream_path}_upsampling_bias',
+        ),
+        DescriptorNN (
+            weight = POSSIBLE_Q_STEP_SYN_NN[header_info['q_step_index_nn']['upsampling']['weight']],
+            bias = 0, # POSSIBLE_Q_STEP_SYN_NN[header_info['q_step_index_nn']['upsampling']['bias']],
+        ),
+        DescriptorNN (
+            weight = POSSIBLE_SCALE_NN[header_info['scale_index_nn']['upsampling']['weight']],
+            bias = 0, # POSSIBLE_SCALE_NN[header_info['scale_index_nn']['upsampling']['bias']],
+        ),
+        header_info.get('ac_max_val_nn'),
+    ).to(device)
+
     synthesis = decode_network(
-        SynthesisMLP(
+        Synthesis(
             header_info.get('latent_n_grids'), header_info.get('layers_synthesis')
         ),  # Empty module
         DescriptorNN(
@@ -405,12 +425,10 @@ def decode(bitstream_path: str, device: str = 'cpu') -> Tensor:
         ),
         header_info.get('ac_max_val_nn'),
     ).to(device)
+    # =========================== Decode the NNs ============================ #
 
     # Instantiate a range coder to decode the y
-    range_coder = RangeCoder(
-        header_info.get('n_ctx_rowcol'),
-        header_info.get('ac_max_val_latent')
-    )
+    range_coder = RangeCoder(header_info.get('n_ctx_rowcol'), header_info.get('ac_max_val_latent'))
     decoded_y = []
 
     # Decode the different latent grids one after the other
@@ -420,9 +438,14 @@ def decode(bitstream_path: str, device: str = 'cpu') -> Tensor:
             for x in header_info.get('img_size')
         ]
 
+        if header_info.get('n_bytes_per_latent')[index_lat_grid] == 0:
+            current_y = torch.zeros((1, 1, h_grid, w_grid), device=device)
+            decoded_y.append(current_y)
+            continue
+
         range_coder.load_bitstream(f'{bitstream_path}_{index_lat_grid}')
         coding_order = range_coder.generate_coding_order(
-            (1, h_grid, w_grid), header_info.get('n_ctx_rowcol')
+            (1, h_grid, w_grid), header_info.get('n_ctx_rowcol'), device=device
         )
 
         # --------- Wave front coding order
@@ -448,7 +471,7 @@ def decode(bitstream_path: str, device: str = 'cpu') -> Tensor:
         _, occurrence_coding_order = torch.unique(flat_coding_order, return_counts=True)
 
         # Current latent grid without padding
-        current_y = torch.zeros((1, 1, h_grid, w_grid), device='cpu')
+        current_y = torch.zeros((1, 1, h_grid, w_grid), device=device)
 
         # Compute the 1d offset of indices to form the context
         offset_index_arm = compute_offset(current_y, mask_size)
@@ -473,28 +496,25 @@ def decode(bitstream_path: str, device: str = 'cpu') -> Tensor:
                 w_grid
             )
 
-            # ----- From now: run on CPU
             # Compute proba param from context
-            cur_raw_proba_param = arm(cur_context.cpu())
+            if ARMINT:
+                # Run on CPU if ARM is done with actual integer (and not integer-in-float mode)
+                cur_raw_proba_param = arm(cur_context.cpu())
+            else:
+                cur_raw_proba_param = arm(cur_context)
             cur_mu, cur_scale = get_mu_scale(cur_raw_proba_param)
-            cur_scale = torch.round(cur_scale*Q_EXP_SCALE)/Q_EXP_SCALE
 
             # Decode and store the value at the proper location within current_y
-            x_delta = n_ctx_row_col+1
+            x = range_coder.decode(cur_mu.cpu(), cur_scale.cpu()).to(device)
+            x_delta = n_ctx_row_col + 1
             if index_coding < w_grid:
                 start_y = 0
                 start_x = index_coding
-            else:
-                start_y = (index_coding - w_grid) // x_delta + 1
-                start_x = w_grid - x_delta + (index_coding - w_grid) % x_delta
-
-            x = range_coder.decode(cur_mu, cur_scale)
-            current_y[
-                [
-                    (w_grid + 2 * pad) * (pad + start_y +i) + (pad + start_x - x_delta * i)
-                    for i in range(len(x))
-                ]
-            ] = x
+            elif True:
+                start_y = (index_coding-w_grid)//x_delta+1
+                start_x = w_grid - x_delta + (index_coding-w_grid)%x_delta
+            current_y[ [ (w_grid+2*pad)*(pad+start_y+i)+(pad+start_x-x_delta*i) for i in range(len(x)) ] ] = x
+            # current_y[coding_order == index_coding] = range_coder.decode(cur_mu, cur_scale)
 
             # Increment the counter of loaded value
             cnt += occurrence_coding_order[index_coding]
@@ -504,15 +524,26 @@ def decode(bitstream_path: str, device: str = 'cpu') -> Tensor:
         current_y = current_y[:, :, pad:-pad, pad:-pad]
         decoded_y.append(current_y.to(device))
 
-    # Reconstruct the output
-    synthesis_input = get_synthesis_input_latent(decoded_y)
-    x_hat = torch.clamp(synthesis(synthesis_input), 0., 1.)
+    # Upsample the latents
+    synthesis_input = upsampling(decoded_y)
 
-    # Cast to [0 255]
-    x_hat = torch.round(x_hat * 255).to(torch.uint8)
+    # Reconstruct the output
+    synthesis_output = synthesis(synthesis_input)
+
+    # Round the output according to the bitdepth
+    # Then scale it back into a "discrete" tensor in [0, 1]
+    bitdepth = 10 if '10b' in header_info.get('img_type') else 8
+    synthesis_output = torch.round((2 ** bitdepth - 1) * synthesis_output)  / (2 ** bitdepth - 1)
+
+    if 'yuv420' in header_info.get('img_type'):
+        x_hat = yuv_dict_clamp(convert_444_to_420(synthesis_output), 0., 1.)
+    elif 'rgb444' in header_info.get('img_type'):
+        x_hat = torch.clamp(synthesis_output, 0., 1.)
+
+    save_png_or_yuv(x_hat, header_info.get('img_type'), output_path)
 
     # ================= Clean up the intermediate bitstream ================= #
-    for cur_module_name in ['arm', 'synthesis']:
+    for cur_module_name in ['arm', 'synthesis', 'upsampling']:
         for parameter_type in ['weight', 'bias']:
             cur_bitstream = f'{bitstream_path}_{cur_module_name}_{parameter_type}'
             subprocess.call(f'rm -f {cur_bitstream}', shell=True)
@@ -523,6 +554,4 @@ def decode(bitstream_path: str, device: str = 'cpu') -> Tensor:
     # ================= Clean up the intermediate bitstream ================= #
 
     elapsed = time.time() - start_time
-    print(f'\n\nDecoding time: {elapsed:7.3f} sec')
-
-    return x_hat
+    print(f'Decoding time: {elapsed:4.3f} sec')

@@ -15,24 +15,23 @@ from typing import List, Tuple
 from einops import rearrange
 
 from models.linear_layers import CustomLinear, CustomLinearResBlock
+from models.quantizable_module import QuantizableModule
+from utils.constants import ARMINT, POSSIBLE_Q_STEP_ARM_NN
 
 
-class ArmMLP(torch.jit.ScriptModule):
+class Arm(QuantizableModule):
     def __init__(self, input_ft: int, layers_dim: List[int], fpfm: int = 0):
-        """Instantiate an ARM MLP. It always has 3 (mu, log scale) output features.
+        super().__init__(possible_q_steps=POSSIBLE_Q_STEP_ARM_NN)
 
-        Args:
-            input_ft (int): Number of input dimensions. It corresponds to the number
-                of context pixels (e.g. 12).
-            layers_dim (List[int]): List of the width of the hidden layers. Empty
-                if no hidden layer (i.e. linear systems).
-        """
-        super().__init__()
         self.FPFM = fpfm # FIXED_POINT_FRACTIONAL_MULT # added for decode_network with torchscript.
+        self.ARMINT = ARMINT
+        self.qw = None
+        self.qb = None
 
         # ======================== Construct the MLP ======================== #
         layers_list = nn.ModuleList()
 
+        # Construct the hidden layer(s)
         for out_ft in layers_dim:
             if input_ft == out_ft:
                 layers_list.append(CustomLinearResBlock(input_ft, out_ft, self.FPFM))
@@ -41,40 +40,34 @@ class ArmMLP(torch.jit.ScriptModule):
             layers_list.append(nn.ReLU())
             input_ft = out_ft
 
-        # Construct the output layer. It always has 2 outputs (mu and log scale)
+        # Construct the output layer. It always has 2 outputs (mu and scale)
         layers_list.append(CustomLinear(input_ft, 2, self.FPFM))
         self.mlp = nn.Sequential(*layers_list)
         # ======================== Construct the MLP ======================== #
 
     def set_quant(self, fpfm: int = 0):
         # Non-zero fpfm implies we're in fixed point mode. weights and biases are integers.
+        # ARMINT False => the integers are stored in floats.
         self.FPFM = fpfm
+        self.cnt = 0
         # Convert from float to fixed point int.
         for l in self.mlp.children():
             if isinstance(l, CustomLinearResBlock) or isinstance(l, CustomLinear) \
-                or l.original_name == "CustomLinearResBlock" or l.original_name == "CustomLinear":
+                or (hasattr(l, "original_name") and (l.original_name == "CustomLinearResBlock" or l.original_name == "CustomLinear")):
                 l.scale = self.FPFM
                 # shadow fixed point weights and biases.
-                l.qw = torch.round(l.w*l.scale).to(torch.int32)
-                l.qb = torch.round(l.b*l.scale*l.scale).to(torch.int32)
+                if self.ARMINT:
+                    l.qw = torch.round(l.weight*l.scale).to(torch.int32)
+                    l.qb = torch.round(l.bias*l.scale*l.scale).to(torch.int32)
+                else:
+                    l.qw = torch.round(l.weight*l.scale).to(torch.int32).to(torch.float)
+                    l.qb = torch.round(l.bias*l.scale*l.scale).to(torch.int32).to(torch.float)
 
     def forward(self, x: Tensor) -> Tensor:
-        """Perform the forward pass for the Synthesis MLP.
-        The input and output are 2D tensors. The input dimension corresponds to
-        the number of context pixels (e.g. 12). The output dimension is always
-        equal to 2 (mu and log scale).
-
-        Args:
-            x (Tensor): A [B, C] 2D tensor, with C the number of context pixels
-
-        Returns:
-            Tensor: A [B, 2] tensor.
-        """
+        # return self.mlp(x)
         if self.FPFM == 0:
             # Pure float processing.
-            for l in self.mlp.children():
-                x = l(x)
-            return x
+            return self.mlp(x)
 
 #        if False:
 #            # Run in fp mode and clamp.
@@ -85,12 +78,23 @@ class ArmMLP(torch.jit.ScriptModule):
 
         # integer mode.
         xint = x.clone().detach()
-        xint = xint.to(torch.int32)*self.FPFM
+        if self.ARMINT:
+            xint = xint.to(torch.int32)*self.FPFM
+        else:
+            xint = (xint.to(torch.int32)*self.FPFM).to(torch.float)
+        # print("ARMIN", self.cnt, x.shape, x)
 
         for l in self.mlp.children():
             xint = l(xint)
+            #if self.cnt == 218:
+            #    print("218 l out", xint)
+        # xint = self.mlp(xint)
 
+        # float the result.
+        # print("ARMOUTI", self.cnt, xint.shape, xint)
         x = xint / self.FPFM
+        # print("ARMOUTF", self.cnt, x.shape, x)
+        self.cnt += 1
         return x
 
 def get_neighbor(x: Tensor, mask_size: int, non_zero_pixel_ctx_idx: Tensor) -> Tensor:
@@ -171,7 +175,6 @@ def get_flat_latent_and_context(
     return flat_latent, flat_context
 
 
-@torch.jit.script
 def laplace_cdf(x: Tensor, loc: Tensor, scale: Tensor) -> Tensor:
     """Compute the laplace cumulative evaluated in x. All parameters
     must have the same dimension.
@@ -186,8 +189,6 @@ def laplace_cdf(x: Tensor, loc: Tensor, scale: Tensor) -> Tensor:
     """
     return 0.5 - 0.5 * (x - loc).sign() * torch.expm1(-(x - loc).abs() / scale)
 
-
-@torch.jit.script
 def get_mu_scale(raw_proba_param: Tensor) -> Tuple[Tensor, Tensor]:
     """From a raw tensor raw_proba_param [B, 2], split it into
     two halves (one for mu, one for scale) and reparameterize the scale
@@ -206,11 +207,9 @@ def get_mu_scale(raw_proba_param: Tensor) -> Tuple[Tensor, Tensor]:
     scale = torch.exp(-0.5 * torch.clamp(log_scale, min=-10., max=13.8155))
     return mu, scale
 
-
-@torch.jit.script
 def compute_rate(x: Tensor, raw_proba_param: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
     """From a raw tensor raw_proba_param [B, 2], split it into
-    two halves (one for mu, one for scale) and re parameterize the scale
+    two halves (one for mu, one for scale) and reparameterize the scale
     so that it will always be positive.
     Then, estimate the entropy of x (in bits) when its distribution is estimated
     as Laplace(mu, scale) = MLP(dec_side_latent). x, mu and scale must have the same

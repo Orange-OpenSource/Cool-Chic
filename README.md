@@ -1,88 +1,77 @@
+# Work in progress for a new release!
+
+## Release note:
+
+* Convolution-based synthesis transform
+* Adapted upsampling module
+* Improved Straight Through Estimator derivative during training
+* YUV 420 input format in 8-bit and 10-bit
+* Fixed point arithmetic for the probability model allowing for cross-platform entropy (de)coding
+* More convenient encoding recipes _e.g._ fast, medium, slow, placebo
+* Improved compression performance: around -15% compared to the previous version
+  described in [_COOL-CHIC: Coordinate-based Low Complexity Hierarchical Image
+  Codec_](https://arxiv.org/abs/2212.05458), Ladune et al.
+
 # COOL-CHIC
 
-This repository contains an implementation of [_COOL-CHIC: Coordinate-based Low Complexity Hierarchical Image Codec_](https://arxiv.org/abs/2212.05458).
-
 COOL-CHIC is a neural image codec based on __overfitting__. It offers the following features:
-- Decode an image with less than __700 multiplications__ / decoded pixel
-- Competitive with Ballé's hyperprior autoencoder (https://openreview.net/forum?id=rkcQFMZRb)
-- Reach performance close to HEVC (HM), with +20 % BD-rate.
+- Lightweight decoder complexity: __2 000 multiplications__ / decoded pixel and as few parameters
+- Compression performance on par with HEVC on RGB images
 
 More information available in the paper: [_COOL-CHIC: Coordinate-based Low Complexity Hierarchical Image Codec_](https://arxiv.org/abs/2212.05458), Ladune et al.
+
+📢📢📢 __New paper coming soon!__ 📢📢📢
 
 # Usage
 
 ## Installation
 
+```bash
     >>> python3 -m pip install virtualenv               # Install virtual env if needed
     >>> virtualenv venv && source venv/bin/activate     # Create and activate a virtual env named "venv"
     >>> python3 -m pip install -r requirements.txt      # Install the required packages
-
-## Decoding a bitstream \& reproducing results from the paper
-
-We provide bitstream for the images of the kodak dataset in
-```results/kodak/bitstreams/``` as well as for a sample image in
-```results/biville/bitstreams/```. This permits to reproduce the results
-presented in the paper. Bitstream can be decoded as follows:
-
-    >>> python3 src/decode.py -i results/biville/bitstreams/biville-lambda0001.bin -o biville-lambda0001.png
-
-The results of the decoding of all bitstreams are given in
-```results/kodak/raw_results.tsv``` and ```results/biville/raw_results.tsv```.
-
+```
 ## Encoding an image
 
-The scripts ```samples/code_image_gpu.sh``` and ```samples/code_image_cpu.sh``` provide examples for COOL-CHIC usage.
+The script ```samples/encode_image.sh``` provides an example for encoding an image with Cool-chic:
 
-    >>> ./samples/code_image_gpu.sh         # Use the cpu script if you don't have a GPU (it can be quite long!)
-    ... Many logs are printed to the terminal
-    >>> cat samples/encoder_results.txt
-    psnr,rate_latent_bpp,rate_mlp_bpp,rate_all_bpp,training_time_second,n_iteration,decoder_rate_bpp,decoder_psnr_db
-    33.428055,0.7880071004231771,0.010424812324345112,0.7984318733215332,    5.7,  999.0,0.82692,33.42805
+```bash
+python3 src/encode.py                               \
+    --device=cpu                                    \   # Change this to "cuda:0" or "mps:0" depending on your available device
+    --input=samples/biville.png                     \   # Image to code
+    --output=samples/bitstream.bin                  \   # Compressed bitstream
+    --model_save_path=samples/model.pt              \   # Save the overfitted model here for analysis purpose
+    --enc_results_path=samples/encoder_results.txt  \   # Save encoder logs for analysis purpose
+    --lmbda=0.0002                                  \   # Rate constraint
+    --start_lr=1e-2                                 \   # Learning rate
+    --recipe=instant                                \   # Encoding preset. Available: instant, faster, fast, medium, slow, placebo
+    --layers_synthesis=40-1-linear-relu,3-1-linear-relu,3-3-residual-relu,3-3-residual-none \   # Synthesis architecture outdim-kernelsize-layertype-nonlinearity
+    --layers_arm=24,24                              \   # ARM architecture hidden layers dimension
+    --n_ctx_rowcol=3                                \   # Number of rows and columns of context
+    --latent_n_grids=7                                  # Number of latent resolutions
+```
+## Decoding a bitstream
 
-At the end of the 1000 iterations the entropy coding takes place and a bitstream
-is written. The ```encode.py``` script also includes decoding (which can be
-found at ```decode.py```). The final results can be found at
-```samples/encoder_results.txt```. The different fields of the result file are:
+The script ```samples/decode_image.sh``` provides an example for decoding an image with Cool-chic:
 
-|         Name         |                                  Meaning                                  | Unit          |
-|:--------------------:|:-------------------------------------------------------------------------:|---------------|
-|         **psnr**        |              Encoder-side PSNR             | dB            |
-|    rate_latent_bpp   | Rate for the latent variables | bit per pixel |
-| rate_mlp_bpp         | Rate synthesis and ARM MLPs   | bit per pixel |
-| **rate_all_bpp**         | Total rate                    | bit per pixel |
-| training_time_second | Total training time                                                       | second        |
-| n_iteration          | Total number of training iterations                                       | /             |
-| decoder_rate_bpp     | Total rate (size of the bitstream)                                        | bit per pixel |
-| decoder_psnr_db      | PSNR of the image decoded from the bitstream                              | dB
+```bash
+python3 src/decode.py                               \   # Faster on CPU so don't change anything!
+    --device=cpu                                    \   # Bitstream path
+    --input=samples/bitstream.bin                   \   # Storage path for the decoded image.
+    --output=samples/biville_decoded.png
+```
 
-Results may slightly differ between the encoder-side rate and decoder-side rate: the encoder measures the entropy of the data while the decoder retrieve the actual size of the bitstream.
+## YUV420 format
 
-Similarly, the encoder-side PSNR is slightly better than the decoder-side one as the encoder does not take into account the rounding due to storing the image as an 8-bit RGB array.
+Cool-chic is able to process YUV420 data with 8-bit and 10-bit representation. To do so, you need to call the ```src/encode.py``` script with an appropriately formatted name such as:
 
+    --input=<videoname>_<W>x<H>_<framerate>_yuv420_<bitdepth>b.yuv
 
-## Arguments
-
-The different arguments accepted by the encoding script are explained here.
-
-    python3 src/encode.py                               \
-        --device=cuda:0                                 \   # Run on GPU
-        -i samples/biville.png                          \   # Image to compress
-        -o samples/bitstream.bin                        \   # Where to write the bitstream
-        --decoded_img_path=samples/decoded.png          \   # Save the decoded image here
-        --model_save_path=samples/model.pt              \   # Save the resulting .pt model here
-        --enc_results_path=samples/encoder_results.txt  \   # Encoder-side results (prior to bitstream)
-        --lmbda=0.001                                   \   # Rate constraint: J = Dist + lmbda Rate
-        --start_lr=1e-2                                 \   # Initial learning rate
-        --n_itr=1000                                    \   # Maximum number of iterations (should be set to 1e6)
-        --layers_synthesis=12,12                        \   # 2 hidden layers of width 12 for the synthesis, as in the paper
-        --layers_arm=12,12                              \   # 2 hidden layers of width 12 for the synthesis, as in the paper
-        --n_ctx_rowcol=2                                \   # Use 2 rows and columns of context pixels for the ARM (C = 12) as in the paper
-        --latent_n_grids=7                                  # Use 7 latent grids (from 1:1 to 1:64), as in the paper
-
+The encoder codes only the first frame of the video.
 
 ## ⚠ ⚠ ⚠ Disclaimer ⚠ ⚠ ⚠
 
-This repository is only a proof of concept illustrating how the ideas of our [_COOL-CHIC paper_](https://arxiv.org/abs/2212.05458) could be translated into an actual codec.
+This repository is only a proof of concept illustrating how the ideas of Cool-chic could be translated into an actual codec.
 The encoding process (i.e. learning the MLPs and latent representation) might suffer from failures. In may help to do successive encoding and keep the best one or tweak the learning rate.
 
 # Thanks

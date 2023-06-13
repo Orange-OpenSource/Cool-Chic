@@ -11,31 +11,49 @@
 import math
 import torch
 from torch import Tensor, nn
-from typing import List, Dict, Tuple, TypedDict, Optional
-from models.synthesis import STEQuantizer, SynthesisMLP, UniformNoiseQuantizer, get_synthesis_input_latent
-from models.arm import ArmMLP, get_flat_latent_and_context, compute_rate
-from utils.constants import LIST_POSSIBLE_DEVICES
+from typing import List, Dict, Tuple, Union
+from dataclasses import dataclass, field
+from fvcore.nn import FlopCountAnalysis, flop_count_table
+
+from model_management.yuv import DictTensorYUV, convert_444_to_420, yuv_dict_clamp, yuv_dict_to_device
+from models.synthesis import NoiseQuantizer, STEQuantizer, Synthesis
+from models.arm import Arm, get_flat_latent_and_context, compute_rate
+from models.upsampling import Upsampling
+from utils.constants import LIST_POSSIBLE_DEVICES, ARMINT
+from utils.data_structure import DescriptorCoolChic
 
 
-class EncoderOutput(TypedDict):
-    """Define the dictionary containing COOL-CHIC encoder output as a type."""
-    x_hat: Tensor                      # Reconstructed frame [1, C, H, W]
-    rate_y: Tensor                     # Rate [1]
-    mu: Optional[List[Tensor]]         # List of N [H_i, W_i] tensors, mu for each latent grid (can be None)
-    scale: Optional[List[Tensor]]      # List of N [H_i, W_i] tensors, scale for each latent grid (can be None)
-    latent: Optional[List[Tensor]]     # List of N [H_i, W_i] tensors, each latent grid (can be None)
+@dataclass
+class CoolChicParameter():
+    """Dataclass to store the parameters of CoolChic."""
+    lmbda: float                        # Rate constraint. Loss = D + lambda R
+    img: Union[Tensor, DictTensorYUV]   # [1, C, H, W] 4D tensor storing the image to code or 3 4-d tensor for yuv420 (in [0., 1.])
+    img_type: str                       # Either 'rgb444' or 'yuv420_8b' or 'yuv420_10b
+    layers_synthesis: List[str]         # Output dim. of layer for the synthesis (e.g. 12-1-linear-relu,12-1-residual-relu,3-1-linear-relu,3-3-residual-none)
+    layers_arm: List[int]               # Output dim. of each hidden layer for the ARM (Empty for linear MLP)
+    n_ctx_rowcol: int = 2               # Number of row and columns of context.
+    latent_n_grids: int = 7             # Number of latent grids.
+    dist: str = 'mse'                   # Either "mse" or "ms_ssim"
+    upsampling_kernel_size: int=8       # kernel size for the upsampler ≥8. if set to zero the kernel is not optimised, the bicubic upsampler is used
+    bitdepth: int = 8                   # Either 8 bits or 10 bits. Only for YUV file
+    ste_derivative: float = 1e-2        # Derivative used for the actual quantization
+
+    # ==================== Not set by the init function ===================== #
+    img_size: Tuple[int, int] = field(init=False)       # Height, Width of the image to code
+    # ==================== Not set by the init function ===================== #
+
+    def __post_init__(self):
+        if self.img_type == 'rgb444':
+            self.img_size = self.img.size()[-2:]
+        elif 'yuv420' in self.img_type:
+            self.img_size = self.img.get('y').size()[-2:]
+            if '10b' in self.img_type:
+                self.bitdepth = 10
 
 
 class CoolChicEncoder(nn.Module):
 
-    def __init__(
-        self,
-        img_size: Tuple[int, int],
-        layers_synthesis: List = [32, 32, 32],
-        layers_arm: List = [16, 16, 16, 16],
-        n_ctx_rowcol: int = 3,
-        latent_n_grids: int = 7,
-    ):
+    def __init__(self, param: CoolChicParameter):
         """Instantiate an INR for this images
 
         Args:
@@ -46,30 +64,26 @@ class CoolChicEncoder(nn.Module):
                 ARM MLP. if empty, no hidden layers
             n_ctx_rowcol (int, optional): How many row and columns are used as context by the ARM.
             latent_n_grids (int, optional): Number of latent grids (and number of resolution).
+            post_process_mode (str, optional): Either "on" or "off".
         """
         super().__init__()
 
-        # Store useful value
-        self.img_size: Tuple[int, int] = img_size
-        self.n_ctx_rowcol = n_ctx_rowcol
-        self.layers_arm = layers_arm
-        self.layers_synthesis = layers_synthesis
-        self.latent_n_grids = latent_n_grids
-
-        # Needed at one point during the training
-        self.ste_quantizer = STEQuantizer()
-        self.uniform_noise_quantizer = UniformNoiseQuantizer()
+        # Store useful values and initialize iterations and training time counter
+        self.param = param
+        self.iterations_counter = 0
+        self.total_training_time_sec = 0.0
 
         # ================== Synthesis related stuff ================= #
-        # Empty grids and associated encoder gains.
+        # Empty grids and associated gains.
         self.log_2_encoder_gains = nn.Parameter(
-            torch.arange(0., latent_n_grids), requires_grad=True
+            torch.arange(0., self.param.latent_n_grids), requires_grad=True
         )
+        self.min_gain = torch.tensor([1.0], requires_grad=False)
 
-        # Populate the successive grids
+        # Populate the successive grid
         self.latent_grids = nn.ParameterList()
-        for i in range(latent_n_grids):
-            h_grid, w_grid = [int(math.ceil(x / (2 ** i))) for x in img_size]
+        for i in range(self.param.latent_n_grids):
+            h_grid, w_grid = [int(math.ceil(x / (2 ** i))) for x in self.param.img_size]
 
             self.latent_grids.append(
                 nn.Parameter(
@@ -78,8 +92,18 @@ class CoolChicEncoder(nn.Module):
             )
 
         # Instantiate the synthesis MLP
-        self.synthesis = torch.jit.script(SynthesisMLP(latent_n_grids, layers_synthesis))
+        self.synthesis = Synthesis(self.param.latent_n_grids, self.param.layers_synthesis)
+
+        self.noise_quantizer = NoiseQuantizer()
+        self.ste_quantizer = STEQuantizer()
+
+        # Not a very elegant way of setting the derivative
+        STEQuantizer.ste_derivative = self.param.ste_derivative
         # ================== Synthesis related stuff ================= #
+
+        # ================== Upsampling related stuff ================ #
+        self.upsampling = Upsampling(param.upsampling_kernel_size)
+        # ================== Upsampling related stuff ================ #
 
         # ===================== ARM related stuff ==================== #
         # Create the probability model for the main INR. It uses a spatial context
@@ -93,7 +117,7 @@ class CoolChicEncoder(nn.Module):
         #   0 0 0 0 0 0 0
         #   0 0 0 0 0 0 0
         #   0 0 0 0 0 0 0
-        self.mask_size = 2 * n_ctx_rowcol + 1
+        self.mask_size = 2 * self.param.n_ctx_rowcol + 1
 
         self.non_zero_pixel_ctx = int((self.mask_size ** 2 - 1) / 2)
 
@@ -103,104 +127,93 @@ class CoolChicEncoder(nn.Module):
         # This allows to use the index_select function, which is significantly
         # faster than usual indexing.
         self.non_zero_pixel_ctx_index = torch.arange(0, self.non_zero_pixel_ctx)
-        self.arm = torch.jit.script(ArmMLP(self.non_zero_pixel_ctx, layers_arm))
+        self.arm = Arm(self.non_zero_pixel_ctx, self.param.layers_arm)
         # ===================== ARM related stuff ==================== #
 
-    def get_nb_mac(self) -> Dict[str, float]:
-        """Count the number of Multiplication-ACcumulation (MAC) per pixel for
-        this model. Return a dictionary containing the MAC for the synthesis,
-        the probability model and the overall system.
-        This is an estimate which omits the upscaling, the quantization gain
-        and the Laplace computation.
+        #  prepare to count the number of floating point operations
+        self.flops_str = None
+
+        torch.set_printoptions(threshold=10000000)
+
+
+    def get_flops(self):
+        # Count the number of floating point operations here. It must be done before
+        # torchscripting the different modules.
+        flops = FlopCountAnalysis(self, None)
+        flops.unsupported_ops_warnings(False)
+
+        self.total_flops = flops.total()
+        self.flops_str = flop_count_table(flops)
+        del flops
+
+    def get_network_rate(self) -> DescriptorCoolChic:
+        """Return the rate associated to the parameters (weights and biases)
+        of the different modules
 
         Returns:
-            dict: {
-                'arm_mac_per_pixel': xxx,
-                'synth_mac_per_pixel': yyy,
-                'total_mal_per_pixel': zzz
-            }
+            DescriptorCoolChic: The rate associated with the weights and biases of each module
         """
-        n_pixels = self.img_size[-2] * self.img_size[-1]
-
-        # ========================= Compute MAC ARM ========================= #
-        n_pixel_latent = self.get_nb_parameters()['inr_latent_grid']
-        # Successive dimension of the ARM ARM:
-        # [in_ft, hidden_layer_1, ..., last_hidden_layer, 2]
-        dim_arm = [self.non_zero_pixel_ctx] + self.layers_arm + [2]
-        n_mac_per_latent_pixel_arm = sum(
-            [in_ft * out_ft for in_ft, out_ft in zip(dim_arm[:-1], dim_arm[1:])]
-        )
-        n_mac_per_pixel_arm = (n_pixel_latent / n_pixels) * n_mac_per_latent_pixel_arm
-        # ========================= Compute MAC ARM ========================= #
-
-        # ====================== Compute MAC Synthesis ======================= #
-        # Successive dimension of the Synthesis MLP:
-        # [in_ft, hidden_layer_1, ..., last_hidden_layer, 3]
-        dim_synth = [self.latent_n_grids] + self.layers_synthesis + [3]
-        n_mac_per_pixel_synth = sum(
-            [in_ft * out_ft for in_ft, out_ft in zip(dim_synth[:-1], dim_synth[1:])]
-        )
-        # ====================== Compute MAC Synthesis ======================= #
-
-        return {
-            'arm_mac_per_pixel': n_mac_per_pixel_arm,
-            'synth_mac_per_pixel': n_mac_per_pixel_synth,
-            'total_mac_per_pixel': n_mac_per_pixel_synth + n_mac_per_pixel_arm,
+        module_to_send = {
+            'arm': self.arm, 'synthesis': self.synthesis, 'upsampling': self.upsampling
         }
 
-    def get_nb_parameters(self) -> dict:
-        """Return the number of parameters of different system parts.
-
-        Returns:
-            dict: contains the number of parameters."""
-
-        # return {k: v for k, v in self.inr.get_nb_parameters().items()}
-        return {
-            'inr_latent_grid': sum(
-                p.numel() for p in self.latent_grids.parameters() if p.requires_grad
-            ),
-            'inr_mlp': sum(
-                p.numel() for p in self.synthesis.parameters() if p.requires_grad
-            ),
-            'inr_proba_model': sum(
-                p.numel() for p in self.arm.parameters() if p.requires_grad
-            ),
+        rate_per_module: DescriptorCoolChic = {
+            'arm': {'weight': 0., 'bias': 0.},
+            'synthesis': {'weight': 0., 'bias': 0.},
+            'upsampling': {'weight': 0., 'bias': 0.},
         }
+        for name, mod in module_to_send.items():
+            rate_per_module[name] = mod.measure_laplace_rate()
 
-    def print_nb_mac(self) -> str:
-        """Return a string describing the number of MAC/pixel in this INR.
+        return rate_per_module
 
-        Returns:
-            str: a pretty and informative string"""
-        n_macs = self.get_nb_mac()
-
-        s = '-' * 80 + '\n'
-        s += f'Synthesis MLP kMAC / pixel: {n_macs.get("synth_mac_per_pixel") / 1000:6.3}\n'
-        s += f'ARM MLP       kMAC / pixel: {n_macs.get("arm_mac_per_pixel") / 1000:6.3}\n'
-        s += f'Total         kMAC / pixel: {n_macs.get("total_mac_per_pixel") / 1000:6.3}\n'
-        s += '-' * 80 + '\n'
-        return s
-
-    def print_nb_parameters(self) -> str:
-        """Return a string describing the number of parameters in this INR.
+    def str_complexity(self) -> str:
+        """Return a string describing the number of MAC (**not mac per pixel**) and the
+        number of parameters for the different modules of CoolChic
 
         Returns:
-            str: a pretty and informative string"""
-        n_params = self.get_nb_parameters()
+            str: A pretty string about CoolChic complexity.
+        """
 
-        s = '-' * 80 + '\n'
-        s += f'Latent        kParameter  : {n_params.get("inr_latent_grid") / 1000:7.4}\n'
-        s += f'Synthesis MLP kParameter  : {n_params.get("inr_mlp") / 1000:7.4}\n'
-        s += f'ARM MLP       kParameter  : {n_params.get("inr_proba_model") / 1000:7.4}\n'
-        s += '-' * 80 + '\n'
-        return s
+        if not self.flops_str:
+            self.get_flops()
+
+        msg_total_mac = '----------------------------------\n'
+        msg_total_mac += f'Total MAC / decoded pixel: {self.get_total_mac_per_pixel():.1f}'
+        msg_total_mac += '\n----------------------------------'
+
+
+        return self.flops_str + '\n\n' + msg_total_mac
+
+    def get_total_mac_per_pixel(self) -> float:
+        """Count the number of Multiplication-ACcumulation (MAC) per decoded pixel
+        for this model.
+
+        Returns:
+            float: number of floating point operation per decoded pixel.
+        """
+
+        if not self.flops_str:
+            self.get_flops()
+
+        n_pixels = self.param.img_size[-2] * self.param.img_size[-1]
+        return self.total_flops / n_pixels
+
+    def get_latent_gain(self) -> Tensor:
+        """Return the latent gains vector
+
+        Returns:
+            Tensor: The latent gains vector
+        """
+        return torch.max(2 ** self.log_2_encoder_gains, self.min_gain)
 
     def forward(
         self,
-        get_proba_param: bool = False,
+        visu: bool = False,
+        specific_latent_grid: List[int] = [],
         use_ste_quant: bool = True,
         AC_MAX_VAL: int = -1
-    ) -> EncoderOutput:
+    ) -> Dict[str, Tensor]:
         """Perform Cool-chic forward pass.
             - Quantize the latent variable
             - Synthesize **all** the output pixels
@@ -208,36 +221,41 @@ class CoolChicEncoder(nn.Module):
             - Measure the rate of all the latent
 
         Args:
-            get_proba_param (bool, optional): True to also return mu and scale.
-                This is needed for the bitstream. Defaults to False.
+            visu (bool, optional): True to output more things in the
+                results dictionary (latents, rate, mu, scale). Defaults to False.
             specific_latent_grid (List[int], optional):
                 Pass [k, l, m] to synthesize the output only from the combination
                 of the k-th, l-th and m-th feature maps. Ignored if the list
                 is empty. Defaults to [].
 
         Returns:
-            EncoderOutput: The forward output.
+            Dict[str, Tensor]: The forward output.
         """
 
         # ! Order of the operations are important as these are asynchronous
         # ! CUDA operations. Some ordering are faster than other...
+        if ARMINT:
+            self.non_zero_pixel_ctx_index = self.non_zero_pixel_ctx_index.to(self.latent_grids[0].device)
+            self.min_gain = self.min_gain.to(self.latent_grids[0].device)
+        latent_gains = self.get_latent_gain()
 
-        self.non_zero_pixel_ctx_index = self.non_zero_pixel_ctx_index.to(self.latent_grids[0].device)
-
-        # ====================== Get sent latent codes ====================== #
-        # Two different types of quantization. quantize() function uses the usual
-        # noise addition proxy if self.training is True and the actual round
-        # otherwise.
-        # if use_ste_quant the straight-through estimator is used i.e. actual
-        # quantization in the forward pass and gradient set to one in the backward.
-        quantizer = self.ste_quantizer if use_ste_quant else self.uniform_noise_quantizer
-        sent_latent = [
-            quantizer.apply(
-                cur_latent * torch.pow(2, self.log_2_encoder_gains[i]), # Apply Q. step
-                self.training                                           # Noise if needed
-            )
-            for i, cur_latent in enumerate(self.latent_grids)
+        scaled_latent = [
+            cur_latent * latent_gains[i] for i, cur_latent in enumerate(self.latent_grids)
         ]
+
+
+        if self.training:
+            if use_ste_quant:
+                sent_latent = [
+                    self.ste_quantizer.apply(cur_latent) for cur_latent in scaled_latent
+                ]
+            else:
+                sent_latent = [
+                    self.noise_quantizer.apply(cur_latent) for cur_latent in scaled_latent
+                ]
+
+        else:
+            sent_latent = [torch.round(cur_latent) for cur_latent in scaled_latent]
 
         # Clamp latent if we need to write a bitstream
         if AC_MAX_VAL != -1:
@@ -245,64 +263,79 @@ class CoolChicEncoder(nn.Module):
                 torch.clamp(cur_latent, -AC_MAX_VAL, AC_MAX_VAL + 1)
                 for cur_latent in sent_latent
             ]
-        # ====================== Get sent latent codes ====================== #
 
         # Extract the spatial content and the latent to code
         flat_latent, flat_context = get_flat_latent_and_context(
-            sent_latent, self.mask_size, self.non_zero_pixel_ctx_index
+            sent_latent,
+            self.mask_size,
+            self.non_zero_pixel_ctx_index
         )
 
-        synthesis_input = get_synthesis_input_latent(sent_latent)
+        # Upsample the latents
+        synthesis_input = self.upsampling(sent_latent)
 
         # Feed the spatial context to the arm MLP and get mu and scale
         raw_proba_param = self.arm(flat_context)
+
+        # Mask all but the desired channel(s)
+        if specific_latent_grid:
+            mask = torch.zeros_like(synthesis_input)
+            for desired_idx in specific_latent_grid:
+                mask[:, desired_idx] = 1
+            synthesis_input = synthesis_input * mask
 
         # Compute the rate (i.e. the entropy of flat latent knowing mu and scale)
         rate_y, _, _ = compute_rate(flat_latent, raw_proba_param)
 
         # Reconstruct the output
-        x_hat = torch.clamp(self.synthesis(synthesis_input), 0., 1.)
+        synthesis_output = self.synthesis(synthesis_input)
 
+        if self.param.img_type == 'rgb444':
+            # Simulate the quantization which occurs when saving on a 256 level PNG file
+            if not self.training:
+                synthesis_output = torch.round((2 ** 8 - 1) * synthesis_output) / (2 ** 8 - 1)
+            x_hat = torch.clamp(synthesis_output, 0., 1.)
 
-        if get_proba_param:
-            _, flat_mu_y, flat_scale_y = compute_rate(flat_latent, raw_proba_param)
+        elif 'yuv420' in self.param.img_type:
+            # Simulate the quantization which occurs when saving on a 8 bits or 10 bits YUV file
+            if not self.training:
+                synthesis_output = torch.round((2 ** self.param.bitdepth - 1) * synthesis_output) / (2 ** self.param.bitdepth - 1)
+
+            x_hat = yuv_dict_clamp(convert_444_to_420(synthesis_output), 0., 1.)
+
+        out: Dict = {'x_hat': x_hat, 'rate_y': rate_y}
+
+        if visu:
+            rate_y, mu_y, scale_y = compute_rate(flat_latent, raw_proba_param)
 
             # Prepare list to accommodate the visualisations
-            mu = []
-            scale = []
-            latent = []
+            out['2d_y_latent'] = []
+            out['2d_y_mu'] = []
+            out['2d_y_scale'] = []
+            out['2d_y_rate'] = []
 
             # "Pointer" for the reading of the 1D scale, mu and rate
             cnt = 0
+            # for i, _ in enumerate(filtered_latent):
             for i, _ in enumerate(self.latent_grids):
                 h_i, w_i = sent_latent[i].size()[-2:]
+                out['2d_y_latent'].append(sent_latent[i].view((h_i, w_i)))
 
                 # Scale, mu and rate are 1D tensors where the N latent grids
                 # are flattened together. As such we have to read the appropriate
                 # number of values in this 1D vector to reconstruct the i-th grid in 2D
-                mu_i, scale_i = [
+
+                mu_i, scale_i, rate_i = [
                     # Read h_i * w_i values starting from cnt
                     tmp[cnt: cnt + (h_i * w_i)].view((h_i, w_i))
-                    for tmp in [flat_mu_y, flat_scale_y]
+                    for tmp in [mu_y, scale_y, rate_y]
                 ]
 
                 cnt += h_i * w_i
-                mu.append(mu_i)
-                scale.append(scale_i)
-                latent.append(sent_latent[i].view(h_i, w_i))
+                out['2d_y_mu'].append(mu_i)
+                out['2d_y_scale'].append(scale_i)
+                out['2d_y_rate'].append(rate_i)
 
-        else:
-            mu = None
-            scale = None
-            latent = None
-
-        out: EncoderOutput = {
-            'x_hat': x_hat,
-            'rate_y': rate_y.sum(),
-            'mu': mu,
-            'scale': scale,
-            'latent': latent,
-        }
         return out
 
 
@@ -320,4 +353,22 @@ def to_device(model: CoolChicEncoder, device: str) -> CoolChicEncoder:
     assert device in LIST_POSSIBLE_DEVICES, f'Unknown device {device}, should be in {LIST_POSSIBLE_DEVICES}'
     model = model.to(device)
     model.non_zero_pixel_ctx_index = model.non_zero_pixel_ctx_index.to(device)
+    model.min_gain = model.min_gain.to(device)
+
+    # Push integerized weights and biases of the mlp (resp qw and qb) to
+    # the required device
+    for idx_layer, layer in enumerate(model.arm.mlp):
+        if hasattr(layer, 'qw'):
+            if layer.qw is not None:
+                model.arm.mlp[idx_layer].qw = layer.qw.to(device)
+
+        if hasattr(layer, 'qb'):
+            if layer.qb is not None:
+                model.arm.mlp[idx_layer].qb = layer.qb.to(device)
+
+    if model.param.img_type == 'rgb444':
+        model.param.img = model.param.img.to(device)
+    elif 'yuv420' in model.param.img_type:
+        model.param.img = yuv_dict_to_device(model.param.img, device)
+
     return model
