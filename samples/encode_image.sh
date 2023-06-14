@@ -1,6 +1,5 @@
 #!/bin/bash
 python3 src/encode.py                               \
-    --device=cpu                                    \
     --input=samples/biville.png                     \
     --output=samples/bitstream.bin                  \
     --model_save_path=samples/model.pt              \

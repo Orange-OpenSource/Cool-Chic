@@ -1,5 +1,6 @@
 # --extra-index-url https://download.pytorch.org/whl/cu116
 torch==2.0.1
-torchvision==0.14.1     # For PIL
+torchvision==0.15.2     # For PIL
 constriction==0.3.0     # Entropy coding
 einops==0.6.0           # Tensor manipulation
+fvcore==0.1.5           # Flop counter
