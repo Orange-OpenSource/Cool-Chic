@@ -31,13 +31,22 @@ More information available in the paper: [_COOL-CHIC: Coordinate-based Low Compl
     >>> virtualenv venv && source venv/bin/activate     # Create and activate a virtual env named "venv"
     >>> python3 -m pip install -r requirements.txt      # Install the required packages
 ```
+
+## Using Apple M1/M2 Neural Engine
+
+For some operations, the mps backend is not yet available. If you want to use
+Apple Neural Engine, you need to set the following environment variable:
+
+```bash
+export PYTORCH_ENABLE_MPS_FALLBACK=1
+```
+
 ## Encoding an image
 
 The script ```samples/encode_image.sh``` provides an example for encoding an image with Cool-chic:
 
 ```bash
 python3 src/encode.py                               \
-    --device=cpu                                    \   # Change this to "cuda:0" or "mps:0" depending on your available device
     --input=samples/biville.png                     \   # Image to code
     --output=samples/bitstream.bin                  \   # Compressed bitstream
     --model_save_path=samples/model.pt              \   # Save the overfitted model here for analysis purpose
@@ -55,10 +64,9 @@ python3 src/encode.py                               \
 The script ```samples/decode_image.sh``` provides an example for decoding an image with Cool-chic:
 
 ```bash
-python3 src/decode.py                               \   # Faster on CPU so don't change anything!
-    --device=cpu                                    \   # Bitstream path
-    --input=samples/bitstream.bin                   \   # Storage path for the decoded image.
-    --output=samples/biville_decoded.png
+python3 src/decode.py                               \
+    --input=samples/bitstream.bin                   \   # Bitstream path
+    --output=samples/biville_decoded.png                # Storage path for the decoded image.
 ```
 
 ## YUV420 format
