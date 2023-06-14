@@ -122,7 +122,7 @@ def encode(model: CoolChicEncoder, bitstream_path: str, q_step_nn: DescriptorCoo
     model = model.eval()
     model = to_device(model, 'cpu')
 
-    subprocess.call(f'rm {bitstream_path}', shell=True)
+    subprocess.call(f'rm -f {bitstream_path}', shell=True)
 
     # ================= Encode the MLP into a bitstream file ================ #
     ac_max_val_nn = get_ac_max_val_nn(model, q_step_nn)
