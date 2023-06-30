@@ -50,6 +50,17 @@ python3 results/decode_one_dataset.py <dataset_name> # Can take a few minutes
 
 The file ```results/<dataset_name>/results.tsv``` provides the results that should be obtained.
 
+Compared to HEVC (HM 16.20), Cool-chic bitstreams offer the following results:
+
+| Dataset          | BD-rate vs. HEVC (HM 16.20) |
+|------------------|-----------------------------|
+| kodak            | <span style="color:#f50">+ 7.16 %  </span> |
+| clic20-pro-valid | <span style="color:green">- 4.92 %  </span>                    |
+| clic22-test      | <span style="color:green">- 4.46 %  </span>               |
+| jvet             | <span style="color:#f50">+ 11.96 %  </span>              |
+
+
+<br/>
 
 # Compressing your own images
 
