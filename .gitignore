@@ -1,12 +1,9 @@
 .vscode/
 images/
 venv/
-*.pyc
 *.pt
 *.png
 *.out
-*.DS_Store
-*.nfs*
 
 !samples/encode_image.sh
 !samples/decode_image.sh
@@ -15,3 +12,8 @@ venv/
 !samples/biville_1152x768_1p_yuv420_10b.yuv
 
 
+.DS_Store
+__pycache__/
+*.py[cod]
+*$py.class
+*.nfs*
