@@ -302,7 +302,7 @@ def read_header(bitstream_path: str) -> HeaderInfo:
             # Hack -- 255 -> -1 for upsampling bias.  Indiciating no bias.
             if q_step_index_nn[nn_name][nn_param] == 255:
                 q_step_index_nn[nn_name][nn_param] = -1
-                print("got -1:", nn_name, nn_param)
+                # print("got -1:", nn_name, nn_param)
             ptr += 1
 
     scale_index_nn: DescriptorCoolChic = {}
