@@ -1,6 +1,6 @@
 # COOL-CHIC
 
-Cool-chic (pronounced <span class="ipa">/kul ʃik/</span> as in French 🥖🧀🍷) is a <b>low-complexity</b>  neural image codec based on __overfitting__. With only <b>2 000 multiplication / decoded pixel</b>, it offers coding performance on par with HEVC.
+Cool-chic (pronounced <span class="ipa">/kul ʃik/</span> as in French 🥖🧀🍷) is a <b>low-complexity</b>  neural image codec based on __overfitting__. With only <b>2 000 multiplications / decoded pixel</b>, it offers coding performance on par with HEVC.
 
 More information available on [Cool-chic page](https://orange-opensource.github.io/Cool-Chic/) or in the paper: [_COOL-CHIC: Coordinate-based Low Complexity Hierarchical Image Codec_](https://arxiv.org/abs/2212.05458), Ladune et al.
 
