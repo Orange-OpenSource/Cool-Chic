@@ -1,8 +1,9 @@
+# 📢📢📢 __Coming soon: Cool-chic for video coding!__ 📢📢📢
+
+
 # COOL-CHIC
 
 Cool-chic (pronounced <span class="ipa">/kul ʃik/</span> as in French 🥖🧀🍷) is a <b>low-complexity</b>  neural image codec based on __overfitting__. With only <b>2 000 multiplications / decoded pixel</b>, it offers coding performance on par with HEVC.
-
-📢📢📢 __New paper available: [_Low-complexity Overfitted Neural Image Codec_](https://arxiv.org/abs/2307.12706)!__ 📢📢📢
 
 More information available:
 
