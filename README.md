@@ -41,7 +41,7 @@ More results to come!
 Python version should be at least 3.10!
 
 ```bash
-python3 --version                               # Should be at least 3.10
+python3 --version                                          # Should be at least 3.10
 ```
 
 ## Necessary packages
