@@ -25,7 +25,7 @@ against different anchors. A negative figure indicates that Cool-chic 3.0
 requires less rate for the same quality. Note that we also provide all the
 bitstreams required to reproduce these results.
 
-| Dataset          | Vs. Cool-chic 2.0                            | Vs. Cool-chic 1.0                            | Vs. [_C3_, Kim et al.](https://arxiv.org/abs/2312.02753) | Vs. HEVC (HM 16.20)                          | Vs. VVC (VTM 19.1)                           |
+| Dataset          | Vs. Cool-chic 2                              | Vs. Cool-chic 1                              | Vs. [_C3_, Kim et al.](https://arxiv.org/abs/2312.02753) | Vs. HEVC (HM 16.20)                          | Vs. VVC (VTM 19.1)                           |
 |------------------|----------------------------------------------|----------------------------------------------|----------------------------------------------------------|----------------------------------------------|----------------------------------------------|
 | kodak            | <span style="color:green" > -18.5  % </span> | <span style="color:green"> -27.4 %  </span>  | <span style="color:green"> - 0.6 %  </span>              | <span style="color:green" > - 14.0 % </span> | <span style="color:#f50" >+  7.2 %   </span> |
 | clic20-pro-valid | <span style="color:gray"> /  </span>         | <span style="color:gray"> /  </span>         | <span style="color:gray"> /  </span>                     | <span style="color:gray"> /  </span>         | <span style="color:gray"> /  </span>         |
