@@ -2,12 +2,13 @@
 python3 src/encode.py                               \
     --input=samples/biville.png                     \
     --output=samples/bitstream.bin                  \
-    --model_save_path=samples/model.pt              \
-    --enc_results_path=samples/encoder_results.txt  \
+    --workdir=./my_temporary_workdir/               \
     --lmbda=0.0002                                  \
     --start_lr=1e-2                                 \
-    --recipe=instant                                \
-    --layers_synthesis=40-1-linear-relu,3-1-linear-relu,3-3-residual-relu,3-3-residual-none \
+    --layers_synthesis=40-1-linear-relu,3-1-linear-relu,X-3-residual-relu,X-3-residual-none \
+    --upsampling_kernel_size=8                      \
     --layers_arm=24,24                              \
     --n_ctx_rowcol=3                                \
-    --latent_n_grids=7
+    --n_ft_per_res=1,1,1,1,1,1,1                    \
+    --n_itr=1000                                    \
+    --n_train_loops=1
