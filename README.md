@@ -1,7 +1,4 @@
-# 📢📢📢 __Cool-chic 3.0 is out!__ 📢📢📢
-
-
-# COOL-CHIC
+# 📢 __Cool-chic 3.0 is out!__ 📢
 
 Cool-chic (pronounced <span class="ipa">/kul ʃik/</span> as in French 🥖🧀🍷) is a <b>low-complexity</b>  neural image codec based on __overfitting__. With only <b>2 000 multiplications / decoded pixel</b>, it offers coding performance close to VVC.
 
