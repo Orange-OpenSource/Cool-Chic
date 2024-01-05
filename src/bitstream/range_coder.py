@@ -1,11 +1,12 @@
 # Software Name: Cool-Chic
-# SPDX-FileCopyrightText: Copyright (c) 2023 Orange
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024 Orange
 # SPDX-License-Identifier: BSD 3-Clause "New"
 #
 # This software is distributed under the BSD-3-Clause license.
 #
 # Authors: Theo Ladune <theo.ladune@orange.com>
 #          Pierrick Philippe <pierrick.philippe@orange.com>
+
 
 import torch
 import constriction
@@ -15,7 +16,7 @@ import torch
 from typing import Optional, Tuple
 from torch import Tensor
 
-from utils.constants import Q_PROBA_DEFAULT
+from utils.misc import Q_PROBA_DEFAULT
 
 class RangeCoder:
     def __init__(self, n_ctx_rowcol: int, AC_MAX_VAL: int, Q_PROBA: int = Q_PROBA_DEFAULT):
@@ -34,7 +35,7 @@ class RangeCoder:
 
         self.n_ctx_rowcol = n_ctx_rowcol
 
-    def quantize_proba_parameters(self, x: Tensor, mode: str = 'mu') -> Tensor:
+    def quantize_proba_parameters(self, x: Tensor) -> Tensor:
         """Apply a quantization to the input x to reduce floating point
         drift.
 
@@ -74,8 +75,8 @@ class RangeCoder:
             mu = mu[index_coding_order]
             scale = scale[index_coding_order]
 
-        mu = self.quantize_proba_parameters(mu, mode = 'mu')
-        scale = self.quantize_proba_parameters(scale, mode = 'scale')
+        mu = self.quantize_proba_parameters(mu)
+        scale = self.quantize_proba_parameters(scale)
 
         # proba = laplace_cdf(x + 0.5, mu, scale) - laplace_cdf(x - 0.5, mu, scale)
         # entropy_rate_bit = -torch.log2(torch.clamp_min(proba, min = 2 ** -16)).sum()

@@ -1,5 +1,5 @@
 # Software Name: Cool-Chic
-# SPDX-FileCopyrightText: Copyright (c) 2023 Orange
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024 Orange
 # SPDX-License-Identifier: BSD 3-Clause "New"
 #
 # This software is distributed under the BSD-3-Clause license.
@@ -7,32 +7,30 @@
 # Authors: Theo Ladune <theo.ladune@orange.com>
 #          Pierrick Philippe <pierrick.philippe@orange.com>
 
-
 import os
 import sys
 import torch
 import subprocess
 import argparse
+from bitstream.encode import encode_video
 
-from PIL import Image
-from torchvision.transforms.functional import to_tensor
+from encoding_management.coding_structure import CodingStructure
+from models.coolchic_encoder import CoolChicEncoderParameter
+from models.frame_encoder import FrameEncoderManager
+from models.video_encoder import VideoEncoder, load_video_encoder
+from utils.misc import get_best_device
 
-from bitstream.encode import encode
-from bitstream.decode import decode
-from model_management.io import save_model
-
-from model_management.presets import AVAILABLE_PRESET
-from model_management.trainer import do_warmup, one_training_phase
-from model_management.yuv import read_video, yuv_dict_to_device
-from models.cool_chic import CoolChicParameter, to_device
-from utils.device import get_best_device
 
 """
-Use this file to encode an image.
+Use this file to train i.e. encode a GOP i.e. something which starts with one
+intra frame and is then followed by <intra_period> inter frames. Note that an
+image is simply a GOP of size 1 with no inter frames.
 
+Input can accommodate either .png (single-frame GOP) or .yuv file (1 to 256
+frames in the GOP).
 
 Syntax example for the synthesis:
-    12-1-linear,12-1-residual,3-1-linear,3-3-residual
+    12-1-linear,12-1-residual,X-1-linear,X-3-residual
 
     This is a 4 layers synthesis. Now the output layer (computing the final RGB
 values) must be specified i.e. a 12,12 should now be called a 12,12,3. Each layer
@@ -40,7 +38,8 @@ is described using the following syntax:
 
         <output_dim>-<kernel_size>-<type>-<non_linearity>
 
-    <output_dim>    : Number of output features.
+    <output_dim>    : Number of output features. If set to X, this is replaced by the
+                      number of required output features i.e. 3 for a RGB or YUV frame.
     <kernel_size>   : Spatial dimension of the kernel. Use 1 to mimic an MLP.
     <type>          :   - "linear" for a standard conv,
                         - "residual" for a residual block i.e. layer(x) = x + conv(x)
@@ -49,74 +48,62 @@ is described using the following syntax:
     <non_linearity> :   - "none" for no non-linearity,
                         - "relu" for a ReLU,
                         - "leakyrelu" for a LeakyReLU,
+                        - "gelu" for a GELU,
 """
 
 if __name__ == '__main__':
     # =========================== Parse arguments =========================== #
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '--device', type=str, default='auto',
-        help='"auto" to find best available device otherwise "cpu" or "cuda:0" or "mps:0"'
-    )
-    # I/O paths ------------------------------------------------------------- #
-    parser.add_argument('-i', '--input', help='Path of the input image.', type=str)
-    parser.add_argument('-o', '--output', type=str, default='./bitstream.bin', help='Bitstream path.')
-    parser.add_argument('--model_save_path', type=str, default='./model.pt', help='Save pytorch model here.')
-    parser.add_argument('--enc_results_path', type=str, default='./encoder_results.txt', help='Save encoder-side results here.')
-    # Encoding parameters --------------------------------------------------- #
+    parser.add_argument('-i', '--input', help='Path of the input image. Either .png (RGB444) or .yuv (YUV420)', type=str)
+    parser.add_argument('-o', '--output', type=str, default='./bitstream.bin', help='Output bitstream path.')
+    parser.add_argument('--workdir', help='Path of the working_directory', type=str, default='.')
+
     parser.add_argument('--lmbda', help='Rate constraint', type=float, default=1e-3)
     parser.add_argument('--start_lr', help='Initial learning rate', type=float, default=1e-2)
-    parser.add_argument('--n_itr', help='Number of maximum iterations', type=int, default=int(1e6))
-    parser.add_argument('--recipe', help='recipe type', type=str, default='slow')
-    # Architecture ---------------------------------------------------------- #
+    parser.add_argument('--n_itr', help='Maximum number of iterations per phase', type=int, default=int(1e5))
     parser.add_argument(
         '--layers_synthesis', help='See default.', type=str,
-        default='40-1-linear-relu,3-1-linear-relu,3-3-residual-relu,3-3-residual-none'
+        default='40-1-linear-relu,X-1-linear-relu,X-3-residual-relu,X-3-residual-none'
     )
     parser.add_argument('--layers_arm', help='Format: 16,8,16', type=str, default='24,24')
-    parser.add_argument('--n_ctx_rowcol', help='Number of rows/columns for ARM', type=int, default=2)
-    parser.add_argument('--latent_n_grids', help='Number of latent grids', type=int, default=7)
+    parser.add_argument('--dist', help='Unused for now', type=str, default='mse')
+    parser.add_argument('--n_ctx_rowcol', help='Number of rows/columns for ARM', type=int, default=3)
+    parser.add_argument(
+        '--n_ft_per_res', type=str, default='1,1,1,1,1,1,1',
+        help='Number of feature for each latent resolution. e.g. --n_ft_per_res=1,2,2,2,3,3,3'
+        ' for 7 latent grids with variable resolutions.',
+    )
+
     parser.add_argument('--upsampling_kernel_size', help='upsampling kernel size (≥8)', type=int, default=8)
+    parser.add_argument('--n_train_loops', help='Number of training loops', type=int, default=5)
     args = parser.parse_args()
     # =========================== Parse arguments =========================== #
 
+    # ====================== Torchscript JIT parameters ===================== #
+    # From https://github.com/pytorch/pytorch/issues/52286
+    # This is no longer the case with the with torch.jit.fuser
+    # ! This gives a significant (+25 %) speed up
+    torch._C._jit_set_profiling_executor(False)
+    torch._C._jit_set_texpr_fuser_enabled(False)
+    torch._C._jit_set_profiling_mode(False)
+    # ====================== Torchscript JIT parameters ===================== #
+
     # =========================== Parse arguments =========================== #
-    layers_synthesis = [x for x in args.layers_synthesis.split(',') if x != '']
-    layers_arm = [int(x) for x in args.layers_arm.split(',') if x != '']
+    workdir = f'{args.workdir.rstrip("/")}/'
+    subprocess.call(f'mkdir -p {workdir}', shell=True)
+
+    # Dump raw parameters into a text file to keep track
+    with open(f'{workdir}param.txt', 'w') as f_out:
+        f_out.write(str(sys.argv))
 
     # Parse arguments
     layers_synthesis = [x for x in args.layers_synthesis.split(',') if x != '']
     layers_arm = [int(x) for x in args.layers_arm.split(',') if x != '']
-    if args.device == 'auto':
-        device = get_best_device()
-    else:
-        device = args.device
-    print(f'Running on {device}')
+    n_ft_per_res = [int(x) for x in args.n_ft_per_res.split(',') if x != '']
 
-    if args.input.endswith('.yuv'):
-        # For now, we always read the first frame
-        img = yuv_dict_to_device(read_video(args.input, frame_idx=0), device)
-        img_type = '_'.join(args.input.split('/')[-1].split('.')[0].split('_')[-2:])
-    else:
-        img = to_tensor(Image.open(args.input)).unsqueeze(0).to(device)
-        img_type = 'rgb444'
-
-    # Create a CoolChicParameter object to store all these parameters
-    cool_chic_param = CoolChicParameter(
-        lmbda=args.lmbda,
-        dist='mse',
-        img=img,
-        img_type=img_type,
-        layers_synthesis=layers_synthesis,
-        layers_arm=layers_arm,
-        n_ctx_rowcol=args.n_ctx_rowcol,
-        latent_n_grids=args.latent_n_grids,
-        upsampling_kernel_size = args.upsampling_kernel_size,
-        ste_derivative=0.01,
-    )
-
-    print(f'Image size: {cool_chic_param.img_size}')
-    print(f'Image type: {cool_chic_param.img_type}')
+    # Automatic device detection
+    device = get_best_device()
+    print(f'{"Device":<20}: {device}')
     # =========================== Parse arguments =========================== #
 
     # ====================== Torchscript JIT parameters ===================== #
@@ -128,74 +115,84 @@ if __name__ == '__main__':
     torch._C._jit_set_profiling_mode(False)
 
     if device == 'cpu':
-        # the number of cores is adjusted to the machine cpu count
-        n_cores = int(os.cpu_count())
-        print(f"Using {n_cores} cpu cores")
+        # the number of cores is adjusted wrt to the slurm variable if exists
+        n_cores=os.getenv('SLURM_JOB_CPUS_PER_NODE')
+        # otherwise use the machine cpu count
+        if n_cores is None:
+            n_cores = os.cpu_count()
+
+        n_cores=int(n_cores)
+        print(f'{"CPU cores":<20}: {n_cores}')
 
         torch.set_flush_denormal(True)
+        # This is ignored due to the torch._C.jit instructions above
+        # torch.jit.enable_onednn_fusion(True)
         torch.set_num_interop_threads(n_cores) # Inter-op parallelism
         torch.set_num_threads(n_cores) # Intra-op parallelism
 
-        subprocess.call('export OMP_PROC_BIND=spread', shell=True)
+        subprocess.call('export OMP_PROC_BIND=spread', shell=True)  # ! VERY IMPORTANT
         subprocess.call('export OMP_PLACES=threads', shell=True)
-        subprocess.call('export OMP_SCHEDULE=static', shell=True)
+        subprocess.call('export OMP_SCHEDULE=static', shell=True)   # ! VERY IMPORTANT
+
         subprocess.call(f'export OMP_NUM_THREADS={n_cores}', shell=True)
         subprocess.call('export KMP_HW_SUBSET=1T', shell=True)
-
-    elif device == 'mps:0':
-        print(f'MS-SSIM computation does not work with YUV data on mps:0 device!')
     # ====================== Torchscript JIT parameters ===================== #
 
 
-    # ===================== Initialize and train model ====================== #
-    # Retrieve the preset class and instantiate it with the desired argument
-    training_preset = AVAILABLE_PRESET.get(args.recipe)(start_lr=args.start_lr, dist='mse')
-    if training_preset is None:
-        print(f'Unknown training recipe. Found {args.recipe}')
-        print(f'Expected: {AVAILABLE_PRESET.keys()}')
-        print(f'Exiting')
-        sys.exit(1)
+    path_video_encoder = f'{workdir}video_encoder.pt'
+    if os.path.exists(path_video_encoder):
+        video_encoder = load_video_encoder(path_video_encoder)
 
-    print(training_preset.to_string())
+    else:
+        # ----- Create coding configuration
+        # Create an all-intra GOP with one frame.
+        coding_config = CodingStructure(
+            gop_type='RA',
+            intra_period=0,
+            p_period=0,
+            seq_name=os.path.basename(args.input).split('.')[0]
+        )
 
-    # Perform warm-up to fine the best starting point
-    model = do_warmup(cool_chic_param, training_preset, device=device)
-    # model is sent back to CPU at the end of do_warmup
-    model = to_device(model, device)
+        coolchic_encoder_parameter = CoolChicEncoderParameter(
+            layers_synthesis=layers_synthesis,
+            layers_arm=layers_arm,
+            n_ctx_rowcol=args.n_ctx_rowcol,
+            n_ft_per_res=n_ft_per_res,
+            upsampling_kernel_size=args.upsampling_kernel_size,
+        )
 
-    # Do the different training phase
-    for idx_phase, phase in enumerate(training_preset.all_phases):
+        dist_weight = {'mse': 1.0, 'msssim': 0.0, 'lpips': 0.0}
 
-        print(f'\n{"#" * 40}    Training phase: {idx_phase:>2}    {"#" * 40}\n')
+        frame_encoder_manager = FrameEncoderManager(
+            preset_name='c3',
+            start_lr=args.start_lr,
+            lmbda=args.lmbda,
+            n_loops=args.n_train_loops,
+            dist_weight=dist_weight,
+            n_itr=args.n_itr,
+        )
 
-        # 2. Actual training ------------------------------------------------ #
-        model, results = one_training_phase(model, phase)
+        video_encoder = VideoEncoder(
+            coding_structure=coding_config,
+            shared_coolchic_parameter=coolchic_encoder_parameter,
+            shared_frame_encoder_manager=frame_encoder_manager,
+            path_original_sequence=args.input,
+        )
 
-        print(f'\nPerformance at the end of the phase:')
-        print(results.to_string(mode='short', print_col_name=True))
+    print(f'\n{video_encoder.coding_structure.pretty_string()}\n')
 
-    # Dump the results into a file and save the model
-    save_model(model, args.model_save_path)
-    with open(args.enc_results_path, 'w') as f_out:
-        f_out.write(results.to_string(mode='all', print_col_name=True) + '\n')
+    # Learn the encoder
+    video_encoder.train(device=device, workdir=workdir)
 
     # Print the final results
-    print('\nFinal encoder-side results (quantized results):')
-    print('-------------------------------------------------')
-    print(results.to_string(mode='more', print_col_name=True))
+    print('\nFinal encoder-side results:')
+    print('----------------------------')
+    path_res_file = f'{workdir}/results_best.tsv'
+    if os.path.isfile(path_res_file):
+        print('\n'.join(open(path_res_file, 'r').readlines()))
+    else:
+        print(f'Can not find a final result file at {path_res_file}')
 
-    # ========================== Encode the network ========================= #
-    print("Encoding to", args.output)
-    encode(
-        model,
-        args.output,
-        {
-            'arm_weight':        results.q_step_arm_weight,
-            'arm_bias':          results.q_step_arm_bias,
-            'upsampling_weight': results.q_step_upsampling_weight,
-            'upsampling_bias':   results.q_step_upsampling_bias,
-            'synthesis_weight':  results.q_step_synthesis_weight,
-            'synthesis_bias':    results.q_step_synthesis_bias,
-        }
-    )
-    # ========================== Encode the network ========================= #
+    # Encode the video into a binary file
+    print(f'Encoding to {args.output}')
+    encode_video(video_encoder, args.output)
