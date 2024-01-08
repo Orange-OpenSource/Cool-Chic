@@ -27,12 +27,10 @@ bitstreams required to reproduce these results.
 
 | Dataset          | Vs. Cool-chic 2                              | Vs. Cool-chic 1                              | Vs. [_C3_, Kim et al.](https://arxiv.org/abs/2312.02753) | Vs. HEVC (HM 16.20)                          | Vs. VVC (VTM 19.1)                           |
 |------------------|----------------------------------------------|----------------------------------------------|----------------------------------------------------------|----------------------------------------------|----------------------------------------------|
-| kodak            | <span style="color:green" > -18.5  % </span> | <span style="color:green"> -27.4 %  </span>  | <span style="color:green"> - 0.6 %  </span>              | <span style="color:green" > - 14.0 % </span> | <span style="color:#f50" >+  7.2 %   </span> |
-| clic20-pro-valid | <span style="color:gray"> /  </span>         | <span style="color:gray"> /  </span>         | <span style="color:gray"> /  </span>                     | <span style="color:gray"> /  </span>         | <span style="color:gray"> /  </span>         |
-| jvet             | <span style="color:gray"> /  </span>         | <span style="color:gray"> /  </span>         | <span style="color:gray"> /  </span>                     | <span style="color:gray"> /  </span>         | <span style="color:gray"> /  </span>         |
+| kodak            | <span style="color:green" > - 19.0 % </span> | <span style="color:green"> - 28.8 % </span>  | <span style="color:green"> - 1.2 %  </span>              | <span style="color:green" > - 14.5 % </span> | <span style="color:#f50" > + 6.6 %   </span> |
+| clic20-pro-valid | <span style="color:green" > - 15.9 % </span> | <span style="color:gray"> /  </span>         | <span style="color:#f50" >+  4.4 %   </span>             | <span style="color:green" > - 20.6 % </span> | <span style="color:#f50" > + 3.4 %   </span> |
+| jvet             | <span style="color:green" > - 21.4 % </span> | <span style="color:gray"> /  </span>         | <span style="color:gray"> /  </span>                     | <span style="color:green" > - 12.1 % </span> | <span style="color:#f50" > + 27.7 %  </span> |
 
-
-More results to come!
 
 # Setup
 
