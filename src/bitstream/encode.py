@@ -335,6 +335,7 @@ def encode_frame(video_encoder: VideoEncoder, frame_encoder: FrameEncoder, bitst
     range_coder_latent = RangeCoder(frame_encoder.coolchic_encoder.param.n_ctx_rowcol, ac_max_val_latent)
 
     # Setting visu to true allows to recover 2D mu, scale and latents
+    frame_encoder.set_to_eval()
     encoder_output = frame_encoder.forward(
         flag_additional_outputs=True, AC_MAX_VAL=range_coder_latent.AC_MAX_VAL, use_ste_quant=True
     )
@@ -342,6 +343,7 @@ def encode_frame(video_encoder: VideoEncoder, frame_encoder: FrameEncoder, bitst
     # Encode the different 2d latent grids one after the other
     n_bytes_per_latent = []
     torch.set_printoptions(threshold=10000000)
+    ctr_2d_ft = 0
     # Loop on the different resolutions
     for index_lat_resolution in range(frame_encoder.coolchic_encoder.param.latent_n_grids):
         current_mu = encoder_output.additional_data.get('detailed_mu')[index_lat_resolution]
@@ -353,6 +355,10 @@ def encode_frame(video_encoder: VideoEncoder, frame_encoder: FrameEncoder, bitst
         # Nothing to send!
         if c_i == 0:
             n_bytes_per_latent.append(0)
+            cur_latent_bitstream = get_sub_bitstream_path(bitstream_path, ctr_2d_ft)
+            # Still create an empty file for coherence
+            subprocess.call(f'touch {cur_latent_bitstream}', shell=True)
+            ctr_2d_ft += 1
             continue
 
         # Loop on the different 2D grids composing one resolutions
@@ -363,15 +369,19 @@ def encode_frame(video_encoder: VideoEncoder, frame_encoder: FrameEncoder, bitst
 
             if y_this_ft.abs().max() == 0:
                 n_bytes_per_latent.append(0)
+                cur_latent_bitstream = get_sub_bitstream_path(bitstream_path, ctr_2d_ft)
+                # Still create an empty file for coherence
+                subprocess.call(f'touch {cur_latent_bitstream}', shell=True)
+                ctr_2d_ft += 1
                 continue
 
-            cur_latent_bitstream = get_sub_bitstream_path(
-                bitstream_path, index_lat_resolution, index_lat_feature
-            )
+            cur_latent_bitstream = get_sub_bitstream_path(bitstream_path, ctr_2d_ft)
             range_coder_latent.encode(
                 cur_latent_bitstream, y_this_ft, mu_this_ft, scale_this_ft, (1, h_i, w_i)
             )
             n_bytes_per_latent.append(os.path.getsize(cur_latent_bitstream))
+
+            ctr_2d_ft += 1
 
     # Write the header
     header_path = f'{bitstream_path}_header'
@@ -400,10 +410,15 @@ def encode_frame(video_encoder: VideoEncoder, frame_encoder: FrameEncoder, bitst
 
     ctr_2d_ft = 0
     for index_lat_resolution in range(frame_encoder.coolchic_encoder.param.latent_n_grids):
+
+        # No feature: still increment the counter and remove the temporary bitstream file
+        if frame_encoder.coolchic_encoder.latent_grids[index_lat_resolution].size()[1] == 0:
+            cur_latent_bitstream = get_sub_bitstream_path(bitstream_path, ctr_2d_ft)
+            subprocess.call(f'rm -f {cur_latent_bitstream}', shell=True)
+            ctr_2d_ft += 1
+
         for index_lat_feature in range(frame_encoder.coolchic_encoder.latent_grids[index_lat_resolution].size()[1]):
-            cur_latent_bitstream = get_sub_bitstream_path(
-                bitstream_path, index_lat_resolution, index_lat_feature
-            )
+            cur_latent_bitstream = get_sub_bitstream_path(bitstream_path, ctr_2d_ft)
             subprocess.call(f'cat {cur_latent_bitstream} >> {bitstream_path}', shell=True)
             subprocess.call(f'rm -f {cur_latent_bitstream}', shell=True)
             ctr_2d_ft += 1

@@ -70,8 +70,10 @@ Header for the frame (one by frame):
 
     ! Here, we split the 3D latent grids into several 2D grids. For instance,
     ! if we have three latent resolutions:
-    !       [1, H, W] ; [3, H / 2, W / 2] and [2, H / 4, W / 4]
-    ! We have 1 + 3 + 2 = 6 2D latent grids but 3 latent resolutions
+    !       [1, H, W] ; [3, H / 2, W / 2], [0, H / 4, W / 4] and [2, H / 8, W / 8]
+    ! We have 1 + 3 + 0 + 2 = 6 2D latent grids but 4 latent resolutions
+    ! Resolution with 0 feature are still displayed in "Number of feature maps for latent X"
+    ! and "Number of bytes used for latent X" with value set to 0
     [Number of latent resolution]                   1 byte
     [Number of **2D** latent grids]                 1 byte
     [Number of feature maps for latent 0]           1 byte

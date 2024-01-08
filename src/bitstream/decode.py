@@ -31,22 +31,23 @@ from visu.utils import save_visualisation
 
 def get_sub_bitstream_path(
     root_bitstream_path: str,
-    index_latent_resolution: int,
-    index_latent_feature: int
+    counter_2d_latent: int,
 ) -> str:
     """Return the complete path of the sub-bistream corresponding to the
-    <index_latent_feature>-th feature map of the <index_latent_resolution>-th
-    latent resolution.
+    <counter_2d_latent>-th 2D feature maps. This is use due to the fact that
+    even 3D features are coded as independent 2D features.
 
     Args:
         root_bitstream_path (str): Root name of the bitstream
-        index_latent_resolution (int): Index of the resolution.
-        index_latent_feature (int): Index of the 2D feature.
+        counter_2d_latent (int): Index of 2D features. Let us suppose that we have
+            two features maps, one is [1, 1, H, W] and the other is [1, 2, H/2, W/2].
+            The counter_2d_latent will be used to iterate on the **3** 2d features
+            (one for the highest resolution, two for the smallest resolution).
 
     Returns:
         str: Complete bitstream path
     """
-    s = f'{root_bitstream_path}_res-{index_latent_resolution}_ft-{index_latent_feature}'
+    s = f'{root_bitstream_path}_{counter_2d_latent}'
     return s
 
 
@@ -359,13 +360,24 @@ def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int
     # element of bitstream
     ctr_2d_ft = 0
     for index_lat_resolution in range(header_info.get('latent_n_resolutions')):
+
+        # No 2d feature for this latent resolution... we still write an empty binary file
+        # and increment the counter
+        if header_info.get('n_ft_per_latent')[index_lat_resolution] == 0:
+            # Write the first bytes in a dedicated file
+            cur_latent_bitstream = get_sub_bitstream_path(bitstream_path, ctr_2d_ft)
+            subprocess.call(f'touch {cur_latent_bitstream}', shell=True)
+            ctr_2d_ft += 1
+            continue
+
+
         for index_lat_feature in range(header_info.get('n_ft_per_latent')[index_lat_resolution]):
             cur_n_bytes = header_info.get('n_bytes_per_latent')[ctr_2d_ft]
 
             # Write the first bytes in a dedicated file
-            current_bitstream_file = f'{bitstream_path}_res-{index_lat_resolution}_ft-{index_lat_feature}'
+            cur_latent_bitstream = get_sub_bitstream_path(bitstream_path, ctr_2d_ft)
             bytes_for_current_latent = bitstream[: cur_n_bytes]
-            with open(current_bitstream_file, 'wb') as f_out:
+            with open(cur_latent_bitstream, 'wb') as f_out:
                 f_out.write(bytes_for_current_latent)
 
             # Keep the rest of the bitstream for next loop
@@ -474,7 +486,7 @@ def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int
         ]
 
         c_grid = header_info.get('n_ft_per_latent')[index_lat_resolution]
-        # Nothing to read
+        # Nothing to read, still increment the counter
         if header_info.get('n_bytes_per_latent')[ctr_2d_ft] == 0:
             current_y = torch.zeros((1, c_grid, h_grid, w_grid))
             decoded_y.append(current_y)
@@ -482,20 +494,14 @@ def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int
             continue
 
         for index_lat_feature in range(c_grid):
-            # Nothing to read
+            # Nothing to read, still increment the counter
             if header_info.get('n_bytes_per_latent')[ctr_2d_ft] == 0:
                 current_y = torch.zeros((1, c_grid, h_grid, w_grid))
                 decoded_y.append(current_y)
                 ctr_2d_ft += 1
                 continue
-            else:
-                ctr_2d_ft += 1
 
-
-
-            cur_latent_bitstream = get_sub_bitstream_path(
-                bitstream_path, index_lat_resolution, index_lat_feature
-            )
+            cur_latent_bitstream = get_sub_bitstream_path(bitstream_path, ctr_2d_ft)
 
             range_coder.load_bitstream(cur_latent_bitstream)
             coding_order = range_coder.generate_coding_order(
@@ -585,6 +591,8 @@ def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int
             current_y = current_y[:, :, pad:-pad, pad:-pad]
             decoded_y.append(current_y)
 
+            ctr_2d_ft += 1
+
     # Up until there, decoded_y is a list of 2d tensors, group them as a (smaller) list of 3d
     final_decoded_y = []
     ctr_2d_ft = 0
@@ -615,12 +623,18 @@ def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int
             cur_bitstream = f'{bitstream_path}_{cur_module_name}_{parameter_type}'
             subprocess.call(f'rm -f {cur_bitstream}', shell=True)
 
+    ctr_2d_ft = 0
     for index_lat_resolution in range(header_info.get('latent_n_resolutions')):
+        # No feature map... we still increment the counter and delete the subbitstream file
+        if header_info.get('n_ft_per_latent')[index_lat_resolution] == 0:
+            cur_latent_bitstream = get_sub_bitstream_path(bitstream_path, ctr_2d_ft)
+            subprocess.call(f'rm -f {cur_latent_bitstream}', shell=True)
+            ctr_2d_ft += 1
+
         for index_lat_feature in range(header_info.get('n_ft_per_latent')[index_lat_resolution]):
-                cur_latent_bitstream = get_sub_bitstream_path(
-                    bitstream_path, index_lat_resolution, index_lat_feature
-                )
+                cur_latent_bitstream = get_sub_bitstream_path(bitstream_path, ctr_2d_ft)
                 subprocess.call(f'rm -f {cur_latent_bitstream}', shell=True)
+                ctr_2d_ft += 1
     # ================= Clean up the intermediate bitstream ================= #
 
     elapsed = time.time() - start_time

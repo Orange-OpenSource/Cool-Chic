@@ -267,7 +267,7 @@ class VideoEncoder(nn.Module):
         # During the first loop, delete the old concatenated yuv file
         flag_delete_old_concat = True
         for idx_display_order in range(self.coding_structure.get_number_of_frames()):
-            for visu_path in glob.glob(self.get_frame_workdir(workdir, idx_display_order) + '*.yuv'):
+            for visu_path in glob.glob(self.get_frame_workdir(workdir, idx_display_order) + 'visu/*.yuv'):
                 # visu_name is something like decoded_416x240_1p_yuv420_8b.yuv
                 visu_name = os.path.basename(visu_path)
 
@@ -289,8 +289,6 @@ class VideoEncoder(nn.Module):
         """
         list_results_file = []
         for idx_display_order in range(self.coding_structure.get_number_of_frames()):
-            frame = self.coding_structure.get_frame_from_display_order(idx_display_order)
-
             cur_res_file = self.get_frame_workdir(workdir, idx_display_order) + 'results_best.tsv'
             if not os.path.isfile(cur_res_file):
                 continue
@@ -315,15 +313,16 @@ class VideoEncoder(nn.Module):
         Args:
             workdir (str): Working directory of the video encoder
         """
-        print(f'Generating results and visualisation...\nFrame: ', end='')
         for idx_display_order in range(self.coding_structure.get_number_of_frames()):
             frame = self.coding_structure.get_frame_from_display_order(idx_display_order)
 
+            # Load the original frame & the references
+            frame = self.load_data_and_refs(frame)
 
             if not self.get_key_all_frame_encoders(frame.coding_order, 'best') in self.all_frame_encoders:
                 continue
 
-            print(f'{idx_display_order}', end=' ', flush=True)
+            print(f'generate_all_results_and_visu(): Frame {idx_display_order}')
             # Create subdirectory to output the results and the visualisation
             frame_workdir = self.get_frame_workdir(workdir, idx_display_order)
             subprocess.call(f'mkdir -p {frame_workdir}', shell=True)
@@ -337,7 +336,7 @@ class VideoEncoder(nn.Module):
                 f_out.write(frame_encoder_logs.pretty_string(show_col_name=True, mode='all') + '\n')
 
             # Generate visualisations
-            frame_encoder.generate_visualisation(frame_workdir)
+            frame_encoder.generate_visualisation(f'{frame_workdir}visu/')
         print('')
 
         # Concatenate the results and visualisation together
