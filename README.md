@@ -52,7 +52,7 @@ python3 -m virtualenv venv && source venv/bin/activate     # Create and activate
 
 # Decoding images with Cool-chic
 
-Already encoded files are provided as bitstreams in ```results/<dataset_name>/```where ```<dataset_name>```can be ```kodak, clic20-pro-valid, clic22-test, jvet```.
+Already encoded files are provided as bitstreams in ```results/<dataset_name>/```where ```<dataset_name>```can be ```kodak, clic20-pro-valid, jvet```.
 
 For each dataset, a script is provided to decode all the bitstreams.
 
