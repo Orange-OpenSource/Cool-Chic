@@ -50,7 +50,8 @@ def is_job_over(start_time: float, max_duration_job_min: int = 45) -> bool:
     Returns:
         bool: True if current time is more than max_duration_job_min after start time.
     """
-    return (time.time() - start_time) / 60 >= max_duration_job_min
+    return False
+    # return (time.time() - start_time) / 60 >= max_duration_job_min
 # =========================== Cluster management ============================ #
 
 # ======================= Some useful data structures ======================= #
