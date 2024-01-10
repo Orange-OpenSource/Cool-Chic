@@ -386,6 +386,7 @@ class VideoEncoder(nn.Module):
 
                 # Infer it to get the data of the references
                 frame_encoder.set_to_eval()
+                frame_encoder.to_device('cpu')
 
                 # flag_additional_outputs set to True to obtain more output
                 frame_encoder_out = frame_encoder.forward(use_ste_quant=False, AC_MAX_VAL=-1, flag_additional_outputs=True)
