@@ -27,9 +27,13 @@ bitstreams required to reproduce these results.
 
 | Dataset          | Vs. Cool-chic 2                              | Vs. Cool-chic 1                              | Vs. [_C3_, Kim et al.](https://arxiv.org/abs/2312.02753) | Vs. HEVC (HM 16.20)                          | Vs. VVC (VTM 19.1)                           |
 |------------------|----------------------------------------------|----------------------------------------------|----------------------------------------------------------|----------------------------------------------|----------------------------------------------|
-| kodak            | <span style="color:green" > - 19.0 % </span> | <span style="color:green"> - 28.8 % </span>  | <span style="color:green"> - 1.2 %  </span>              | <span style="color:green" > - 14.5 % </span> | <span style="color:#f50" > + 6.6 %   </span> |
-| clic20-pro-valid | <span style="color:green" > - 15.9 % </span> | <span style="color:gray"> /  </span>         | <span style="color:#f50" >+  4.4 %   </span>             | <span style="color:green" > - 20.6 % </span> | <span style="color:#f50" > + 3.4 %   </span> |
+| kodak            | <span style="color:green" > - 19.8 % </span> | <span style="color:green"> - 29.4 % </span>  | <span style="color:green"> - 2.1 %  </span>              | <span style="color:green" > - 15.1 % </span> | <span style="color:#f50" > + 6.0 %   </span> |
+| clic20-pro-valid | <span style="color:green" > - 18.0 % </span> | <span style="color:gray"> /  </span>         | <span style="color:#f50" >+  1.8 %   </span>             | <span style="color:green" > - 22.6 % </span> | <span style="color:#f50" > + 0.8 %   </span> |
 | jvet             | <span style="color:green" > - 21.4 % </span> | <span style="color:gray"> /  </span>         | <span style="color:gray"> /  </span>                     | <span style="color:green" > - 12.1 % </span> | <span style="color:#f50" > + 27.7 %  </span> |
+
+
+All these results are obtained with a decoding complexity ranging from 1000 to
+2700 multiplications / decoded pixel, with an average complexity of __2300 multiplications / decoded pixel__.
 
 
 # Setup
@@ -52,7 +56,7 @@ python3 -m virtualenv venv && source venv/bin/activate     # Create and activate
 
 # Decoding images with Cool-chic
 
-Already encoded files are provided as bitstreams in ```results/<dataset_name>/```where ```<dataset_name>```can be ```kodak, clic20-pro-valid, jvet```.
+Already encoded files are provided as bitstreams in ```results/<dataset_name>/```where ```<dataset_name>```can be ```kodak, clic20-pro-valid, clic22-test, jvet```.
 
 For each dataset, a script is provided to decode all the bitstreams.
 
