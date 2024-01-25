@@ -524,7 +524,7 @@ class FrameEncoder(nn.Module):
         if self.training:
             decoded_image = inter_coding_output.decoded_image
         else:
-            max_dynamic = 2 ** (self.frame.data.bitdepth - 1)
+            max_dynamic = 2 ** (self.frame.data.bitdepth) - 1
             decoded_image = torch.round(inter_coding_output.decoded_image * max_dynamic) / max_dynamic
 
         if self.frame.data.frame_data_type == 'yuv420':
@@ -545,10 +545,12 @@ class FrameEncoder(nn.Module):
         )
 
     def set_to_train(self):
+        self = self.train()
         self.coolchic_encoder = self.coolchic_encoder.train()
         self.inter_coding_module = self.inter_coding_module.train()
 
     def set_to_eval(self):
+        self = self.eval()
         self.coolchic_encoder = self.coolchic_encoder.eval()
         self.inter_coding_module = self.inter_coding_module.eval()
 
