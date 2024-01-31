@@ -193,6 +193,11 @@ if __name__ == '__main__':
     else:
         print(f'Can not find a final result file at {path_res_file}')
 
+    path_final_model = f'{workdir}/video_encoder.pt'
+    assert os.path.isfile(path_final_model), f'Can not find the final trained encoder at {path_final_model}'
+
+    video_encoder = load_video_encoder(path_final_model)
+
     # Encode the video into a binary file
     print(f'Encoding to {args.output}')
     encode_video(video_encoder, args.output)
