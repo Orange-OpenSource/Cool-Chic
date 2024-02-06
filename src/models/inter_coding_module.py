@@ -62,7 +62,7 @@ class InterCodingModuleInput():
     residue: Tensor     # [B, 3, H, W] either the residue or the entire frame for I frames
     flow_1: Tensor      # [B, 2, H, W] optical flow to interpolate the 1st reference. Zero for I frames
     flow_2: Tensor      # [B, 2, H, W] optical flow to interpolate the 2nd reference. Zero for I & P frames
-    alpha: Tensor       # [B, 1, H, W] Intra / inter switch. One for I frames
+    alpha: Tensor       # [B, 1, H, W] Intra / inter switch. Zero for I frames
     beta: Tensor        # [B, 1, H, W] Bi-directional prediction weighting. One for I & P frames
 
 
@@ -109,7 +109,7 @@ class InterCodingModule(nn.Module):
             alpha = torch.clamp(raw_coolchic_output[:, 5:6, :, :] + 0.5, 0., 1.)
         else:
             flow_1 = torch.zeros((b, 2, h, w), device=residue.device)
-            alpha = torch.ones((b, 1, h, w), device=residue.device)
+            alpha = torch.zeros((b, 1, h, w), device=residue.device)
 
         if self.frame_type == 'B':
             flow_2 = raw_coolchic_output[:, 6:8, :, :] * self.flow_gain

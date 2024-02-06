@@ -22,8 +22,8 @@ from bitstream.range_coder import RangeCoder
 from encoding_management.coding_structure import CodingStructure, FrameData
 from models.inter_coding_module import InterCodingModule
 from utils.yuv import convert_420_to_444, convert_444_to_420, yuv_dict_clamp
-from models.coolchic_components.arm import Arm, get_mu_scale
-from utils.misc import DescriptorNN, POSSIBLE_Q_STEP_ARM_NN, POSSIBLE_Q_STEP_SYN_NN, POSSIBLE_SCALE_NN, FIXED_POINT_FRACTIONAL_MULT, ARMINT
+from models.coolchic_components.arm import Arm, get_mu_scale, get_non_zero_pixel_ctx_index
+from utils.misc import MAX_ARM_MASK_SIZE, DescriptorNN, POSSIBLE_Q_STEP_ARM_NN, POSSIBLE_Q_STEP_SYN_NN, POSSIBLE_SCALE_NN, FIXED_POINT_FRACTIONAL_MULT, ARMINT
 from models.coolchic_components.upsampling import Upsampling
 from models.coolchic_components.synthesis import Synthesis
 from visu.utils import save_visualisation
@@ -51,9 +51,9 @@ def get_sub_bitstream_path(
     return s
 
 
-def compute_offset(x: Tensor, mask_size: int) -> Tensor:
+def compute_offset(x: Tensor, dim_arm: int) -> Tensor:
     """Compute the offset vector which will be applied to the 1d indices of
-    a feature in order to extract its context.
+    a **padded** feature in order to extract its context.
     Let us suppose that we have n_ctx_rowcol = 1 and the following feature
     maps:
 
@@ -72,15 +72,23 @@ def compute_offset(x: Tensor, mask_size: int) -> Tensor:
 
     That is, coding of pixel g (index 16) uses the context pixels of indices {8, 9, 15}.
     The offset vector for this case is the one such that: 16 - offset = {8, 9, 15}:
-        offset = {8, 7, 1}
+        offset = {8, 7, 1}.
+
+    As we don't always use the full template, we call torch.index_select at the very end
+    to keep only the useful context pixels
+
 
     Args:
-        x (Tensor): The feature maps to decode. Used only for its size.
+        x (Tensor): The feature maps to decode. Used only for its (non-padded) size.
         mask_size (int): Size of the mask (mask_size = 2 * n_ctx_rowcol + 1).
 
     Returns:
         Tensor: The offset vector
     """
+
+
+    mask_size = MAX_ARM_MASK_SIZE
+
     # Padding required by the number of context pixels
     pad = int((mask_size - 1) / 2)
     # Number of input for the ARM MLP
@@ -114,6 +122,10 @@ def compute_offset(x: Tensor, mask_size: int) -> Tensor:
     #         offset.append((pad - idx_col) + (pad - idx_row) * W_pad)
 
     offset = idx_col + idx_row * W_pad
+
+    # We've generated the full mask, just select the relevant (non-zero) context
+    offset = torch.index_select(offset, dim=0, index=get_non_zero_pixel_ctx_index(dim_arm))
+
     return offset
 
 
@@ -226,7 +238,7 @@ def fast_get_neighbor(x: Tensor, mask_size: int, offset: Tensor, idx: Tensor, w_
             the floor(N ** 2 / 2) - 1 neighbors of each H * W pixels.
     """
     pad = int((mask_size - 1) / 2)
-    n_context_pixel = int((mask_size ** 2 - 1) / 2)
+    n_context_pixel = offset.numel()
 
     # Convert indices in the image to indices with padding
     # Then repeat it to be of the same size than offset size (i.e. N spatial context)
@@ -267,17 +279,11 @@ def decode_network(
     have_bias = q_step_nn.bias > 0
 
     # Instantiate two range coder objects to decode simultaneously weight and bias
-    range_coder_nn_weight = RangeCoder(
-        0,      # 0 because we don't have a ctx_row_col
-        AC_MAX_VAL = ac_max_val
-    )
+    range_coder_nn_weight = RangeCoder(AC_MAX_VAL = ac_max_val)
     range_coder_nn_weight.load_bitstream(bitstream_path.weight)
 
     if have_bias:
-        range_coder_nn_bias = RangeCoder(
-            0,      # 0 because we don't have a ctx_row_col
-            AC_MAX_VAL = ac_max_val
-        )
+        range_coder_nn_bias = RangeCoder(AC_MAX_VAL = ac_max_val)
         range_coder_nn_bias.load_bitstream(bitstream_path.bias)
 
     loaded_param = {}
@@ -307,9 +313,10 @@ def decode_network(
     return empty_module
 
 @torch.no_grad()
-def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int]) -> Tuple[Tensor, bytes]:
-    """Decode a bitstream located at <bitstream_path> and save the decoded image
-    at <output_path>
+def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int]) -> Tuple[Tensor, bytes, int]:
+    """Decode a bitstream located at <bitstream_path>.
+    This only performs the cool-chic part of the decoding. Inter coding module goes after
+    that in decode_video. 
 
     Args:
         bitstream_path (str): Absolute path of the bitstream. We keep that to output some temporary file
@@ -321,6 +328,8 @@ def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int
         Tensor: The decoded image with shape [1, 3, H, W] in [0., 1.]. Normalization, and conversion
             into 4:2:0 does **not** happen in this function
         bytes: The remaining bytes of the bitstream (i.e. for the following frames).
+        int: The flow gain parameters needed by the inter coding module afterwards.
+            This is not really elegant but at least its convenient...
     """
     start_time = time.time()
     torch.use_deterministic_algorithms(True)
@@ -397,11 +406,11 @@ def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int
     #   0 0 0 0 0 0 0
     #   0 0 0 0 0 0 0
     #   0 0 0 0 0 0 0
-    mask_size = 2 * header_info.get('n_ctx_rowcol') + 1
-    # How many padding pixels we need
-    pad = header_info.get('n_ctx_rowcol')
-    # Number of context pixel used.
-    non_zero_pixel_ctx = int((mask_size ** 2 - 1) / 2)
+    mask_size = MAX_ARM_MASK_SIZE
+    # How many padding pixels we need ; equal to n_ctx_row col i.e. maximum
+    # rows and columns span of the context pixels
+    pad = int((mask_size - 1) // 2)
+    n_ctx_row_col = pad
     # ========== Reconstruct some information from the header data ========== #
 
     # =========================== Decode the NNs ============================ #
@@ -411,7 +420,7 @@ def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int
     #   3. Send it to the requested device.
 
     arm = decode_network(
-        Arm(non_zero_pixel_ctx, header_info.get('layers_arm'), FIXED_POINT_FRACTIONAL_MULT),  # Empty module
+        Arm(header_info.get('dim_arm'), header_info.get('n_hidden_layers_arm'), FIXED_POINT_FRACTIONAL_MULT),  # Empty module
         DescriptorNN(
             weight = f'{bitstream_path}_arm_weight',
             bias = f'{bitstream_path}_arm_bias',
@@ -436,7 +445,8 @@ def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int
         exit(1)
     upsampling = decode_network(
         Upsampling(
-            header_info.get('upsampling_kernel_size')
+            header_info.get('upsampling_kernel_size'),
+            header_info.get('static_upsampling_kernel')
         ),  # Empty module
         DescriptorNN(
             weight = f'{bitstream_path}_upsampling_weight',
@@ -474,7 +484,7 @@ def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int
     # =========================== Decode the NNs ============================ #
 
     # Instantiate a range coder to decode the y
-    range_coder = RangeCoder(header_info.get('n_ctx_rowcol'), header_info.get('ac_max_val_latent'))
+    range_coder = RangeCoder(header_info.get('ac_max_val_latent'))
     decoded_y = []
 
     # Decode the different latent grids one after the other
@@ -504,9 +514,7 @@ def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int
             cur_latent_bitstream = get_sub_bitstream_path(bitstream_path, ctr_2d_ft)
 
             range_coder.load_bitstream(cur_latent_bitstream)
-            coding_order = range_coder.generate_coding_order(
-                (1, h_grid, w_grid), header_info.get('n_ctx_rowcol')
-            )
+            coding_order = range_coder.generate_coding_order((1, h_grid, w_grid))
 
             # --------- Wave front coding order
             # With n_ctx_rowcol = 1, coding order is something like
@@ -534,7 +542,7 @@ def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int
             current_y = torch.zeros((1, 1, h_grid, w_grid))
 
             # Compute the 1d offset of indices to form the context
-            offset_index_arm = compute_offset(current_y, mask_size)
+            offset_index_arm = compute_offset(current_y, header_info.get('dim_arm'))
 
             # pad and flatten and current y to perform everything in 1d
             current_y = F.pad(current_y, (pad, pad, pad, pad), mode='constant', value=0.)
@@ -549,7 +557,6 @@ def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int
             # Count the number of decoded values to iterate within the
             # flat_index_coding_order array.
             cnt = 0
-            n_ctx_row_col = header_info.get('n_ctx_rowcol')
             for index_coding in range(flat_coding_order.max() + 1):
                 cur_context = fast_get_neighbor(
                     current_y, mask_size, offset_index_arm,
@@ -640,7 +647,7 @@ def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int
     elapsed = time.time() - start_time
     print(f'Frame decoding time: {elapsed:4.3f} sec')
 
-    return synthesis_output, bitstream
+    return synthesis_output, bitstream, header_info.get('flow_gain')
 
 @torch.no_grad()
 def decode_video(bitstream_path: str, output_path: str):
@@ -656,7 +663,6 @@ def decode_video(bitstream_path: str, output_path: str):
         bitstream = fin.read()[header_info.get('n_bytes_header'): ]
 
     coding_structure = CodingStructure(
-        gop_type=header_info.get('gop_type'),
         intra_period=header_info.get('intra_period'),
         p_period=header_info.get('p_period'),
     )
@@ -684,13 +690,16 @@ def decode_video(bitstream_path: str, output_path: str):
 
         # Forward into the cool chic decoder... with the ARM module.
         # We also return the bitstream with the read pointer updated?
-        raw_coolchic_output, bitstream = decode_frame(bitstream_path, bitstream, img_size=header_info.get('img_size'))
+        raw_coolchic_output, bitstream, flow_gain = decode_frame(
+            bitstream_path,
+            bitstream,
+            img_size=header_info.get('img_size')
+        )
 
         # Feed the output of coolchic to the inter coding module
         inter_coding_module = InterCodingModule(frame_type=frame.frame_type)
         # Set the flow gain
-        if len(frame.index_references) > 0:
-            inter_coding_module.flow_gain = abs(frame.display_order - frame.index_references[0])
+        inter_coding_module.flow_gain = float(flow_gain)
 
         decoded_image = inter_coding_module.forward(
             {
@@ -705,7 +714,8 @@ def decode_video(bitstream_path: str, output_path: str):
         # Round the output according to the bitdepth
         # Then scale it back into a "discrete" tensor in [0, 1]
         bitdepth = header_info.get('bitdepth')
-        decoded_image = torch.round((2 ** bitdepth - 1) * decoded_image)  / (2 ** bitdepth - 1)
+        max_dynamic = 2 ** (bitdepth) - 1
+        decoded_image = torch.round(max_dynamic * decoded_image)  / max_dynamic
 
         if 'yuv420' in header_info.get('frame_data_type'):
             decoded_image = yuv_dict_clamp(convert_444_to_420(decoded_image), 0., 1.)
@@ -736,7 +746,10 @@ def decode_video(bitstream_path: str, output_path: str):
         # The save_visualisation function will add some extra character in the
         # name of the file (e.g. HxW_bitdepth_yuv420.yuv). Some we need to glob
         # with the beginning of the name to try finding the corresponding frame.
-        frame_path = glob.glob(f'{output_path}_{idx_display_order}*')
+        if format == 'yuv':
+            frame_path = glob.glob(f'{output_path}_{idx_display_order}_*')
+        elif format == 'png':
+            frame_path = glob.glob(f'{output_path}_{idx_display_order}*')
         assert len(frame_path) == 1, f'Found {len(frame_path)} corresponding frame(s) ' \
             f'for the frame n° {idx_display_order}. Should have been 1.'
 

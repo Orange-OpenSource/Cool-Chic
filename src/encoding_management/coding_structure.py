@@ -30,7 +30,6 @@ FRAME_TYPE = Literal['I', 'P', 'B']
 #   number_of_frames_in_gop = intra_period + 1 = number_of_inter_frames_in_gop + 1
 #
 #
-# A GOP is either a low-delay GOP with one intra and only P frames (LDP).
 #   E.g.:
 #       I0 ---> P1 ---> P2 ---> P3 ---> P4 ---> P5 ---> P6 ---> P7 ---> P8
 #
@@ -41,12 +40,9 @@ FRAME_TYPE = Literal['I', 'P', 'B']
 #            \--> B1 <--/ \--> B3 <--/   \--> B5 <--/  \--> B7 <--/
 #
 # Here, both GOPs have an intra period of 8 (i.e. 8 inter-frames) in
-# between two I-frames. The RA P period is 4 which is the distance
-# of the P-frame prediction.
+# between two I-frames. First GOP P-period is 1, while second P period is 4
+# which is the distance of the P-frame prediction.
 #
-# Note: an all intra GOP is either a RA of a LDP GOP with an intra-period
-# and P-period set to zero.
-GOP_TYPE = Literal['RA', 'LDP']
 FRAME_DATA_TYPE = Literal['rgb', 'yuv420', 'yuv444']
 POSSIBLE_BITDEPTH = Literal[8, 10]
 
@@ -176,7 +172,6 @@ class Frame():
 
 @dataclass
 class CodingStructure():
-    gop_type: GOP_TYPE      # Either LDP or RA.
     intra_period: int       # Number of inter frames in the GOP.
     p_period: int = 0       # For RA GOP : distance of the furthest (P) prediction
                             # For LDP GOP: Irrelevant
@@ -190,42 +185,9 @@ class CodingStructure():
     # ==================== Not set by the init function ===================== #
 
     def __post_init__(self):
-        if self.gop_type == 'RA':
-            self.frames = self.compute_ra_gop(self.intra_period, self.p_period)
-        elif self.gop_type == 'LDP':
-            self.frames = self.compute_ldp_gop(self.intra_period)
+        self.frames = self.compute_gop(self.intra_period, self.p_period)
 
-    def compute_ldp_gop(self, intra_period: int) -> List[Frame]:
-        """Return a list of frames with one intra followed by intra_period
-        P-frames. Read above for more details.
-
-        Args:
-            intra_period (int): Number of inter frames in the GOP.
-
-        Returns:
-            List[Frame]: List describing the frames to code.
-        """
-        # First frame is an intra
-        frames = [Frame(coding_order=0, display_order=0, index_references=[], seq_name=self.seq_name)]
-
-        if intra_period == 0:
-            print(f'Intra period is 0: all intra coding!')
-            return frames
-
-        # Instantiate the successive P frames
-        for i in range(intra_period):
-            frames.append(
-                Frame(
-                    coding_order = i + 1,
-                    display_order = i + 1,
-                    index_references = [i],
-                    seq_name=self.seq_name
-                )
-            )
-
-        return frames
-
-    def compute_ra_gop(self, intra_period: int, p_period: int) -> List[Frame]:
+    def compute_gop(self, intra_period: int, p_period: int) -> List[Frame]:
         """Return a list of frames with one intra followed by at least one hierarchical
         Random Access GOP. The size of each chained GOP is deduced from two parameters,
         the number of inter frames in the overall GOP (intra_period) and the distance

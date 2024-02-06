@@ -43,15 +43,21 @@ class TrainingExitCode(Enum):
 
 def is_job_over(start_time: float, max_duration_job_min: int = 45) -> bool:
     """Return true if current time is more than max_duration_job_min after start time.
+    Use -1 for max_job_duration_min to always return False
+
 
     Args:
         start_time (float): time.time() at the start of the program.
+        max_duration_job_min (int): How long we should run. If -1, we never stop
+            i.e. we always return False.
 
     Returns:
         bool: True if current time is more than max_duration_job_min after start time.
     """
-    return False
-    # return (time.time() - start_time) / 60 >= max_duration_job_min
+    if max_duration_job_min < 0:
+        return False
+
+    return (time.time() - start_time) / 60 >= max_duration_job_min
 # =========================== Cluster management ============================ #
 
 # ======================= Some useful data structures ======================= #
@@ -72,6 +78,8 @@ class DescriptorCoolChic():
 # ======================= Some useful data structures ======================= #
 
 # =============== Neural network quantization & integerization ============== #
+MAX_ARM_MASK_SIZE = 9
+
 # True: ARM in pure integer mode (cpu only)
 # False: ARM in integer-in-float mode (gpu or cpu)
 # Both values should produce the same results.

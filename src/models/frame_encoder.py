@@ -662,7 +662,8 @@ class FrameEncoder(nn.Module):
         device: POSSIBLE_DEVICE,
         frame_workdir: str,
         path_original_sequence: str,
-        start_time: float
+        start_time: float,
+        job_duration_min: float,
     ) -> TrainingExitCode:
         """Main training function of a FrameEncoder. It requires a frame_encoder_save_path
         in order to save the encoder periodically to allow for checkpoint.
@@ -675,6 +676,8 @@ class FrameEncoder(nn.Module):
                 inter warm-up where the references are shifted.
             start_time (float): Keep track of the when we started the overall training to
                 requeue if need be
+            job_duration_min (float): Exit and save the job after this duration is passed.
+                Use -1 to only exit at the end of the entire encoding
 
         Returns:
             (TrainingExitCode): Exit code
@@ -699,7 +702,7 @@ class FrameEncoder(nn.Module):
             self.frame_encoder_manager.warm_up_done = True
 
         # Save model after checkpoint
-        if is_job_over(start_time):
+        if is_job_over(start_time, max_duration_job_min=float(job_duration_min)):
             return TrainingExitCode.REQUEUE
 
         # Perform the successive training phase from phase_encoder_manager.phase_idx to
@@ -715,7 +718,7 @@ class FrameEncoder(nn.Module):
             print('--------------------------------')
             print(f'\n{self.test().pretty_string(show_col_name=True, mode="short")}\n')
 
-            if is_job_over(start_time):
+            if is_job_over(start_time, max_duration_job_min=float(job_duration_min)):
                 return TrainingExitCode.REQUEUE
 
         # At the end of each loop, compute the final loss
@@ -791,6 +794,7 @@ class FrameEncoder(nn.Module):
             training_phase = TrainerPhase(
                 lr=warmup_phase.lr,
                 max_itr=warmup_phase.iterations,
+                freq_valid=warmup_phase.freq_valid,
                 start_temperature_softround=0.3,
                 end_temperature_softround=0.3,
                 start_kumaraswamy=2.0,
@@ -1024,30 +1028,15 @@ class FrameEncoder(nn.Module):
         cnt_record = 0
         show_col_name = True
 
+        secure_with_best_model_period = trainer_phase.max_itr / 10
+
         # phase optimization
         for cnt in range(trainer_phase.max_itr):
+
             if cnt - cnt_record > trainer_phase.patience:
 
-                # if no scheduler, exceeding the patience level ends the phase
-                if not scheduler:
-                    break
-
-                # If we have a scheduler, we reload the previous best mode and resume from the current lr
-                else:
-                    self.load_state_dict(this_phase_best_model)
-                    current_lr = scheduler.get_last_lr()[0]
-
-                if False:
-                    # we re-initiate the scheduler
-                    T_max = ( cnt - trainer_phase.max_itr) // trainer_phase.freq_valid
-                    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=T_max, eta_min=0, last_epoch=-1, verbose=False)
-                    print(f"Reload best model and new schedule tmax={T_max} and lr={current_lr:.6f}")
-
-                else:
-                    # we keep on with the current scheduler
-                    print(f"Reload best model lr={current_lr:.6f}")
-
-                cnt_record = cnt
+                # exceeding the patience level ends the phase
+                break
 
             # This is slightly faster than optimizer.zero_grad()
             for param in self.parameters():
@@ -1146,6 +1135,10 @@ class FrameEncoder(nn.Module):
 
                 # Restore training mode
                 self.set_to_train()
+
+            # the best model is periodically reloaded to avoid divergence
+            if scheduler and (cnt % secure_with_best_model_period) == 0 and cnt:
+                self.load_state_dict(this_phase_best_model)
 
         # Load best model found for this encoding loop
         self.load_state_dict(this_phase_best_model)

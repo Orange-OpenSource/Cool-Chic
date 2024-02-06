@@ -168,10 +168,7 @@ def encode_frame(video_encoder: VideoEncoder, frame_encoder: FrameEncoder, bitst
 
     # ================= Encode the MLP into a bitstream file ================ #
     ac_max_val_nn = get_ac_max_val_nn(frame_encoder)
-    range_coder_nn = RangeCoder(
-        0,     # 0 because we don't have a ctx_row_col
-        ac_max_val_nn
-    )
+    range_coder_nn = RangeCoder(ac_max_val_nn)
 
     scale_index_nn: DescriptorCoolChic = {}
     q_step_index_nn: DescriptorCoolChic = {}
@@ -295,8 +292,8 @@ def encode_frame(video_encoder: VideoEncoder, frame_encoder: FrameEncoder, bitst
 
         if module_name == 'arm':
             empty_module = Arm(
-                frame_encoder.coolchic_encoder.non_zero_pixel_ctx,
-                frame_encoder.coolchic_encoder.param.layers_arm
+                frame_encoder.coolchic_encoder.param.dim_arm,
+                frame_encoder.coolchic_encoder.param.n_hidden_layers_arm
             )
             Q_STEPS = POSSIBLE_Q_STEP_ARM_NN
         elif module_name == 'synthesis':
@@ -306,7 +303,10 @@ def encode_frame(video_encoder: VideoEncoder, frame_encoder: FrameEncoder, bitst
             )
             Q_STEPS = POSSIBLE_Q_STEP_SYN_NN
         elif module_name == 'upsampling':
-            empty_module = Upsampling(frame_encoder.coolchic_encoder.param.upsampling_kernel_size)
+            empty_module = Upsampling(
+                    frame_encoder.coolchic_encoder.param.upsampling_kernel_size,
+                    frame_encoder.coolchic_encoder.param.static_upsampling_kernel
+                )
             Q_STEPS = POSSIBLE_Q_STEP_SYN_NN
 
         have_bias = q_step_index_nn[module_name].get('bias') >= 0
@@ -332,7 +332,7 @@ def encode_frame(video_encoder: VideoEncoder, frame_encoder: FrameEncoder, bitst
     frame_encoder.coolchic_encoder.to_device('cpu')
 
     ac_max_val_latent = get_ac_max_val_latent(frame_encoder)
-    range_coder_latent = RangeCoder(frame_encoder.coolchic_encoder.param.n_ctx_rowcol, ac_max_val_latent)
+    range_coder_latent = RangeCoder(ac_max_val_latent)
 
     # Setting visu to true allows to recover 2D mu, scale and latents
     frame_encoder.set_to_eval()

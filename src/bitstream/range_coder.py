@@ -16,10 +16,10 @@ import torch
 from typing import Optional, Tuple
 from torch import Tensor
 
-from utils.misc import Q_PROBA_DEFAULT
+from utils.misc import MAX_ARM_MASK_SIZE, Q_PROBA_DEFAULT
 
 class RangeCoder:
-    def __init__(self, n_ctx_rowcol: int, AC_MAX_VAL: int, Q_PROBA: int = Q_PROBA_DEFAULT):
+    def __init__(self, AC_MAX_VAL: int, Q_PROBA: int = Q_PROBA_DEFAULT):
 
         # Higher: more accurate but less reliable probability model
         # Actual q_step is 1 / Q_PROBA
@@ -33,7 +33,23 @@ class RangeCoder:
             -self.AC_MAX_VAL, self.AC_MAX_VAL + 1
         )
 
-        self.n_ctx_rowcol = n_ctx_rowcol
+        # Every context is inscribed inside as mask of size MAX_ARM_MASK_SIZE
+        # For a given mask size N (odd number e.g. 3, 5, 7), we have at most
+        # (N * N - 1) / 2 context pixels in it.
+        # Example, a 9x9 mask as below has 40 context pixel (indicated with 1s)
+        # available to predict the pixel '*'
+        #   1 1 1 1 1 1 1 1 1
+        #   1 1 1 1 1 1 1 1 1
+        #   1 1 1 1 1 1 1 1 1
+        #   1 1 1 1 1 1 1 1 1
+        #   1 1 1 1 * 0 0 0 0
+        #   0 0 0 0 0 0 0 0 0
+        #   0 0 0 0 0 0 0 0 0
+        #   0 0 0 0 0 0 0 0 0
+        #   0 0 0 0 0 0 0 0 0
+        # Here n_ctx_rowcol = 4 rows and columns of context
+
+        self.n_ctx_rowcol = int((MAX_ARM_MASK_SIZE - 1) / 2)
 
     def quantize_proba_parameters(self, x: Tensor) -> Tensor:
         """Apply a quantization to the input x to reduce floating point
@@ -66,7 +82,7 @@ class RangeCoder:
         """
         # Re-arrange the data for wave front coding
         if CHW is not None:
-            flat_coding_order = self.generate_coding_order(CHW, self.n_ctx_rowcol).flatten()
+            flat_coding_order = self.generate_coding_order(CHW).flatten()
             # ! Stable is absolutely mandatory otherwise it won't work!
             index_coding_order = flat_coding_order.argsort(stable=True)
 
@@ -110,12 +126,13 @@ class RangeCoder:
         return x
 
 
-    def generate_coding_order(self, CHW: Tuple[int, int, int], n_ctx_rowcol: int, device: str = "cpu") -> Tensor:
+    def generate_coding_order(self, CHW: Tuple[int, int, int], device: str = "cpu") -> Tensor:
+
         C, H, W = CHW
 
         # Edge case: we have an image whose width is smaller than the number of
         # context row/column in this case: no wavefront
-        if W < n_ctx_rowcol:
+        if W < self.n_ctx_rowcol:
             coding_order = torch.arange(0, H * W).view(1, H, W).repeat(C, 1, 1).view(1, C, H, W)
             return coding_order
 
@@ -127,7 +144,7 @@ class RangeCoder:
 
         # Repeat the first line H times
         first_line = torch.arange(W, device=device).view(1, -1).repeat((H, 1))
-        row_increment = torch.arange(H, device=device) * (n_ctx_rowcol + 1)
+        row_increment = torch.arange(H, device=device) * (self.n_ctx_rowcol + 1)
         row_increment = row_increment.view(-1, 1)
 
         # This is the spatial coding order i.e. a [H, W] tensor

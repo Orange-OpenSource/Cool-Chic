@@ -81,4 +81,6 @@ def compute_msssim(x: Union[Tensor, DictTensorYUV], y: Union[Tensor, DictTensorY
             total_pixels_yuv += n_pixels_channel
 
         ms_ssim = ms_ssim / total_pixels_yuv
+        # Max MS-SSIM dB is 100 i.e. - 10 * log10(1e-10
+        ms_ssim = torch.clamp(ms_ssim, 0, 1 - 1e-6)
         return ms_ssim

@@ -20,8 +20,19 @@ from utils.misc import ARMINT, POSSIBLE_Q_STEP_ARM_NN
 
 
 class Arm(QuantizableModule):
-    def __init__(self, input_ft: int, layers_dim: List[int], fpfm: int = 0):
+    def __init__(self, dim_arm: int, n_hidden_layers_arm: int, fpfm: int = 0):
+        """Instantitate an autoregressive module.
+
+        Args:
+            dim_arm (int): Number of context pixels AND dimension of the hidden layer.
+            n_hidden_layers_arm (int): Number of hidden layers. 0 for a linear ARM
+        """
+            # fpfm (int, optional): FIXED_POINT_FRACTIONAL_MULT for ARM integerization. Defaults to 0.
+
         super().__init__(possible_q_steps=POSSIBLE_Q_STEP_ARM_NN)
+
+        assert dim_arm % 8 == 0, f'ARM context size and hidden layer dimension must be ' \
+            f'a multiple of 8. Found {dim_arm}.'
 
         self.FPFM = fpfm # FIXED_POINT_FRACTIONAL_MULT # added for decode_network with torchscript.
         self.ARMINT = ARMINT
@@ -31,16 +42,12 @@ class Arm(QuantizableModule):
         layers_list = nn.ModuleList()
 
         # Construct the hidden layer(s)
-        for out_ft in layers_dim:
-            if input_ft == out_ft:
-                layers_list.append(CustomLinearResBlock(input_ft, out_ft, self.FPFM))
-            else:
-                layers_list.append(CustomLinear(input_ft, out_ft, self.FPFM))
+        for i in range(n_hidden_layers_arm):
+            layers_list.append(CustomLinearResBlock(dim_arm, dim_arm, self.FPFM))
             layers_list.append(nn.ReLU())
-            input_ft = out_ft
 
         # Construct the output layer. It always has 2 outputs (mu and scale)
-        layers_list.append(CustomLinear(input_ft, 2, self.FPFM))
+        layers_list.append(CustomLinear(dim_arm, 2, self.FPFM))
         self.mlp = nn.Sequential(*layers_list)
         # ======================== Construct the MLP ======================== #
 
@@ -193,6 +200,7 @@ def laplace_cdf(x: Tensor, loc: Tensor, scale: Tensor) -> Tensor:
     """
     return 0.5 - 0.5 * (x - loc).sign() * torch.expm1(-(x - loc).abs() / scale)
 
+
 def get_mu_scale(raw_proba_param: Tensor) -> Tuple[Tensor, Tensor]:
     """From a raw tensor raw_proba_param [B, 2], split it into
     two halves (one for mu, one for scale) and reparameterize the scale
@@ -210,6 +218,7 @@ def get_mu_scale(raw_proba_param: Tensor) -> Tuple[Tensor, Tensor]:
     # no scale smaller than exp(-0.5 * 13.81) = 1e-3
     scale = torch.exp(-0.5 * torch.clamp(log_scale, min=-10., max=13.8155))
     return mu, scale
+
 
 def compute_rate(x: Tensor, raw_proba_param: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
     """From a raw tensor raw_proba_param [B, 2], split it into
@@ -235,3 +244,71 @@ def compute_rate(x: Tensor, raw_proba_param: Tensor) -> Tuple[Tensor, Tensor, Te
     )
     rate = -torch.log2(proba)
     return rate, mu, scale
+
+
+def get_non_zero_pixel_ctx_index(dim_arm: int) -> Tensor:
+    """Generate the relative index of the context pixel with respect to the
+    actual pixel being decoded.
+
+    1D tensor containing the indices of the non zero context. This corresponds to the one
+    in the pattern above. This allows to use the index_select function, which is significantly
+    faster than usual indexing.
+
+    0   1   2   3   4   5   6   7   8
+    9   10  11  12  13  14  15  16  17
+    18  19  20  21  22  23  24  25  26
+    27  28  29  30  31  32  33  34  35
+    36  37  38  39  *   x   x   x   x
+    x   x   x   x   x   x   x   x   x
+    x   x   x   x   x   x   x   x   x
+    x   x   x   x   x   x   x   x   x
+    x   x   x   x   x   x   x   x   x
+
+
+    Args:
+        dim_arm (int): Number of context pixels
+
+    Returns:
+        Tensor: 1D tensor with the flattened index of the context pixels.
+    """
+
+    if dim_arm == 8:
+        return torch.tensor(
+            [
+                    21, 22,
+                    30, 31, 32, 33,
+                38, 39, #
+            ]
+        )
+
+    elif dim_arm == 16:
+        return torch.tensor(
+            [
+                            13, 14,
+                    20, 21, 22, 23, 24,
+                28, 29, 30, 31, 32, 33,
+                37, 38, 39, #
+            ]
+        )
+
+    elif dim_arm == 24:
+        return torch.tensor(
+            [
+                                4 ,
+                        11, 12, 13, 14, 15,
+                    19, 20, 21, 22, 23, 24, 25,
+                    28, 29, 30, 31, 32, 33, 34,
+                36, 37, 38, 39, #
+            ]
+        )
+
+    elif dim_arm == 32:
+        return torch.tensor(
+            [
+                        2 , 3 , 4 , 5 ,
+                    10, 11, 12, 13, 14, 15, 16,
+                    19, 20, 21, 22, 23, 24, 25, 26,
+                27, 28, 29, 30, 31, 32, 33, 34, 35,
+                36, 37, 38, 39, #
+            ]
+        )

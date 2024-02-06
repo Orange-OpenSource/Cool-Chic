@@ -19,8 +19,8 @@ from fvcore.nn import FlopCountAnalysis, flop_count_table
 from models.coolchic_components.quantizer import NoiseQuantizer, STEQuantizer
 from models.coolchic_components.synthesis import Synthesis
 from models.coolchic_components.upsampling import Upsampling
-from models.coolchic_components.arm import Arm, get_flat_latent_and_context, compute_rate
-from utils.misc import POSSIBLE_DEVICE, ARMINT, DescriptorCoolChic
+from models.coolchic_components.arm import Arm, get_flat_latent_and_context, compute_rate, get_non_zero_pixel_ctx_index
+from utils.misc import MAX_ARM_MASK_SIZE, POSSIBLE_DEVICE, ARMINT, DescriptorCoolChic
 
 
 @dataclass
@@ -33,11 +33,13 @@ class CoolChicEncoderParameter():
     img_size: Tuple[int, int] = field(init=False)
 
     # ----- Architecture options
-    layers_synthesis: List[str]         # Synthesis architecture (e.g. '12-1-linear-relu', '12-1-residual-relu', '3-1-linear-relu', '3-3-residual-none')
-    layers_arm: List[int]               # Output dim. of each hidden layer for the ARM (Empty for linear MLP)
-    n_ctx_rowcol: int = 2               # Number of row and columns of context.
-    upsampling_kernel_size: int = 8     # Kernel size for the upsampler ≥8. if set to zero the kernel is not optimised, the bicubic upsampler is used
-    n_ft_per_res: List[int] = 1         # Number of features for each resolution.
+    layers_synthesis: List[str]             # Synthesis architecture (e.g. '12-1-linear-relu', '12-1-residual-relu', '3-1-linear-relu', '3-3-residual-none')
+    n_ft_per_res: List[int]                 # Number of features for each resolution.
+    dim_arm: int = 24                       # Number of context pixels AND dimension of the hidden layers of the ARM
+    n_hidden_layers_arm: int = 2            # Number of hidden layers in the ARM. 0 for a linear ARM
+    upsampling_kernel_size: int = 8         # Kernel size for the upsampler ≥8. if set to zero the kernel is not optimised, the bicubic upsampler is used
+    static_upsampling_kernel: bool = False  # Whether the upsampling kernel is learned or kept static (bicubic)
+    encoder_gain: int = 16                  # Gain applied to the latent grids at the encoder-side (i.e. before quantization)
 
     # ==================== Not set by the init function ===================== #
     latent_n_grids: int = field(init=False) # Number of different resolutions
@@ -87,7 +89,7 @@ class CoolChicEncoder(nn.Module):
 
         # ================== Synthesis related stuff ================= #
         # Encoder-side latent gain applied prior to quantization, one per feature
-        self.encoder_gains = torch.ones(self.param.latent_n_grids,) * 16
+        self.encoder_gains = torch.ones(self.param.latent_n_grids,) * param.encoder_gain
 
         # Populate the successive grids
         self.latent_grids = nn.ParameterList()
@@ -95,10 +97,7 @@ class CoolChicEncoder(nn.Module):
         for i in range(self.param.latent_n_grids):
             h_grid, w_grid = [int(math.ceil(x / (2 ** i))) for x in self.param.img_size]
 
-            if isinstance(self.param.n_ft_per_res, list):
-                c_grid = self.param.n_ft_per_res[i]
-            else:
-                c_grid = self.param.n_ft_per_res
+            c_grid = self.param.n_ft_per_res[i]
 
             dim_synthesis_input += c_grid
 
@@ -116,35 +115,40 @@ class CoolChicEncoder(nn.Module):
         # ================ Quantization related stuff ================ #
 
         # ===================== Upsampling stuff ===================== #
-        self.upsampling = Upsampling(self.param.upsampling_kernel_size)
+        self.upsampling = Upsampling(self.param.upsampling_kernel_size, self.param.static_upsampling_kernel)
         # ===================== Upsampling stuff ===================== #
 
         # ===================== ARM related stuff ==================== #
         # Create the probability model for the main INR. It uses a spatial context
         # parameterized by the spatial context
 
-        # If we need 3 rows & columns of context, we'll use a 7x7 mask as:
-        #   1 1 1 1 1 1 1
-        #   1 1 1 1 1 1 1
-        #   1 1 1 1 1 1 1
-        #   1 1 1 * 0 0 0
-        #   0 0 0 0 0 0 0
-        #   0 0 0 0 0 0 0
-        #   0 0 0 0 0 0 0
+        # For a given mask size N (odd number e.g. 3, 5, 7), we have at most
+        # (N * N - 1) / 2 context pixels in it.
+        # Example, a 9x9 mask as below has 40 context pixel (indicated with 1s)
+        # available to predict the pixel '*'
+        #   1 1 1 1 1 1 1 1 1
+        #   1 1 1 1 1 1 1 1 1
+        #   1 1 1 1 1 1 1 1 1
+        #   1 1 1 1 1 1 1 1 1
+        #   1 1 1 1 * 0 0 0 0
+        #   0 0 0 0 0 0 0 0 0
+        #   0 0 0 0 0 0 0 0 0
+        #   0 0 0 0 0 0 0 0 0
+        #   0 0 0 0 0 0 0 0 0
+
+        # No more than 40 context pixels i.e. a 9x9 mask size (see example above)
+        max_mask_size = MAX_ARM_MASK_SIZE
+        max_context_pixel = int((max_mask_size ** 2 - 1) / 2)
+        assert self.param.dim_arm <= max_context_pixel, f'You can not have more context pixels ' \
+            f' than {max_context_pixel}. Found {self.param.dim_arm}'
 
         # Mask of size 2N + 1 when we have N rows & columns of context.
-        self.mask_size = 2 * self.param.n_ctx_rowcol + 1
+        self.mask_size = max_mask_size
 
-        # Number of non-zero pixels in the (2N + 1) x (2N + 1) mask. This is the actual
-        # context size. Context size = (N ** 2 - 1) / 2
-        self.non_zero_pixel_ctx = int((self.mask_size ** 2 - 1) / 2)
+        # 1D tensor containing the indices of the selected context pixels.
+        self.non_zero_pixel_ctx_index = get_non_zero_pixel_ctx_index(self.param.dim_arm)
 
-        # Index in the mask (i.e. 0, 1, ... context_size - 1). Used for faster implementation
-        # of the get_neighbors function. This allows to use the index_select function, which
-        # is significantly faster than usual indexing.
-        self.non_zero_pixel_ctx_index = torch.arange(0, self.non_zero_pixel_ctx)
-
-        self.arm = Arm(self.non_zero_pixel_ctx, self.param.layers_arm)
+        self.arm = Arm(self.param.dim_arm, self.param.n_hidden_layers_arm)
         # ===================== ARM related stuff ==================== #
 
         # ======================== Monitoring ======================== #
@@ -392,6 +396,7 @@ class CoolChicEncoder(nn.Module):
         self = self.to(device)
         self.non_zero_pixel_ctx_index = self.non_zero_pixel_ctx_index.to(device)
         self.encoder_gains = self.encoder_gains.to(device)
+        self.upsampling.static_kernel = self.upsampling.static_kernel.to(device)
 
         # Push integerized weights and biases of the mlp (resp qw and qb) to
         # the required device

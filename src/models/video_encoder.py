@@ -56,7 +56,18 @@ class VideoEncoder(nn.Module):
     frame_data_type: FRAME_DATA_TYPE = field(init=False)
     # ==================== Not set by the init function ===================== #
 
-    def train(self, device: POSSIBLE_DEVICE, workdir: str):
+    def train(self, device: POSSIBLE_DEVICE, workdir: str, job_duration_min: int = -1):
+        """Main training function of a FrameEncoder. It requires a frame_encoder_save_path
+        in order to save the encoder periodically to allow for checkpoint.
+
+        Args:
+            device (POSSIBLE_DEVICE): On which device should the training run
+            workdir (str): Where we'll save many thing
+            job_duration_min (Optional, float): Exit and save the job after this duration
+                is passed. Use -1 to only exit at the end of the entire encoding.
+                Default to -1.
+        """
+
         start_time = time.time()
         n_frames = self.coding_structure.get_number_of_frames()
 
@@ -95,12 +106,11 @@ class VideoEncoder(nn.Module):
                 current_frame_encoder_manager = copy.deepcopy(self.shared_frame_encoder_manager)
                 current_coolchic_parameter = copy.deepcopy(self.shared_coolchic_parameter)
                 current_coolchic_parameter.img_size = frame.data.img_size
+                current_coolchic_parameter.encoder_gain = 16 if frame.frame_type == "I" else 1
 
-
-                # Change the lambda according to the depth of the frame in the GOP in case
-                # of RA coding. The deeper the frame, the bigger the lambda, the smaller the rate
-                if self.coding_structure.gop_type == 'RA':
-                    current_frame_encoder_manager.lmbda = self.shared_frame_encoder_manager.lmbda * (1.5 ** frame.depth)
+                # Change the lambda according to the depth of the frame in the GOP
+                # The deeper the frame, the bigger the lambda, the smaller the rate
+                current_frame_encoder_manager.lmbda = self.shared_frame_encoder_manager.lmbda * (1.5 ** frame.depth)
 
                 if frame.frame_type == 'I':
                     n_output_synthesis = 3
@@ -140,7 +150,8 @@ class VideoEncoder(nn.Module):
                     device=device,
                     frame_workdir=frame_workdir,
                     path_original_sequence=self.path_original_sequence,
-                    start_time=start_time
+                    start_time=start_time,
+                    job_duration_min=job_duration_min
                 )
 
                 # Concatenate the different results file
@@ -306,12 +317,14 @@ class VideoEncoder(nn.Module):
             else:
                 subprocess.call(f'cat {frame_path} | head -2 | tail -1 >> {out_path}', shell=True)
 
-    def generate_all_results_and_visu(self, workdir: str):
+    def generate_all_results_and_visu(self, workdir: str, visu: bool = True):
         """Look at all the already encoded frames inside the working directory and recompute the
         the different results and the visualisations.
 
         Args:
             workdir (str): Working directory of the video encoder
+            visu (bool): Do we generate visu?
+
         """
         for idx_display_order in range(self.coding_structure.get_number_of_frames()):
             frame = self.coding_structure.get_frame_from_display_order(idx_display_order)
@@ -336,12 +349,14 @@ class VideoEncoder(nn.Module):
                 f_out.write(frame_encoder_logs.pretty_string(show_col_name=True, mode='all') + '\n')
 
             # Generate visualisations
-            frame_encoder.generate_visualisation(f'{frame_workdir}visu/')
+            if visu:
+                frame_encoder.generate_visualisation(f'{frame_workdir}visu/')
         print('')
 
         # Concatenate the results and visualisation together
         self.concat_results_file(workdir)
-        self.concat_visualisation(workdir)
+        if visu:
+            self.concat_visualisation(workdir)
 
     @torch.no_grad()
     def load_data_and_refs(self, frame: Frame) -> Frame:

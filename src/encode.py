@@ -56,8 +56,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input', help='Path of the input image. Either .png (RGB444) or .yuv (YUV420)', type=str)
     parser.add_argument('-o', '--output', type=str, default='./bitstream.bin', help='Output bitstream path.')
-    parser.add_argument('--workdir', help='Path of the working_directory', type=str, default='.')
+    parser.add_argument('--intra_period', help='Number of inter frames in the GOP. 0 for image coding', type=int, default=0)
+    parser.add_argument('--p_period', help='Distance between P-frames. 0 for image coding', type=int, default=0)
 
+    parser.add_argument('--workdir', help='Path of the working_directory', type=str, default='.')
     parser.add_argument('--lmbda', help='Rate constraint', type=float, default=1e-3)
     parser.add_argument('--start_lr', help='Initial learning rate', type=float, default=1e-2)
     parser.add_argument('--n_itr', help='Maximum number of iterations per phase', type=int, default=int(1e5))
@@ -65,9 +67,15 @@ if __name__ == '__main__':
         '--layers_synthesis', help='See default.', type=str,
         default='40-1-linear-relu,X-1-linear-relu,X-3-residual-relu,X-3-residual-none'
     )
-    parser.add_argument('--layers_arm', help='Format: 16,8,16', type=str, default='24,24')
+
+    parser.add_argument(
+        '--arm', type=str, default='24,2',
+        help='<arm_context_and_layer_dimension>,<number_of_hidden_layers>'
+        'First number indicates both the context size **AND** the hidden layer dimension.'
+        'Second number indicates the number of hidden layer(s). 0 gives a linear ARM module.'
+    )
+
     parser.add_argument('--dist', help='Unused for now', type=str, default='mse')
-    parser.add_argument('--n_ctx_rowcol', help='Number of rows/columns for ARM', type=int, default=3)
     parser.add_argument(
         '--n_ft_per_res', type=str, default='1,1,1,1,1,1,1',
         help='Number of feature for each latent resolution. e.g. --n_ft_per_res=1,2,2,2,3,3,3'
@@ -75,7 +83,8 @@ if __name__ == '__main__':
     )
 
     parser.add_argument('--upsampling_kernel_size', help='upsampling kernel size (≥8)', type=int, default=8)
-    parser.add_argument('--n_train_loops', help='Number of training loops', type=int, default=5)
+    parser.add_argument('--static_upsampling_kernel', help='Use this flag to **not** learn the upsampling kernel', action='store_true', default=False)
+    parser.add_argument('--n_train_loops', help='Number of training loops', type=int, default=2)
     args = parser.parse_args()
     # =========================== Parse arguments =========================== #
 
@@ -98,8 +107,12 @@ if __name__ == '__main__':
 
     # Parse arguments
     layers_synthesis = [x for x in args.layers_synthesis.split(',') if x != '']
-    layers_arm = [int(x) for x in args.layers_arm.split(',') if x != '']
     n_ft_per_res = [int(x) for x in args.n_ft_per_res.split(',') if x != '']
+
+    assert len(args.arm.split(',')) == 2, f'--arm format should be X,Y.' \
+        f' Found {args.arm}'
+
+    dim_arm, n_hidden_layers_arm = [int(x) for x in args.arm.split(',')]
 
     # Automatic device detection
     device = get_best_device()
@@ -145,26 +158,31 @@ if __name__ == '__main__':
 
     else:
         # ----- Create coding configuration
-        # Create an all-intra GOP with one frame.
+        assert args.intra_period >= 0 and args.intra_period <= 255, f'Intra period should be ' \
+            f'  in [0, 255]. Found {args.intra_period}'
+
+        assert args.p_period >= 0 and args.p_period <= 255, f'P period should be ' \
+            f'  in [0, 255]. Found {args.p_period}'
+
         coding_config = CodingStructure(
-            gop_type='RA',
-            intra_period=0,
-            p_period=0,
+            intra_period=args.intra_period,
+            p_period=args.p_period,
             seq_name=os.path.basename(args.input).split('.')[0]
         )
 
         coolchic_encoder_parameter = CoolChicEncoderParameter(
             layers_synthesis=layers_synthesis,
-            layers_arm=layers_arm,
-            n_ctx_rowcol=args.n_ctx_rowcol,
+            dim_arm=dim_arm,
+            n_hidden_layers_arm=n_hidden_layers_arm,
             n_ft_per_res=n_ft_per_res,
             upsampling_kernel_size=args.upsampling_kernel_size,
+            static_upsampling_kernel=args.static_upsampling_kernel,
         )
 
         dist_weight = {'mse': 1.0, 'msssim': 0.0, 'lpips': 0.0}
 
         frame_encoder_manager = FrameEncoderManager(
-            preset_name='c3',
+            preset_name='c3x',
             start_lr=args.start_lr,
             lmbda=args.lmbda,
             n_loops=args.n_train_loops,
@@ -197,7 +215,6 @@ if __name__ == '__main__':
     assert os.path.isfile(path_final_model), f'Can not find the final trained encoder at {path_final_model}'
 
     video_encoder = load_video_encoder(path_final_model)
-
     # Encode the video into a binary file
     print(f'Encoding to {args.output}')
     encode_video(video_encoder, args.output)

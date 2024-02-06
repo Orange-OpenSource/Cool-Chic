@@ -20,6 +20,7 @@ class IntraWarmupPhase():
     candidates: int                         # Keep the first <candidates> best systems at the beginning of this warmup phase
     iterations: int                         # Number of iterations for each candidates
     lr: float = 1e-2                        # Learning rate used during the whole phase
+    freq_valid:float = 100                  # period for the validation
 
     _col_width_print: ClassVar[int] = 20    # Used only for the pretty_string() function
 
@@ -160,7 +161,7 @@ class Preset:
 
         s += '\nInter Warm-up\n'
         s += '-------------\n'
-        s += IntraWarmupPhase.pretty_string_column_name() + '\n'
+        s += InterWarmupPhase.pretty_string_column_name() + '\n'
         s += self.inter_warmup.pretty_string() + '\n'
 
         s += '\nMain training\n'
@@ -253,6 +254,80 @@ class PresetC3(Preset):
 
         self.inter_warmup = InterWarmupPhase(iterations=500, lr=start_lr)
 
+class PresetC3x(Preset):
+    def __init__(self, start_lr: float = 1e-2, n_itr_per_phase: int = 100000):
+        super().__init__(preset_name='c3x')
+        # 1st stage: with soft round and kumaraswamy noise
+        self.all_phases: List[TrainerPhase] = [
+            TrainerPhase(
+                lr=start_lr,
+                max_itr=n_itr_per_phase,
+                patience=100000,
+                optimized_module=['all'],
+                scheduling_period=True,
+                start_temperature_softround=0.3,
+                end_temperature_softround=0.1,
+                start_kumaraswamy=2.0,
+                end_kumaraswamy=1.0
+            )
+        ]
+
+        # Second stage with STE
+        self.all_phases.append(
+            TrainerPhase(
+                lr=1.e-4,
+                max_itr=2000,
+                patience=2000,
+                optimized_module=['all'],
+                scheduling_period=True,
+                ste=True,
+                # This is only used to parameterize the backward of the quantization
+                start_temperature_softround=1e-4,
+                end_temperature_softround=1e-4,
+                # Kumaraswamy noise with parameter = 1 --> Uniform noise
+                start_kumaraswamy=1.0,
+                end_kumaraswamy=1.0
+            )
+        )
+
+        # Final stage: quantize the networks and then re-tuned the latent
+        self.all_phases.append(
+            TrainerPhase(
+                lr=1.e-4,
+                max_itr=100,
+                patience=100,
+                optimized_module=['all'],
+                ste=True,
+                quantize_model=True,                # ! This is the important parameter
+                start_temperature_softround=1e-4,
+                end_temperature_softround=1e-4,
+                start_kumaraswamy=1.0,
+                end_kumaraswamy=1.0
+            )
+        )
+        self.all_phases.append(
+            TrainerPhase(
+                lr=1.e-4,
+                max_itr= 1000,
+                patience= 50,
+                optimized_module=['latent'],        # ! Only fine tune the latent
+                freq_valid=10,
+                ste=True,
+                start_temperature_softround=1e-4,
+                end_temperature_softround=1e-4,
+                start_kumaraswamy=1.0,
+                end_kumaraswamy=1.0
+            )
+        )
+
+        # 25 candidates, then 5 then 2
+        self.all_intra_warmups: List[IntraWarmupPhase] = [
+            # IntraWarmupPhase(candidates=20, iterations= 10, lr=start_lr, freq_valid=  10), # eliminates degenerations... but uses to much memory
+            IntraWarmupPhase(candidates= 5, iterations=400, lr=start_lr, freq_valid= 400),
+            IntraWarmupPhase(candidates= 2, iterations=400, lr=start_lr, freq_valid= 400)
+        ]
+
+        self.inter_warmup = InterWarmupPhase(iterations=500, lr=start_lr)
 
 
 class PresetDebug(Preset):
@@ -312,6 +387,7 @@ class PresetDebug(Preset):
 
 AVAILABLE_PRESETS: Dict[str, Preset] = {
     'c3': PresetC3,
+    'c3x': PresetC3x,
     'debug': PresetDebug,
 }
 

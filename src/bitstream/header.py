@@ -25,7 +25,7 @@ Header for the GOP (one by video):
     [Image width]                                   2 bytes
 
     ? Everything here is detailed in src/encoding_management/coding_structure.py
-    [GOP TYPE, FRAME_DATA_TYPE, BITDEPTH]           1 byte (Everything condensed in one byte)
+    [FRAME_DATA_TYPE, BITDEPTH]                     1 byte (Everything condensed in one byte)
     [Intra Period]                                  1 byte (From 0 to 255)
     [P-period]                                      1 byte (From 0 to 255)
     ? ========================= GOP HEADER ========================= ?
@@ -37,14 +37,13 @@ Header for the frame (one by frame):
     ? ======================== FRAME HEADER ======================== ?
     [Number of bytes used for the header]           2 bytes
     [Display index of the frame]                    1 byte (From 0. to 255.) Not absolutely necessary!
-    [Number of row & column of context]             1 byte
-    [Number of hidden layer ARM]                    1 byte  (e.g. 2 if archi='24,24')
-    [Hidden layer dimension ARM]                    1 byte  (e.g. 24 if archi='24,24')
-    [Upsampling layer kernel size]                  1 byte  (From 0 to 255)
+    [ARM Hidden layer dim, num_hidden_layer]        1 byte  (Everything condensed in one byte)
+    [Upsampling kernel size, static kernel flag]    1 byte  (Everything condensed in one byte)
     [Number of layer Synthesis]                     1 byte  (e.g. 2 if archi='24,24')
     [Synthesis layer 0 description ]                3 bytes  (Contains out_ft / k_size / layer_type / non-linearity)
                         ...
     [Synthesis layer N - 1 description ]            3 bytes  (Contains out_ft / k_size / layer_type / non-linearity)
+    [Flow gain]                                     1 byte  (From 0. to 255.)
 
 
     [Index of quantization step weight ARM]         1 bytes (From 0 to 255)
@@ -91,7 +90,7 @@ Header for the frame (one by frame):
 
 import os
 from typing import List, Tuple, TypedDict
-from encoding_management.coding_structure import FRAME_DATA_TYPE, GOP_TYPE, POSSIBLE_BITDEPTH
+from encoding_management.coding_structure import FRAME_DATA_TYPE, POSSIBLE_BITDEPTH
 from models.coolchic_components.synthesis import Synthesis
 from models.frame_encoder import FrameEncoder
 from models.video_encoder import VideoEncoder
@@ -100,7 +99,6 @@ from utils.misc import MAX_AC_MAX_VAL, DescriptorCoolChic
 
 
 # Quick & dirty copy and paste from encoding_management.coding_structure
-_GOP_TYPE = ['RA', 'LDP']
 _FRAME_DATA_TYPE = ['rgb', 'yuv420', 'yuv444']
 _POSSIBLE_BITDEPTH = [8, 10]
 _POSSIBLE_SYNTHESIS_MODE = [k for k in Synthesis.possible_mode]
@@ -110,7 +108,6 @@ _POSSIBLE_SYNTHESIS_NON_LINEARITY = [k for k in Synthesis.possible_non_linearity
 class GopHeader(TypedDict):
     n_bytes_header: int                 # Number of bytes for the header
     img_size: Tuple[int, int]           # Format: (height, width)
-    gop_type: GOP_TYPE                  # RA or LDP
     frame_data_type: FRAME_DATA_TYPE    # RGB, YUV 4:2:0, YUV 4:4:4
     bitdepth: POSSIBLE_BITDEPTH         # 8 or 10
     intra_period: int                   # See coding_structure.py
@@ -140,12 +137,10 @@ def write_gop_header(video_encoder: VideoEncoder, header_path: str):
     byte_to_write += video_encoder.img_size[-1].to_bytes(2, byteorder='big', signed=False)
 
     byte_to_write += (
-        # Last three bits are for the bitdepth
-        _POSSIBLE_BITDEPTH.index(video_encoder.bitdepth) * 2 ** 5 \
-        # The three intermediates bits are for the frame data type
-        + _FRAME_DATA_TYPE.index(video_encoder.frame_data_type) * 2 ** 2 \
-        # First two bits are for the frame data type
-        + _GOP_TYPE.index(video_encoder.coding_structure.gop_type)
+        # Last 4 bits are for the bitdepth
+        _POSSIBLE_BITDEPTH.index(video_encoder.bitdepth) * 2 ** 4 \
+        # The first 4 bits are for the frame data type
+        + _FRAME_DATA_TYPE.index(video_encoder.frame_data_type) \
     ).to_bytes(1, byteorder='big', signed=False)
 
     byte_to_write += video_encoder.coding_structure.intra_period.to_bytes(1, byteorder='big', signed=False)
@@ -186,9 +181,8 @@ def read_gop_header(bitstream_path: str) -> GopHeader:
 
     raw_value = int.from_bytes(bitstream[ptr: ptr + 1], byteorder='big', signed=False)
     ptr += 1
-    bitdepth = _POSSIBLE_BITDEPTH[raw_value // 2 ** 5]
-    frame_data_type = _FRAME_DATA_TYPE[(raw_value % 2 ** 5) // 2 ** 2]
-    gop_type = _GOP_TYPE[raw_value % 2 ** 2]
+    bitdepth = _POSSIBLE_BITDEPTH[raw_value // 2 ** 4]
+    frame_data_type = _FRAME_DATA_TYPE[(raw_value % 2 ** 4)]
 
     intra_period = int.from_bytes(bitstream[ptr: ptr + 1], byteorder='big', signed=False)
     ptr += 1
@@ -198,7 +192,6 @@ def read_gop_header(bitstream_path: str) -> GopHeader:
     header_info: GopHeader = {
         'n_bytes_header': n_bytes_header,
         'img_size': (img_height, img_width),
-        'gop_type': gop_type,
         'frame_data_type': frame_data_type,
         'bitdepth': bitdepth,
         'intra_period': intra_period,
@@ -222,9 +215,10 @@ class FrameHeader(TypedDict):
     n_ft_per_latent: List[int]          # Number of feature maps for each latent resolutions
     n_bytes_per_latent: List[int]       # Number of bytes for each 2D latent
     img_size: Tuple[int, int]           # Format: (height, width)
-    n_ctx_rowcol: int                   # Number of row & column of context used by the ARM
-    layers_arm: List[int]               # Dimension of each hidden layer in the ARM
+    dim_arm: int                        # Number of context pixels AND dimension of the hidden layers of the ARM
+    n_hidden_layers_arm: int            # Number of hidden layers in the ARM. 0 for a linear ARM
     upsampling_kernel_size: int         # Upsampling model kernel size
+    static_upsampling_kernel: bool      # Whether the upsampling kernel is learned or kept static (bicubic)
     layers_synthesis: List[str]         # Dimension of each hidden layer in the Synthesis
     q_step_index_nn: DescriptorCoolChic # Index of the quantization step used for the weight & bias of the NNs
     scale_index_nn: DescriptorCoolChic  # Index of the scale used for entropy code weight & bias of the NNs
@@ -232,6 +226,8 @@ class FrameHeader(TypedDict):
     ac_max_val_nn: int                  # The range coder AC_MAX_VAL parameters for entropy coding the NNs
     ac_max_val_latent: int              # The range coder AC_MAX_VAL parameters for entropy coding the latents
     image_type: str                     # Image type from the list possible_image_type defined above
+    flow_gain: int                      # Multiply the optical flow coming from cool chic
+
 
 def write_frame_header(
     frame_encoder: FrameEncoder,
@@ -266,13 +262,12 @@ def write_frame_header(
     n_bytes_header += 2     # Number of bytes header
     n_bytes_header += 1     # Display index of the frame
 
-    n_bytes_header += 1     # Number of row and column of context
-    n_bytes_header += 1     # Number hidden layer ARM
-    n_bytes_header += 1     # Hidden layer dimension ARM
+    n_bytes_header += 1     # Context size and Hidden layer dimension ARM, n. hidden layers ARM
     n_bytes_header += 1     # Upsampling kernel size
     n_bytes_header += 1     # Number hidden layer Synthesis
     # Hidden Synthesis layer out#, kernelsz, mode+nonlinearity
     n_bytes_header += 3 * len(frame_encoder.coolchic_encoder_param.layers_synthesis)
+    n_bytes_header += 1     # Flow gain
 
     n_bytes_header += 2     # AC_MAX_VAL for neural networks
     n_bytes_header += 2     # AC_MAX_VAL for the latent variables
@@ -305,15 +300,29 @@ def write_frame_header(
     byte_to_write += n_bytes_header.to_bytes(2, byteorder='big', signed=False)
     byte_to_write += frame_encoder.frame.display_order.to_bytes(1, byteorder='big', signed=False)
 
-    byte_to_write += frame_encoder.coolchic_encoder_param.n_ctx_rowcol.to_bytes(1, byteorder='big', signed=False)
-    byte_to_write += len(frame_encoder.coolchic_encoder_param.layers_arm).to_bytes(1, byteorder='big', signed=False)
-    # If no hidden layers in the ARM, model.param.layers_arm is an empty list. So write 0
-    if len(frame_encoder.coolchic_encoder_param.layers_arm) == 0:
-        byte_to_write += int(0).to_bytes(1, byteorder='big', signed=False)
-    else:
-        byte_to_write += frame_encoder.coolchic_encoder_param.layers_arm[0].to_bytes(1, byteorder='big', signed=False)
+    # Since the dimension of the hidden layer and of the context is always a multiple of
+    # 8, we can spare 3 bits by dividing it by 8
+    assert frame_encoder.coolchic_encoder_param.dim_arm // 8 < 2 ** 4, f'Number of context pixels' \
+        f' and dimension of the hidden layer for the arm must be inferior to {2 ** 4 * 8}. Found' \
+        f' {frame_encoder.coolchic_encoder_param.dim_arm}'
 
-    byte_to_write += frame_encoder.coolchic_encoder_param.upsampling_kernel_size.to_bytes(1, byteorder='big', signed=False)
+    assert frame_encoder.coolchic_encoder_param.n_hidden_layers_arm < 2 ** 4, f'Number of hidden layers' \
+        f' for the ARM should be inferior to {2 ** 4}. Found ' \
+        f'{frame_encoder.coolchic_encoder_param.n_hidden_layers_arm}'
+
+    byte_to_write += (
+        (frame_encoder.coolchic_encoder_param.dim_arm // 8) * 2 ** 4 \
+        + frame_encoder.coolchic_encoder_param.n_hidden_layers_arm
+        ).to_bytes(1, byteorder='big', signed=False)
+
+    assert frame_encoder.coolchic_encoder_param.upsampling_kernel_size < 2 ** 7, f'Upsampling' \
+        f' kernel size should be small than {2 ** 7}. Found' \
+        f' {frame_encoder.coolchic_encoder_param.upsampling_kernel_size}'
+
+    byte_to_write += (
+        frame_encoder.coolchic_encoder_param.upsampling_kernel_size * 2 ** 1 \
+        + int(frame_encoder.coolchic_encoder_param.static_upsampling_kernel)
+    ).to_bytes(1, byteorder='big', signed=False)
 
     byte_to_write += len(frame_encoder.coolchic_encoder_param.layers_synthesis).to_bytes(1, byteorder='big', signed=False)
     # If no hidden layers in the Synthesis, frame_encoder.coolchic_encoder_param.layers_synthesis is an empty list. So write 0
@@ -322,6 +331,15 @@ def write_frame_header(
         byte_to_write += int(out_ft).to_bytes(1, byteorder='big', signed=False)
         byte_to_write += int(k_size).to_bytes(1, byteorder='big', signed=False)
         byte_to_write += (_POSSIBLE_SYNTHESIS_MODE.index(mode)*16+_POSSIBLE_SYNTHESIS_NON_LINEARITY.index(non_linearity)).to_bytes(1, byteorder='big', signed=False)
+
+    flow_gain = frame_encoder.inter_coding_module.flow_gain
+
+    if isinstance(flow_gain, float):
+        assert flow_gain.is_integer(), f'Flow gain should be integer, found {flow_gain}'
+        flow_gain = int(flow_gain)
+    
+    assert flow_gain >= 0 and flow_gain <= 255, f'Flow gain should be in [0, 255], found {flow_gain}'
+    byte_to_write += flow_gain.to_bytes(1, byteorder='big', signed=False)
 
     if ac_max_val_nn > MAX_AC_MAX_VAL:
         print(f'AC_MAX_VAL NN is too big!')
@@ -414,27 +432,19 @@ def read_frame_header(bitstream: bytes) -> FrameHeader:
     n_bytes_header = int.from_bytes(bitstream[ptr: ptr + 2], byteorder='big', signed=False)
     ptr += 2
 
-    # img_height = int.from_bytes(bitstream[ptr: ptr + 2], byteorder='big', signed=False)
-    # ptr += 2
-    # img_width = int.from_bytes(bitstream[ptr: ptr + 2], byteorder='big', signed=False)
-    # ptr += 2
-
-    # img_type = possible_image_type[int.from_bytes(bitstream[ptr: ptr + 1], byteorder='big', signed=False)]
-    # ptr += 1
-
     display_index = int.from_bytes(bitstream[ptr: ptr + 1], byteorder='big', signed=False)
     ptr += 1
 
-    n_ctx_rowcol = int.from_bytes(bitstream[ptr: ptr + 1], byteorder='big', signed=False)
+    raw_arm = int.from_bytes(bitstream[ptr: ptr + 1], byteorder='big', signed=False)
     ptr += 1
+    dim_arm = 8 * (raw_arm // (2 ** 4))
+    n_hidden_layers_arm = raw_arm % (2 ** 4)
 
-    n_hidden_dim_arm = int.from_bytes(bitstream[ptr: ptr + 1], byteorder='big', signed=False)
+    raw_upsampling = int.from_bytes(bitstream[ptr: ptr + 1], byteorder='big', signed=False)
     ptr += 1
-    hidden_size_arm = int.from_bytes(bitstream[ptr: ptr + 1], byteorder='big', signed=False)
-    ptr += 1
+    upsampling_kernel_size = (raw_upsampling // (2 ** 1))
+    static_upsampling_kernel = bool(raw_upsampling % (2 ** 1))
 
-    upsampling_kernel_size = int.from_bytes(bitstream[ptr: ptr + 1], byteorder='big', signed=False)
-    ptr += 1
 
     n_hidden_dim_synthesis = int.from_bytes(bitstream[ptr: ptr + 1], byteorder='big', signed=False)
     ptr += 1
@@ -449,6 +459,9 @@ def read_frame_header(bitstream: bytes) -> FrameHeader:
         mode = _POSSIBLE_SYNTHESIS_MODE[mode_non_linearity // 16]
         non_linearity = _POSSIBLE_SYNTHESIS_NON_LINEARITY[mode_non_linearity % 16]
         layers_synthesis.append(f'{out_ft}-{kernel_size}-{mode}-{non_linearity}')
+
+    flow_gain = int.from_bytes(bitstream[ptr: ptr + 1], byteorder='big', signed=False)
+    ptr += 1
 
     ac_max_val_nn = int.from_bytes(bitstream[ptr: ptr + 2], byteorder='big', signed=False)
     ptr += 2
@@ -518,9 +531,11 @@ def read_frame_header(bitstream: bytes) -> FrameHeader:
         'latent_n_2d_grid': latent_n_2d_grid,
         'n_bytes_per_latent': n_bytes_per_latent,
         'n_ft_per_latent': n_ft_per_latent,
-        'n_ctx_rowcol': n_ctx_rowcol,
-        'layers_arm': [hidden_size_arm for _ in range(n_hidden_dim_arm)],
+        'n_hidden_layers_arm': n_hidden_layers_arm,
+        'dim_arm': dim_arm,
         'upsampling_kernel_size': upsampling_kernel_size,
+        'static_upsampling_kernel': static_upsampling_kernel,
+        'flow_gain': flow_gain,
         'layers_synthesis': layers_synthesis,
         'q_step_index_nn': q_step_index_nn,
         'scale_index_nn': scale_index_nn,

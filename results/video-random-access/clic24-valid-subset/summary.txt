@@ -1,0 +1,2 @@
+	                        	BDR hm [%] 	BDR x265-medium-psnr [%] 	BDR x264-medium-psnr [%] 	Min C [MAC/px] 	Max C [MAC/px] 	Avg C [MAC/px] 
+	release-3-1-clic24-ra33 	65.604     	21.493                   	-12.408                  	458            	460            	458            
