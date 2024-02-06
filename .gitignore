@@ -5,11 +5,15 @@ venv/
 *.png
 *.out
 
-!samples/encode_image.sh
-!samples/decode_image.sh
-!samples/biville.png
-!samples/biville_1152x768_1p_yuv420_8b.yuv
-!samples/biville_1152x768_1p_yuv420_10b.yuv
+!samples/image/encode_image.sh
+!samples/image/decode_image.sh
+!samples/image/biville.png
+!samples/image/biville_1152x768_1p_yuv420_8b.yuv
+!samples/image/biville_1152x768_1p_yuv420_10b.yuv
+
+!samples/video/encode_video.sh
+!samples/video/decode_video.sh
+!samples/video/fiveframes-D-BasketballPass_416x240_50p_yuv420_8b.yuv
 
 
 .DS_Store
