@@ -36,8 +36,14 @@ subprocess.call(f'mkdir -p {decoded_image_path}', shell=True)
 # Successively decode all bitstreams
 all_bitstreams = glob.glob(f'{bitstream_path}*.bin')
 image_or_video = 'image' if args.configuration == 'image' else 'video'
+
+if args.dataset_name in ['kodak', 'clic20-pro-valid']:
+    extension = 'png'
+else:
+    extension = 'yuv'
+
 for idx, cur_bitstream in enumerate(all_bitstreams):
     print(f'\nDecoding {image_or_video} {idx + 1:>4} / {len(all_bitstreams)}...')
-    cur_decoded_path = f'{decoded_image_path}{cur_bitstream.split("/")[-1].split(".")[0]}.png'
+    cur_decoded_path = f'{decoded_image_path}{cur_bitstream.split("/")[-1].split(".")[0]}.{extension}'
     cmd = f'python3 {cool_chic_decode_path} -i {cur_bitstream} -o {cur_decoded_path}'
     subprocess.call(cmd, shell=True)
