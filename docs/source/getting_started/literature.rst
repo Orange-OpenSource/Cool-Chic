@@ -59,7 +59,7 @@ have not (yet?) been integrated  in this repository.
 
 * 2023
 
-  * December: `Hybrid Implicit Neural Image Compression with Subpixel Context Model and Iterative Pruner, Li et al. <https://ieeexplore.ieee.org/abstract/document/10402791s>`_
+  * December: `Hybrid Implicit Neural Image Compression with Subpixel Context Model and Iterative Pruner, Li et al. <https://ieeexplore.ieee.org/abstract/document/10402791>`_
 
     * Speed-up cool-chic decoding by removing the auto-regressive probability model
 
