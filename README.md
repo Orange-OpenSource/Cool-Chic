@@ -117,4 +117,3 @@ Special thanks go to:
 
 * Robert Bamler for the [_constriction package_](https://github.com/bamler-lab/constriction) which serves as our entropy coder. More details @ [_Understanding Entropy Coding With Asymmetric Numeral Systems (ANS): a Statistician's Perspective_, Bamler](https://arxiv.org/pdf/2201.01741.pdf).
 * Hyunjik Kim, Matthias Bauer, Lucas Theis, Jonathan Richard Schwarz and Emilien Dupont for their great work enhancing Cool-chic: [_C3: High-performance and low-complexity neural compression from a single image or video_, Kim et al.](https://arxiv.org/abs/2312.02753)
-e
