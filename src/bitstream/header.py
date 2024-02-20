@@ -53,17 +53,17 @@ Header for the frame (one by frame):
     [Index of quantization step weight Synthesis]   1 bytes (From 0 to 255)
     [Index of quantization step bias Synthesis]     1 bytes (From 0 to 255)
 
-    [Index of scale entropy coding weight ARM]      2 bytes (From 0 to 2 ** 16 - 1)
-    [Index of scale entropy coding bias ARM]        2 bytes (From 0 to 2 ** 16 - 1)
-    [Index of scale entropy coding weight Upsampling] 2 bytes (From 0 to 2 ** 16 - 1)
-    [Index of scale entropy coding bias Upsampling]   2 bytes (From 0 to 2 ** 16 - 1)
-    [Index of scale entropy coding weight Synthesis]2 bytes (From 0 to 2 ** 16 - 1)
-    [Index of scale entropy coding bias Synthesis]  2 bytes (From 0 to 2 ** 16 - 1)
+    [Index of scale entropy coding weight ARM]      1 bytes (From 0 to 2 ** 8 - 1)
+    [Index of scale entropy coding bias ARM]        1 bytes (From 0 to 2 ** 8 - 1)
+    [Idx of scale entropy coding weight Upsampling] 1 bytes (From 0 to 2 ** 8 - 1)
+    [Idx of scale entropy coding bias Upsampling]   1 bytes (From 0 to 2 ** 8 - 1)
+    [Idx of scale entropy coding weight Synthesis]  1 bytes (From 0 to 2 ** 8 - 1)
+    [Idx of scale entropy coding bias Synthesis]    1 bytes (From 0 to 2 ** 8 - 1)
 
     [Number of bytes used for weight ARM]           2 bytes (less than 65535 bytes)
     [Number of bytes used for bias ARM]             2 bytes (less than 65535 bytes)
-    [Number of bytes used for weight Upsampling]           2 bytes (less than 65535 bytes)
-    [Number of bytes used for bias Upsampling]             2 bytes (less than 65535 bytes)
+    [Number of bytes used for weight Upsampling]    2 bytes (less than 65535 bytes)
+    [Number of bytes used for bias Upsampling]      2 bytes (less than 65535 bytes)
     [Number of bytes used for weight Synthesis]     2 bytes (less than 65535 bytes)
     [Number of bytes used for bias Synthesis]       2 bytes (less than 65535 bytes)
 
@@ -279,11 +279,11 @@ def write_frame_header(
     n_bytes_header += 1     # Index of the quantization step weight Synthesis
     n_bytes_header += 1     # Index of the quantization step bias Synthesis
 
-    n_bytes_header += 2     # Index of scale entropy coding weight ARM
-    n_bytes_header += 2     # Index of scale entropy coding bias ARM
-    n_bytes_header += 2     # Index of scale entropy coding weight Upsampling
-    n_bytes_header += 2     # Index of scale entropy coding weight Synthesis
-    n_bytes_header += 2     # Index of scale entropy coding bias Synthesis
+    n_bytes_header += 1     # Index of scale entropy coding weight ARM
+    n_bytes_header += 1     # Index of scale entropy coding bias ARM
+    n_bytes_header += 1     # Index of scale entropy coding weight Upsampling
+    n_bytes_header += 1     # Index of scale entropy coding weight Synthesis
+    n_bytes_header += 1     # Index of scale entropy coding bias Synthesis
 
     n_bytes_header += 2     # Number of bytes for weight ARM
     n_bytes_header += 2     # Number of bytes for bias ARM
@@ -337,19 +337,19 @@ def write_frame_header(
     if isinstance(flow_gain, float):
         assert flow_gain.is_integer(), f'Flow gain should be integer, found {flow_gain}'
         flow_gain = int(flow_gain)
-    
+
     assert flow_gain >= 0 and flow_gain <= 255, f'Flow gain should be in [0, 255], found {flow_gain}'
     byte_to_write += flow_gain.to_bytes(1, byteorder='big', signed=False)
 
     if ac_max_val_nn > MAX_AC_MAX_VAL:
-        print(f'AC_MAX_VAL NN is too big!')
+        print('AC_MAX_VAL NN is too big!')
         print(f'Found {ac_max_val_nn}, should be smaller than {MAX_AC_MAX_VAL}')
-        print(f'Exiting!')
+        print('Exiting!')
         return
     if ac_max_val_latent > MAX_AC_MAX_VAL:
-        print(f'AC_MAX_VAL latent is too big!')
+        print('AC_MAX_VAL latent is too big!')
         print(f'Found {ac_max_val_latent}, should be smaller than {MAX_AC_MAX_VAL}')
-        print(f'Exiting!')
+        print('Exiting!')
         return
 
     byte_to_write += ac_max_val_nn.to_bytes(2, byteorder='big', signed=False)
@@ -371,7 +371,7 @@ def write_frame_header(
                 # no bias.
                 continue
             cur_scale_index = scale_index_nn.get(nn_name).get(nn_param)
-            byte_to_write += cur_scale_index.to_bytes(2, byteorder='big', signed=False)
+            byte_to_write += cur_scale_index.to_bytes(1, byteorder='big', signed=False)
 
     for nn_name in ['arm', 'upsampling', 'synthesis']:
         for nn_param in ['weight', 'bias']:
@@ -489,9 +489,9 @@ def read_frame_header(bitstream: bytes) -> FrameHeader:
                 scale_index_nn[nn_name][nn_param] = -1
             else:
                 scale_index_nn[nn_name][nn_param] = int.from_bytes(
-                    bitstream[ptr: ptr + 2], byteorder='big', signed=False
+                    bitstream[ptr: ptr + 1], byteorder='big', signed=False
                 )
-                ptr += 2
+                ptr += 1
 
     n_bytes_nn: DescriptorCoolChic = {}
     for nn_name in ['arm', 'upsampling', 'synthesis']:

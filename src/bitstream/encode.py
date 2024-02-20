@@ -21,7 +21,7 @@ from models.coolchic_components.upsampling import Upsampling
 from models.coolchic_components.synthesis import Synthesis
 from models.frame_encoder import FrameEncoder
 from models.video_encoder import VideoEncoder
-from utils.misc import POSSIBLE_Q_STEP_ARM_NN, POSSIBLE_Q_STEP_SYN_NN, POSSIBLE_Q_STEP_UPS_NN, POSSIBLE_SCALE_NN, FIXED_POINT_FRACTIONAL_MULT, DescriptorNN, DescriptorCoolChic
+from utils.misc import POSSIBLE_SCALE_NN, FIXED_POINT_FRACTIONAL_MULT, DescriptorNN, DescriptorCoolChic
 
 
 def get_ac_max_val_nn(frame_encoder: FrameEncoder) -> int:
@@ -44,10 +44,7 @@ def get_ac_max_val_nn(frame_encoder: FrameEncoder) -> int:
 
         # Retrieve all the weights and biases for the ARM MLP
         for k, v in module_to_encode.named_parameters():
-            if cur_module_name == 'arm':
-                Q_STEPS = POSSIBLE_Q_STEP_ARM_NN
-            else:
-                Q_STEPS = POSSIBLE_Q_STEP_SYN_NN
+            Q_STEPS = module_to_encode._POSSIBLE_Q_STEP
 
             if k.endswith('.w') or k.endswith('.weight'):
                 # Find the index of the closest quantization step in the list of
@@ -189,12 +186,7 @@ def encode_frame(video_encoder: VideoEncoder, frame_encoder: FrameEncoder, bitst
             assert cur_module_name in ['arm', 'synthesis', 'upsampling'], f'Unknow module name {cur_module_name}. '\
                 'Module name should be in ["arm", "synthesis", "upsampling"].'
 
-            if cur_module_name == 'arm':
-                Q_STEPS = POSSIBLE_Q_STEP_ARM_NN
-            elif cur_module_name == 'synthesis':
-                Q_STEPS = POSSIBLE_Q_STEP_SYN_NN
-            elif cur_module_name == 'upsampling':
-                Q_STEPS = POSSIBLE_Q_STEP_UPS_NN
+            Q_STEPS = module_to_encode._POSSIBLE_Q_STEP
 
             if k.endswith('.w') or k.endswith('.weight'):
                 # Find the index of the closest quantization step in the list of
@@ -295,19 +287,18 @@ def encode_frame(video_encoder: VideoEncoder, frame_encoder: FrameEncoder, bitst
                 frame_encoder.coolchic_encoder.param.dim_arm,
                 frame_encoder.coolchic_encoder.param.n_hidden_layers_arm
             )
-            Q_STEPS = POSSIBLE_Q_STEP_ARM_NN
         elif module_name == 'synthesis':
             empty_module =  Synthesis(
                 sum(frame_encoder.coolchic_encoder.param.n_ft_per_res),
                 frame_encoder.coolchic_encoder.param.layers_synthesis
             )
-            Q_STEPS = POSSIBLE_Q_STEP_SYN_NN
         elif module_name == 'upsampling':
             empty_module = Upsampling(
                     frame_encoder.coolchic_encoder.param.upsampling_kernel_size,
                     frame_encoder.coolchic_encoder.param.static_upsampling_kernel
                 )
-            Q_STEPS = POSSIBLE_Q_STEP_SYN_NN
+
+        Q_STEPS = empty_module._POSSIBLE_Q_STEP
 
         have_bias = q_step_index_nn[module_name].get('bias') >= 0
         loaded_module = decode_network(

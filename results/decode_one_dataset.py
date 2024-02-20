@@ -6,6 +6,7 @@ import argparse
 POSSIBLE_DATASETS_PER_CONFIG = {
     'image': ['kodak', 'clic20-pro-valid', 'jvet'],
     'video-random-access': ['clic24-valid-subset'],
+    'video-low-latency': ['clic24-valid-subset'],
 }
 
 parser = argparse.ArgumentParser()
@@ -18,8 +19,6 @@ assert args.configuration in POSSIBLE_DATASETS_PER_CONFIG.keys(), 'Configuration
     f'{POSSIBLE_DATASETS_PER_CONFIG.keys()}. Found {args.configuration}.'
 
 cur_possible_dataset = POSSIBLE_DATASETS_PER_CONFIG.get(args.configuration)
-
-
 
 assert args.dataset_name in cur_possible_dataset, \
     f'Dataset must be in {cur_possible_dataset} for configuration {args.configuration}.' \

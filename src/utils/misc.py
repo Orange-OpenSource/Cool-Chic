@@ -85,13 +85,12 @@ MAX_ARM_MASK_SIZE = 9
 # Both values should produce the same results.
 ARMINT = False
 
-# Avoid numerical instability when measuring the rate of the NN parameters
-MIN_SCALE_NN_WEIGHTS_BIAS = 1.0/1024.0
 
-# List of all possible scales when coding a MLP
-POSSIBLE_SCALE_NN = 2 ** torch.linspace(
-    MIN_SCALE_NN_WEIGHTS_BIAS, 16, steps=2 ** 16 - 1, device='cpu'
-)
+# List of all possible scales when coding a MLP... could be moved inside
+# the QuantizableModule class.
+# From 0.25 256.0. Offering such high variance do saves bit!
+POSSIBLE_SCALE_NN = torch.tensor([2 ** (x / 4) for x in range(-8, 32 + 1)])
+
 # List of all possible quantization steps when coding a MLP
 POSSIBLE_Q_STEP_ARM_NN = 2. ** torch.linspace(-7, 0, 8, device='cpu')
 POSSIBLE_Q_STEP_SYN_NN = 2. ** torch.linspace(-16, 0, 17, device='cpu')

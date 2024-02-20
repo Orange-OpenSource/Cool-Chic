@@ -1,2 +1,2 @@
-	                  	BDR vtm [%] 	BDR hm [%] 	BDR c3 [%] 	BDR coolchic-2-0 [%] 	BDR coolchic-1-0 [%] 	Min C [MAC/px] 	Max C [MAC/px] 	Avg C [MAC/px] 
-	release-3-1-kodak 	8.107       	-13.401    	-0.245     	-18.266              	-28.091              	299            	2291           	1281           
+	                    	BDR vtm [%] 	BDR hm [%] 	BDR c3 [%] 	BDR coolchic-2-0 [%] 	BDR coolchic-1-0 [%] 	Min C [MAC/px] 	Max C [MAC/px] 	Avg C [MAC/px] 
+	release-3-1-1-kodak 	6.627       	-14.588    	-1.629     	-19.383              	-29.075              	299            	2291           	1841           

@@ -33,7 +33,7 @@ Cool-chic results are provided for both image and video compression inside the
 
 ## Image compression
 
-Image compression performance are presented on the kodak and clic20-pro-valid dataset.
+Image compression performance are presented on the kodak, clic20-pro-valid and jvet datasets.
 
 <div style="text-align: center;">
     <img src="./results/image/kodak/rd.png" alt="Kodak rd results" width="800" style="centered"/>
@@ -42,13 +42,11 @@ Image compression performance are presented on the kodak and clic20-pro-valid da
 
 <br/>
 
-| Dataset          | Vs. Cool-chic 2                              | Vs. Cool-chic 1                              | Vs. [_C3_, Kim et al.](https://arxiv.org/abs/2312.02753) | Vs. HEVC (HM 16.20)                          | Vs. VVC (VTM 19.1)                           | Minimum decoder complexity [MAC / pixel]     | Maximum decoder complexity [MAC / pixel]     | Average decoder complexity [MAC / pixel]     |
-|------------------|----------------------------------------------|----------------------------------------------|----------------------------------------------------------|----------------------------------------------|----------------------------------------------|----------------------------------------------|----------------------------------------------|----------------------------------------------|
-| kodak            | <span style="color:green" > - 18.3 % </span> | <span style="color:green"> - 28.1 % </span>  | <span style="color:green"> - 0.2 %  </span>              | <span style="color:green" > - 13.4 % </span> | <span style="color:#f50" > + 8.1 %   </span> |299                                           |2291                                          | 1281                                         |
-| clic20-pro-valid | <span style="color:green" > - 15.8 % </span> | <span style="color:gray"> /  </span>         | <span style="color:#f50" >+  4.6 %   </span>             | <span style="color:green" > - 20.5 % </span> | <span style="color:#f50" > + 3.5 %   </span> |545                                           |2288                                          | 1590                                         |
-
-
-✨ YUV 420 image coding results coming soon
+| Dataset          | Vs. Cool-chic 2                              | Vs. Cool-chic 1                              | Vs. [_C3_, Kim et al.](https://arxiv.org/abs/2312.02753) | Vs. HEVC (HM 16.20)                          | Vs. VVC (VTM 19.1)                           | Min decoder complexity [MAC / pixel] | Max decoder complexity [MAC / pixel] | Avg decoder complexity [MAC / pixel] |
+|------------------|----------------------------------------------|----------------------------------------------|----------------------------------------------------------|----------------------------------------------|----------------------------------------------|--------------------------------------|--------------------------------------|--------------------------------------|
+| kodak            | <span style="color:green" > - 19.4 % </span> | <span style="color:green"> - 29.1 % </span>  | <span style="color:green"> - 1.6 %  </span>              | <span style="color:green" > - 14.6 % </span> | <span style="color:#f50" > + 6.6 %   </span> |299                                   |2291                                  | 1841                                 |
+| clic20-pro-valid | <span style="color:green" > - 16.8 % </span> | <span style="color:gray"> /  </span>         | <span style="color:#f50" >+  3.3 %   </span>             | <span style="color:green" > - 21.4 % </span> | <span style="color:#f50" > + 2.3 %   </span> |545                                   |2295                                  | 1897                                 |
+| jvet             | <span style="color:green" > - 23.0 % </span> | <span style="color:gray"> /  </span>         | <span style="color:gray"> /  </span>                     | <span style="color:green" > - 13.7 % </span> | <span style="color:#f50" > + 25.4 %  </span> |300                                   |2295                                  | 1680                                 |
 
 
 ## Video compression
@@ -68,11 +66,10 @@ configurations:
 
 <br/>
 
-| Dataset             | Config        | Vs. HEVC (HM 16.20)                          | Vs. x265 medium                              | Vs. x264 medium                              | Minimum decoder complexity [MAC / pixel]     | Maximum decoder complexity [MAC / pixel]     | Average decoder complexity [MAC / pixel]     |
-|---------------------|---------------|----------------------------------------------|----------------------------------------------|----------------------------------------------|----------------------------------------------|----------------------------------------------|----------------------------------------------|
-| clic24-valid-subset | random-access | <span style="color:#f50" > + 65.6 % </span>  | <span style="color:#f50" > + 21.5 %   </span> | <span style="color:green" >- 12.4 % </span> |460                                           |460                                           | 460                                          |
-
-✨ Low-delay P coding results coming soon!
+| Dataset             | Config        | Vs. HEVC (HM 16.20)                          | Vs. x265 medium                              | Vs. x264 medium                            | Min. decoder complexity [MAC / pixel] | Max decoder complexity [MAC / pixel] | Avg decoder complexity [MAC / pixel] |
+|---------------------|---------------|----------------------------------------------|----------------------------------------------|--------------------------------------------|---------------------------------------|--------------------------------------|--------------------------------------|
+| clic24-valid-subset | random-access | <span style="color:#f50" > + 60.4 % </span>  | <span style="color:#f50" > +18.1 %   </span> | <span style="color:green" > -15.5 % </span>|460                                    |460                                   | 460                                  |
+| clic24-valid-subset | low-latency   | <span style="color:#f50" > + 122.0 % </span> | <span style="color:#f50" > +73.8 %  </span>  | <span style="color:#f50" > +28.9 % </span> |460                                    |460                                   | 460                                  |
 
 # Setup
 

@@ -23,7 +23,7 @@ from encoding_management.coding_structure import CodingStructure, FrameData
 from models.inter_coding_module import InterCodingModule
 from utils.yuv import convert_420_to_444, convert_444_to_420, yuv_dict_clamp
 from models.coolchic_components.arm import Arm, get_mu_scale, get_non_zero_pixel_ctx_index
-from utils.misc import MAX_ARM_MASK_SIZE, DescriptorNN, POSSIBLE_Q_STEP_ARM_NN, POSSIBLE_Q_STEP_SYN_NN, POSSIBLE_SCALE_NN, FIXED_POINT_FRACTIONAL_MULT, ARMINT
+from utils.misc import MAX_ARM_MASK_SIZE, DescriptorNN, POSSIBLE_SCALE_NN, FIXED_POINT_FRACTIONAL_MULT, ARMINT
 from models.coolchic_components.upsampling import Upsampling
 from models.coolchic_components.synthesis import Synthesis
 from visu.utils import save_visualisation
@@ -419,15 +419,20 @@ def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int
     #   2. Populate it with the weights and biases decoded from the bitstream
     #   3. Send it to the requested device.
 
+    empty_arm =Arm(
+        header_info.get('dim_arm'),
+        header_info.get('n_hidden_layers_arm'),
+        FIXED_POINT_FRACTIONAL_MULT
+    )
     arm = decode_network(
-        Arm(header_info.get('dim_arm'), header_info.get('n_hidden_layers_arm'), FIXED_POINT_FRACTIONAL_MULT),  # Empty module
+        empty_arm,
         DescriptorNN(
             weight = f'{bitstream_path}_arm_weight',
             bias = f'{bitstream_path}_arm_bias',
         ),
         DescriptorNN (
-            weight = POSSIBLE_Q_STEP_ARM_NN[header_info['q_step_index_nn']['arm']['weight']],
-            bias = POSSIBLE_Q_STEP_ARM_NN[header_info['q_step_index_nn']['arm']['bias']],
+            weight = empty_arm._POSSIBLE_Q_STEP[header_info['q_step_index_nn']['arm']['weight']],
+            bias = empty_arm._POSSIBLE_Q_STEP[header_info['q_step_index_nn']['arm']['bias']],
         ),
         DescriptorNN (
             weight = POSSIBLE_SCALE_NN[header_info['scale_index_nn']['arm']['weight']],
@@ -443,17 +448,20 @@ def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int
         # For the moment we do not expect this!  No bias for upsampling.
         print("WHAT")
         exit(1)
+
+    empty_upsampling = Upsampling(
+        header_info.get('upsampling_kernel_size'),
+        header_info.get('static_upsampling_kernel')
+    )
+
     upsampling = decode_network(
-        Upsampling(
-            header_info.get('upsampling_kernel_size'),
-            header_info.get('static_upsampling_kernel')
-        ),  # Empty module
+        empty_upsampling,
         DescriptorNN(
             weight = f'{bitstream_path}_upsampling_weight',
             bias = "",
         ),
         DescriptorNN (
-            weight = POSSIBLE_Q_STEP_SYN_NN[header_info['q_step_index_nn']['upsampling']['weight']],
+            weight = empty_upsampling._POSSIBLE_Q_STEP[header_info['q_step_index_nn']['upsampling']['weight']],
             bias = 0,
         ),
         DescriptorNN (
@@ -463,17 +471,18 @@ def decode_frame(bitstream_path: str, bitstream: bytes, img_size: Tuple[int, int
         header_info.get('ac_max_val_nn'),
     )
 
+    empty_synthesis = Synthesis(
+        sum(header_info.get('n_ft_per_latent')), header_info.get('layers_synthesis')
+    )
     synthesis = decode_network(
-        Synthesis(
-            sum(header_info.get('n_ft_per_latent')), header_info.get('layers_synthesis')
-        ),  # Empty module
+        empty_synthesis,
         DescriptorNN(
             weight = f'{bitstream_path}_synthesis_weight',
             bias = f'{bitstream_path}_synthesis_bias',
         ),
         DescriptorNN (
-            weight = POSSIBLE_Q_STEP_SYN_NN[header_info['q_step_index_nn']['synthesis']['weight']],
-            bias = POSSIBLE_Q_STEP_SYN_NN[header_info['q_step_index_nn']['synthesis']['bias']],
+            weight = empty_synthesis._POSSIBLE_Q_STEP[header_info['q_step_index_nn']['synthesis']['weight']],
+            bias = empty_synthesis._POSSIBLE_Q_STEP[header_info['q_step_index_nn']['synthesis']['bias']],
         ),
         DescriptorNN (
             weight = POSSIBLE_SCALE_NN[header_info['scale_index_nn']['synthesis']['weight']],

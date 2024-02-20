@@ -15,7 +15,7 @@ from typing import Optional, OrderedDict
 from torch import nn, Tensor
 from torch.distributions import Laplace
 
-from utils.misc import MAX_AC_MAX_VAL, MIN_SCALE_NN_WEIGHTS_BIAS, DescriptorNN
+from utils.misc import MAX_AC_MAX_VAL, POSSIBLE_SCALE_NN, DescriptorNN
 
 class QuantizableModule(nn.Module):
     """This class is **not** made to be instantiated. It is thought as an interface
@@ -134,7 +134,7 @@ class QuantizableModule(nn.Module):
             # Concatenate the list of parameters as a big one dimensional tensor
             v = torch.cat(v)
             distrib = Laplace(
-                0., max(v.std().item() / math.sqrt(2), MIN_SCALE_NN_WEIGHTS_BIAS)
+                0., max(v.std().item() / math.sqrt(2), POSSIBLE_SCALE_NN.min())
             )
             # No value can cost more than 32 bits
             proba = torch.clamp(

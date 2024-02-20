@@ -1,0 +1,2 @@
+	                   	BDR vtm [%] 	BDR hm [%] 	BDR coolchic-2-0 [%] 	Min C [MAC/px] 	Max C [MAC/px] 	Avg C [MAC/px] 
+	release-3-1-1-jvet 	25.389      	-13.691    	-22.972              	300            	2301           	1680           
