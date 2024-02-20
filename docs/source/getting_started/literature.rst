@@ -36,7 +36,7 @@ This repository is based on several papers successively enhancing Cool-chic.
 
   * December: `COOL-CHIC: Coordinate-based Low Complexity Hierarchical Image Codec, Ladune et al. <https://arxiv.org/abs/2212.05458>`_
 
-    * This constitutes Cool-chic 2
+    * This constitutes Cool-chic 1
 
     * ``git clone --branch v1.0 https://github.com/Orange-OpenSource/Cool-Chic.git``
 

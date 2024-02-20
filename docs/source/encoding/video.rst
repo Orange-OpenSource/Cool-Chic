@@ -8,7 +8,7 @@ The video coding configuration is set through the following arguments
 * ``--p_period``
 
 
-Cool-chic is a video codec implementing 3 different type of B-frames
+Cool-chic is a video codec implementing 3 different type of frames
 
 * I (intra) frames have no reference. They can be used for image coding
 

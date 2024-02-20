@@ -11,6 +11,7 @@ Cool-chic
 
 `Go to Cool-chic GitHub repository. <https://github.com/Orange-OpenSource/Cool-Chic>`_
 
+
 Version history
 """""""""""""""
 
