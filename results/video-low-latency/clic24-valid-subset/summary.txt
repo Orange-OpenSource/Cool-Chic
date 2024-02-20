@@ -1,0 +1,2 @@
+	                           	BDR hm [%] 	BDR x265-medium [%] 	BDR x264-medium [%] 	Min C [MAC/px] 	Max C [MAC/px] 	Avg C [MAC/px] 
+	release-3-1-1-clic24-ldp33 	121.997    	73.842              	28.919              	433            	435            	433            
