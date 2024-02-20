@@ -38,6 +38,7 @@ Image compression performance are presented on the kodak, clic20-pro-valid and j
 <div style="text-align: center;">
     <img src="./results/image/kodak/rd.png" alt="Kodak rd results" width="800" style="centered"/>
     <img src="./results/image/clic20-pro-valid/rd.png" alt="CLIC rd results" width="800" style="centered"/>
+    <img src="./results/image/jvet/rd.png" alt="CLIC rd results" width="800" style="centered"/>
 </div>
 
 <br/>
@@ -62,6 +63,7 @@ configurations:
 
 <div style="text-align: center;">
     <img src="results/video-random-access/clic24-valid-subset/rd.png" alt="CLIC24 random access" width="800" style="centered"/>
+    <img src="results/video-low-latency/clic24-valid-subset/rd.png" alt="CLIC24 random access" width="800" style="centered"/>
 </div>
 
 <br/>
