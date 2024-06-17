@@ -1,0 +1,22 @@
+Cool-chic code at a glance
+==========================
+
+Coolchic source code is organized as follows
+
+.. code:: none
+
+    coolchic/
+        |___ encoder/
+        |        |___ component/                     The different modules composing the Encoder
+        |        |          |___ core/               The different NN (ARM, upsampling and synthesis) + quantizer
+        |        |          |___ coolchic.py         Entire Cool-chic: Latent + ARM + upsampling + synthesis
+        |        |          |___ intercoding.py      Not used for image coding
+        |        |          |___ frame.py            Encode a frame with a cool-chic
+        |        |          |___ video.py            Encode a video. Call frame.py for each frame
+        |        |___ training/                      Train, test, quantize the models, loss
+        |        |___ utils/                         Presets, coding structure and various stuff.
+        |        |___ bitstream/                     Write the bitstream from a trained model.
+        |
+        |___ decoder/                                Python interface with the C API for the decoder
+        |
+        |___ cpp/                                    Cool-chic C API for fast decoding & entropy coding
