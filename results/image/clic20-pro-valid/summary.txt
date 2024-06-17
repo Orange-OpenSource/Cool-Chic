@@ -1,2 +1,0 @@
-	                   	BDR vtm [%] 	BDR hm [%] 	BDR c3 [%] 	BDR coolchic-2-0 [%] 	Min C [MAC/px] 	Max C [MAC/px] 	Avg C [MAC/px] 
-	release-3-1-1-clic 	2.287       	-21.413    	3.272      	-16.778              	545            	2295           	1897           

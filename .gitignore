@@ -1,11 +1,22 @@
 .vscode/
+samples/
 images/
 venv/
+*.pyc
 *.pt
+*.png
 *.out
 
+docs/build/
 .DS_Store
 __pycache__/
 *.py[cod]
 *$py.class
 *.nfs*
+
+test/test-workdir/
+venv/
+
+coolchic/CCLIB/
+coolchic.egg-info/
+*.so

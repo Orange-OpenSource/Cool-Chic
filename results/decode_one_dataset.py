@@ -29,15 +29,15 @@ assert args.dataset_name in cur_possible_dataset, \
 current_dir_path = os.path.dirname(__file__)
 bitstream_path = os.path.join(current_dir_path, args.configuration, args.dataset_name, 'bitstreams/')
 decoded_image_path = os.path.join(bitstream_path, '../decoded/')
-cool_chic_decode_path = os.path.join(current_dir_path, '../src/decode.py')
+cool_chic_decode_path = os.path.join(current_dir_path, '../coolchic/decode.py')
 subprocess.call(f'mkdir -p {decoded_image_path}', shell=True)
 
 # Successively decode all bitstreams
-all_bitstreams = glob.glob(f'{bitstream_path}*.bin')
+all_bitstreams = glob.glob(f'{bitstream_path}*.cool')
 image_or_video = 'image' if args.configuration == 'image' else 'video'
 
 if args.dataset_name in ['kodak', 'clic20-pro-valid']:
-    extension = 'png'
+    extension = 'ppm'
 else:
     extension = 'yuv'
 

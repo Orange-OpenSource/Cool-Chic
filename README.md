@@ -1,118 +1,72 @@
-# 🎬 __Cool-chic 3.1: Now it does video!__
-
-
-# COOL-CHIC
+#  🏎️ 🔥 __Cool-chic 3.2: Go fast boiii__ 🔥 🏎️
 
 Cool-chic (pronounced <span class="ipa">/kul ʃik/</span> as in French 🥖🧀🍷) is
- is a low-complexity neural image and video codec based on overfitting. Image
- coding performance are on par with VVC for 2000 multiplication per decoded
- pixels, while video coding performance compete with AVC with as few as 500
- multiplication per decoded pixels.
+is a low-complexity neural image codec based on overfitting. Image
+coding performance are __on par with VVC for 2000 multiplications__ per decoded
+pixels.
 
-All the documentation is available on the [Cool-chic page](https://orange-opensource.github.io/Cool-Chic/)
-
-# Version history
-
-* Fev. 24: version 3.1
-    - Cool-chic video from [_Cool-chic video: Learned video coding with 800 parameters_, Leguay et al.](https://arxiv.org/abs/2402.03179)
-    - Random access and low-delay video coding, competitive with AVC.
-* Jan. 24: version 3.0
-    - Re-implement most of the encoder-side improvements proposed by [_C3: High-performance and low-complexity neural compression from a single image or video_, Kim et al.](https://arxiv.org/abs/2312.02753)
-    - 15% to 20% rate decrease compared to Cool-chic 2
-* July 23: version 2 [_Low-complexity Overfitted Neural Image Codec_, Leguay et al.](https://arxiv.org/abs/2307.12706)
-    - Several architecture changes for the decoder: convolution-based synthesis, learnable upsampling module
-    - Friendlier usage: support for YUV 420 input format in 8-bit and 10-bit & Fixed point arithmetic for cross-platform entropy (de)coding
-* March 23: version 1 [_COOL-CHIC: Coordinate-based Low Complexity Hierarchical Image Codec_, Ladune et al.](https://arxiv.org/abs/2212.05458)
-
-Up to come: a fast decoder implementation will be released soon for near real-time CPU decoding 🏎️ 🔥.
-
-# Cool-chic 3.1 performance
-
-Cool-chic results are provided for both image and video compression inside the
-```results/``` directory alongside compressed bitstream.
-
-## Image compression
-
-Image compression performance are presented on the kodak, clic20-pro-valid and jvet datasets.
-
-<div style="text-align: center;">
-    <img src="./results/image/kodak/rd.png" alt="Kodak rd results" width="800" style="centered"/>
-    <img src="./results/image/clic20-pro-valid/rd.png" alt="CLIC rd results" width="800" style="centered"/>
-    <img src="./results/image/jvet/rd.png" alt="CLIC rd results" width="800" style="centered"/>
-</div>
-
-<br/>
-
-| Dataset          | Vs. Cool-chic 2                              | Vs. Cool-chic 1                              | Vs. [_C3_, Kim et al.](https://arxiv.org/abs/2312.02753) | Vs. HEVC (HM 16.20)                          | Vs. VVC (VTM 19.1)                           | Min decoder complexity [MAC / pixel] | Max decoder complexity [MAC / pixel] | Avg decoder complexity [MAC / pixel] |
-|------------------|----------------------------------------------|----------------------------------------------|----------------------------------------------------------|----------------------------------------------|----------------------------------------------|--------------------------------------|--------------------------------------|--------------------------------------|
-| kodak            | <span style="color:green" > - 19.4 % </span> | <span style="color:green"> - 29.1 % </span>  | <span style="color:green"> - 1.6 %  </span>              | <span style="color:green" > - 14.6 % </span> | <span style="color:#f50" > + 6.6 %   </span> |299                                   |2291                                  | 1841                                 |
-| clic20-pro-valid | <span style="color:green" > - 16.8 % </span> | <span style="color:gray"> /  </span>         | <span style="color:#f50" >+  3.3 %   </span>             | <span style="color:green" > - 21.4 % </span> | <span style="color:#f50" > + 2.3 %   </span> |545                                   |2295                                  | 1897                                 |
-| jvet             | <span style="color:green" > - 23.0 % </span> | <span style="color:gray"> /  </span>         | <span style="color:gray"> /  </span>                     | <span style="color:green" > - 13.7 % </span> | <span style="color:#f50" > + 25.4 %  </span> |300                                   |2295                                  | 1680                                 |
+Check out the [Cool-chic documentation page!](https://orange-opensource.github.io/Cool-Chic/)
 
 
-## Video compression
+## Notable improvements
 
-Video compression performance are presented on the first 33 frames (~= 1 second)
-from the [CLIC24 validation
-subset](https://storage.googleapis.com/clic2023_public/validation_sets/clic2024_validation_video_30.zip),
-composed of 30 high resolution videos. We provide results for 2 coding
-configurations:
+- **Fast CPU-only decoder** as proposed in [_Overfitted image coding at reduced complexity_, Blard et al.](https://arxiv.org/abs/2403.11651)
+    - Decode a 512x768 image in **100 ms**
+    - C API for **binary arithmetic coding**
+- Encoding time **reduced by 35%**
+- Rate **reduction of 5%** compared to Cool-chic 3.1
 
-* Low-delay P: address use-cases where low latency is mandatory;
-* Random access: address use-cases where compression efficiency is primordial e.g. video streaming.
-
-<div style="text-align: center;">
-    <img src="results/video-random-access/clic24-valid-subset/rd.png" alt="CLIC24 random access" width="800" style="centered"/>
-    <img src="results/video-low-latency/clic24-valid-subset/rd.png" alt="CLIC24 random access" width="800" style="centered"/>
-</div>
-
-<br/>
-
-| Dataset             | Config        | Vs. HEVC (HM 16.20)                          | Vs. x265 medium                              | Vs. x264 medium                            | Min. decoder complexity [MAC / pixel] | Max decoder complexity [MAC / pixel] | Avg decoder complexity [MAC / pixel] |
-|---------------------|---------------|----------------------------------------------|----------------------------------------------|--------------------------------------------|---------------------------------------|--------------------------------------|--------------------------------------|
-| clic24-valid-subset | random-access | <span style="color:#f50" > + 60.4 % </span>  | <span style="color:#f50" > +18.1 %   </span> | <span style="color:green" > -15.5 % </span>|460                                    |460                                   | 460                                  |
-| clic24-valid-subset | low-latency   | <span style="color:#f50" > + 122.0 % </span> | <span style="color:#f50" > +73.8 %  </span>  | <span style="color:#f50" > +28.9 % </span> |460                                    |460                                   | 460                                  |
+Check-out the [**release history**](https://github.com/Orange-OpenSource/Cool-Chic/releases) to see previous versions of Cool-chic.
 
 # Setup
 
-More details available on the [Cool-chic page](https://orange-opensource.github.io/Cool-Chic/)
-
-## ⚠️ Python version
-
-Python version should be at least 3.10!
+More details are available on the [Cool-chic page](https://orange-opensource.github.io/Cool-Chic/getting_started/quickstart.html)
 
 ```bash
-python3 --version                                          # Should be at least 3.10
+# We need to get these packages to compile the C API and bind it to python.
+sudo add-apt-repository -y ppa:deadsnakes/ppa && sudo apt update
+sudo apt install -y build-essential python3.10-dev python3.10-pip
+git clone https://github.com/Orange-OpenSource/Cool-Chic.git && cd Cool-Chic
+
+# Install create and activate virtual env
+python3.10 -m pip install virtualenv
+python3.10 -m virtualenv venv && source venv/bin/activate
+
+# Install Cool-chic
+pip install -e .
+
+# Sanity check
+python -m test.sanity_check
 ```
 
-## Necessary packages
+You're good to go!
 
-```bash
-python3 -m pip install virtualenv                          # Install virtual env if needed
-python3 -m virtualenv venv && source venv/bin/activate     # Create and activate a virtual env named "venv"
-(venv) pip install -r requirements.txt                     # Install the required packages
-```
 
-# Replicating Cool-chic results
+## Performance
 
-Already encoded files are provided as bitstreams in ```results/<configuration>/<dataset_name>/```.
+The Cool-chic page provides [comprehensive rate-distortion results and compressed bitstreams](https://orange-opensource.github.io/Cool-Chic/getting_started/results.html) allowing
+to reproduce the results inside the ```results/``` directory.
 
-* ```<configuration>``` can be ```image```, ```video-low-latency```, ```video-random-access```
-* ```<dataset_name>``` can be ```kodak, clic20-pro-valid, clic24-valid-subset, jvet```.
+| Dataset          | Vs. Cool-chic 3.1                            | Vs. [_C3_, Kim et al.](https://arxiv.org/abs/2312.02753) | Vs. HEVC (HM 16.20)                          | Vs. VVC (VTM 19.1)                           | Avg decoder MAC / pixel          | Avg decoding time [ms]           |
+|------------------|----------------------------------------------|----------------------------------------------------------|----------------------------------------------|----------------------------------------------|----------------------------------|----------------------------------|
+| kodak            | <span style="color:green" > - 1.9 % </span>  | <span style="color:green"> - 3.5 %  </span>              | <span style="color:green" > - 16.4 % </span> | <span style="color:#f50" > + 4.4 %   </span> | 1880                             | 168                              |
+| clic20-pro-valid | <span style="color:gray" > /</span>          | <span style="color:gray" > /   </span>                   | <span style="color:gray" > / </span>         | <span style="color:gray" > / </span>         |<span style="color:gray" >/</span>|<span style="color:gray" >/</span>|
+| jvet             | <span style="color:gray" > / </span>         | <span style="color:gray"> /  </span>                     | <span style="color:gray" > / </span>         | <span style="color:gray" > / </span>         |<span style="color:gray" >/</span>|<span style="color:gray" >/</span>|
 
-For each dataset, a script is provided to decode all the bitstreams.
 
-```bash
-(venv) python results/decode_one_dataset.py <configuration> <dataset_name>  # Can take a few minutes
-```
+### Kodak
 
-The file ```results/<configuration>/<dataset_name>/results.tsv``` provides the results that should be obtained.
-
+<div style="text-align: center;">
+    <!-- <img src="./results/image/kodak/rd.png" alt="Kodak rd results" width="800" style="centered"/> -->
+    <img src="./docs/source/assets/kodak/rd.png" alt="Kodak rd results" height="500" style="centered"/>
+    <img src="./docs/source/assets/kodak/perf_complexity.png" alt="Kodak performance complexity" height="500" style="centered"/>
+    <!-- <img src="./results/image/jvet/rd.png" alt="CLIC rd results" width="800" style="centered"/> -->
+</div>
 <br/>
+
+More results to come in the following days!
+
 
 # Thanks
 
-Special thanks go to:
-
-* Robert Bamler for the [_constriction package_](https://github.com/bamler-lab/constriction) which serves as our entropy coder. More details @ [_Understanding Entropy Coding With Asymmetric Numeral Systems (ANS): a Statistician's Perspective_, Bamler](https://arxiv.org/pdf/2201.01741.pdf).
-* Hyunjik Kim, Matthias Bauer, Lucas Theis, Jonathan Richard Schwarz and Emilien Dupont for their great work enhancing Cool-chic: [_C3: High-performance and low-complexity neural compression from a single image or video_, Kim et al.](https://arxiv.org/abs/2312.02753)
+Special thanks go to Hyunjik Kim, Matthias Bauer, Lucas Theis, Jonathan Richard Schwarz and Emilien Dupont for their great work enhancing Cool-chic: [_C3: High-performance and low-complexity neural compression from a single image or video_, Kim et al.](https://arxiv.org/abs/2312.02753)
