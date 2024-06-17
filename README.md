@@ -59,7 +59,7 @@ to reproduce the results inside the ```results/``` directory.
 <div style="text-align: center;">
     <!-- <img src="./results/image/kodak/rd.png" alt="Kodak rd results" width="800" style="centered"/> -->
     <img src="./docs/source/assets/kodak/rd.png" alt="Kodak rd results" height="500" style="centered"/>
-    <img src="./docs/source/assets/kodak/perf_decoding_time.png" alt="Kodak performance complexity" height="500" style="centered"/>
+    <img src="./docs/source/assets/kodak/perf_complexity.png" alt="Kodak performance complexity" height="500" style="centered"/>
     <!-- <img src="./results/image/jvet/rd.png" alt="CLIC rd results" width="800" style="centered"/> -->
 </div>
 <br/>
