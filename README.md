@@ -25,7 +25,7 @@ More details are available on the [Cool-chic page](https://orange-opensource.git
 ```bash
 # We need to get these packages to compile the C API and bind it to python.
 sudo add-apt-repository -y ppa:deadsnakes/ppa && sudo apt update
-sudo apt install -y build-essential python3.10-dev python3.10-pip
+sudo apt install -y build-essential python3.10-dev pip
 git clone https://github.com/Orange-OpenSource/Cool-Chic.git && cd Cool-Chic
 
 # Install create and activate virtual env
