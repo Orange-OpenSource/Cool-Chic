@@ -1,2 +1,2 @@
                        BDR vtm [%]   BDR hm [%]   BDR c3 [%]   BDR coolchic-3-1 [%]   Avg C [MAC/px]   Avg time [ms]  
- release-3-2-0-kodak   4.416         -16.414      -3.48        -1.928                 1880             168            
+ release-3-2-0-kodak   4.416         -16.414      -3.48        -1.928                 1880             167            

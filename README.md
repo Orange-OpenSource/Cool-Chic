@@ -50,8 +50,12 @@ to reproduce the results inside the ```results/``` directory.
 | Dataset          | Vs. Cool-chic 3.1                            | Vs. [_C3_, Kim et al.](https://arxiv.org/abs/2312.02753) | Vs. HEVC (HM 16.20)                          | Vs. VVC (VTM 19.1)                           | Avg decoder MAC / pixel          | Avg decoding time [ms]           |
 |------------------|----------------------------------------------|----------------------------------------------------------|----------------------------------------------|----------------------------------------------|----------------------------------|----------------------------------|
 | kodak            | <span style="color:green" > - 1.9 % </span>  | <span style="color:green"> - 3.5 %  </span>              | <span style="color:green" > - 16.4 % </span> | <span style="color:#f50" > + 4.4 %   </span> | 1880                             | 168                              |
-| clic20-pro-valid | <span style="color:gray" > /</span>          | <span style="color:gray" > /   </span>                   | <span style="color:gray" > / </span>         | <span style="color:gray" > / </span>         |<span style="color:gray" >/</span>|<span style="color:gray" >/</span>|
-| jvet             | <span style="color:gray" > / </span>         | <span style="color:gray"> /  </span>                     | <span style="color:gray" > / </span>         | <span style="color:gray" > / </span>         |<span style="color:gray" >/</span>|<span style="color:gray" >/</span>|
+| clic20-pro-valid | <span style="color:green" > - 4.3 % </span>  | <span style="color:green"> - 1.1 %  </span>              | <span style="color:green" > - 24.9 % </span> | <span style="color:green"> - 2.0 %   </span> | 1907                             | 857                              |
+| jvet class B     | <span style="color:green" > - 7.2 % </span>  | <span style="color:gray"> /  </span>                     | <span style="color:green" > - 10.9 % </span> | <span style="color:#f50"> + 19.4 %   </span> | 1803                             | 485                              |
+<!-- | jvet class C     | <span style="color:green" > - 2.5 % </span>  | <span style="color:gray"> /  </span>                     | <span style="color:green" > - 15.0 % </span> | <span style="color:#f50"> + 10.7 %   </span> | 1942                             | 186                              |
+| jvet class D     | <span style="color:green" > - 1.4 % </span>  | <span style="color:gray"> /  </span>                     | <span style="color:green" > - 11.2 % </span> | <span style="color:#f50"> + 11.0 %   </span> | 1086                             | 30                               |
+| jvet class E     | <span style="color:green" > - 9.1 % </span>  | <span style="color:gray"> /  </span>                     | <span style="color:green" >  - 2.7 % </span> | <span style="color:#f50"> + 32.5 %   </span> | 1814                             | 332                              |
+| jvet class F     | <span style="color:green" > - 3.2 % </span>  | <span style="color:gray"> /  </span>                     | <span style="color:green" > - 32.0 % </span> | <span style="color:#f50"> + 20.2 %   </span> | 2201                             | 456                              | -->
 
 
 ### Kodak
@@ -64,8 +68,25 @@ to reproduce the results inside the ```results/``` directory.
 </div>
 <br/>
 
-More results to come in the following days!
+### CLIC20 Pro Valid
 
+<div style="text-align: center;">
+    <!-- <img src="./results/image/kodak/rd.png" alt="Kodak rd results" width="800" style="centered"/> -->
+    <img src="./docs/source/assets/clic20-pro-valid/rd.png" alt="CLIC20 rd results" height="500" style="centered"/>
+    <img src="./docs/source/assets/clic20-pro-valid/perf_complexity.png" alt="CLIC20 performance complexity" height="500" style="centered"/>
+    <!-- <img src="./results/image/jvet/rd.png" alt="CLIC rd results" width="800" style="centered"/> -->
+</div>
+<br/>
+
+### JVET Class B
+
+<div style="text-align: center;">
+    <!-- <img src="./results/image/kodak/rd.png" alt="Kodak rd results" width="800" style="centered"/> -->
+    <img src="./docs/source/assets/jvet/rd_classB.png" alt="JVET class B rd results" height="500" style="centered"/>
+    <img src="./docs/source/assets/jvet/perf_complexity_classB.png" alt="JVET class B performance complexity" height="500" style="centered"/>
+    <!-- <img src="./results/image/jvet/rd.png" alt="CLIC rd results" width="800" style="centered"/> -->
+</div>
+<br/>
 
 # Thanks
 
