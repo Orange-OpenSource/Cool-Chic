@@ -84,6 +84,9 @@ We show below the rate-distortion performance on Kodak:
 .. image:: ../assets/kodak/perf_decoding_time.png
   :alt: Kodak performance-decoding-time
 
+CLIC20 Pro Valid
+****************
+
 .. image:: ../assets/clic20-pro-valid/rd.png
   :alt: CLIC20 rd results
 
@@ -92,6 +95,10 @@ We show below the rate-distortion performance on Kodak:
 
 .. image:: ../assets/clic20-pro-valid/perf_decoding_time.png
   :alt: CLIC20 performance-decoding-time
+
+
+JVET Class B
+************
 
 .. image:: ../assets/jvet/rd_classB.png
   :alt: JVET class B rd results
