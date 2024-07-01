@@ -39,9 +39,7 @@ The file ``results/<configuration>/<dataset_name>/results.tsv`` provides the res
 Image compression
 """""""""""""""""
 
-Image compression performance are presented on the kodak dataset.
-
-.. , clic20-pro-valid and jvet datasets.
+Image compression performance are presented on the kodak dataset, clic20-pro-valid and jvet datasets.
 
 The following table sums up the compression performance obtained by Cool-chic
 3.2 against different anchors.
@@ -51,10 +49,25 @@ The following table sums up the compression performance obtained by Cool-chic
 +==================+=======================+========================+=========================+========================+======================================+========================+
 | kodak            | \ :green:`-1.9`       | \ :green:`-3.5`        | \ :green:`-16.4`        | \ :red:`+4.4`          | 1880                                 | 168                    |
 +------------------+-----------------------+------------------------+-------------------------+------------------------+--------------------------------------+------------------------+
-| clic20-pro-valid | /                     | /                      | /                       | /                      | /                                    | /                      |
+| clic20-pro-valid | \ :green:`-4.3`       | \ :green:`-1.1`        | \ :green:`-24.9`        | \ :green:`-2.0`        | 1907                                 | 857                    |
 +------------------+-----------------------+------------------------+-------------------------+------------------------+--------------------------------------+------------------------+
-| jvet             | /                     | /                      | /                       | /                      | /                                    | /                      |
+| jvet class B     | \ :green:`-7.2`       |          /             | \ :green:`-10.9`        | \ :red:`19.4`          | 1803                                 | 485                    |
 +------------------+-----------------------+------------------------+-------------------------+------------------------+--------------------------------------+------------------------+
+| jvet class C     | \ :green:`-2.5`       |          /             | \ :green:`-15.9`        | \ :red:`10.6`          | 1942                                 | 186                    |
++------------------+-----------------------+------------------------+-------------------------+------------------------+--------------------------------------+------------------------+
+| jvet class D     | \ :green:`-1.4`       |          /             | \ :green:`-11.2`        | \ :red:`11.1`          | 1086                                 | 30                     |
++------------------+-----------------------+------------------------+-------------------------+------------------------+--------------------------------------+------------------------+
+| jvet class E     | \ :green:`-9.1`       |          /             | \ :green:`-2.7`         | \ :red:`32.5`          | 1814                                 | 332                    |
++------------------+-----------------------+------------------------+-------------------------+------------------------+--------------------------------------+------------------------+
+| jvet class F     | \ :green:`-3.2`       |          /             | \ :green:`-32.0`        | \ :red:`20.23`         | 1769                                 | 456                    |
++------------------+-----------------------+------------------------+-------------------------+------------------------+--------------------------------------+------------------------+
+
+
+We also present the performance-complexity continuum on Kodak. The different
+configurations (*VLOP*, *LOP*, *MOP*, *HOP*) are obtained using the
+configuration files detailed in the :doc:`decoder documentation
+<./../encoding/architecture>`. For the *MIX* configuration, we pick the best
+configuration out of the 4 available ones for each image.
 
 
 Kodak
@@ -65,25 +78,29 @@ We show below the rate-distortion performance on Kodak:
 .. image:: ../assets/kodak/rd.png
   :alt: Kodak rd results
 
-We also present the performance-complexity continuum on Kodak. The different
-configurations (*VLOP*, *LOP*, *MOP*, *HOP*) are obtained using the
-configuration files detailed in the :doc:`decoder documentation
-<./../encoding/architecture>`. For the *MIX* configuration, we pick the best
-configuration out of the 4 available ones for each image.
-
-
 .. image:: ../assets/kodak/perf_complexity.png
   :alt: Kodak performance-complexity
 
 .. image:: ../assets/kodak/perf_decoding_time.png
   :alt: Kodak performance-decoding-time
 
-.. .. image:: ../assets/rd-image-clic20-validpro.png
-..   :alt: CLIC20 rd results
+.. image:: ../assets/clic20-pro-valid/rd.png
+  :alt: CLIC20 rd results
 
-.. .. image:: ../assets/rd-image-jvet.png
-..   :alt: JVET AI rd results
+.. image:: ../assets/clic20-pro-valid/perf_complexity.png
+  :alt: CLIC20 performance-complexity
 
+.. image:: ../assets/clic20-pro-valid/perf_decoding_time.png
+  :alt: CLIC20 performance-decoding-time
+
+.. image:: ../assets/jvet/rd_classB.png
+  :alt: JVET class B rd results
+
+.. image:: ../assets/jvet/perf_complexity_classB.png
+  :alt: JVET class B performance-complexity
+
+.. image:: ../assets/jvet/perf_decoding_time_classB.png
+  :alt: JVET class B performance-decoding-time
 
 
 .. Video compression
