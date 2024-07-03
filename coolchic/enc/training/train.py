@@ -45,7 +45,7 @@ def _linear_schedule(
     assert cur_itr >= 0 and cur_itr <= max_itr, (
         f"Linear scheduling from 0 to {max_itr} iterations"
         " except to have a current iterations between those two values."
-        " Found cur_itr = {cur_itr}."
+        f" Found cur_itr = {cur_itr}."
     )
 
     return cur_itr * (final_value - initial_value) / max_itr + initial_value
