@@ -63,7 +63,7 @@ if __name__ == "__main__":
         "--workdir", help="Path of the working_directory", type=str, default="."
     )
     parser.add("--lmbda", help="Rate constraint", type=float, default=1e-3)
-    parser.add_argument(
+    parser.add(
         "--job_duration_min",
         type=int,
         default=-1,
@@ -104,10 +104,10 @@ if __name__ == "__main__":
         type=int,
         default=int(1e4),
     )
-    parser.add_argument(
+    parser.add(
         "--n_train_loops", help="Number of training loops", type=int, default=1
     )
-    parser.add_argument(
+    parser.add(
         "--recipe",
         help='Recipe type. Either "c3x" or "debug".',
         type=str,
