@@ -13,7 +13,6 @@ import torch
 import subprocess
 import configargparse
 
-from enc.bitstream.encode import encode_video
 from enc.component.coolchic import CoolChicEncoderParameter
 from enc.component.video import (
     VideoEncoder,
@@ -321,6 +320,7 @@ if __name__ == "__main__":
 
     # Bitstream
     if args.output != "":
+        from enc.bitstream.encode import encode_video
         # video_encoder = load_video_encoder(video_encoder_savepath)
         encode_video(video_encoder, args.output, hls_sig_blksize=16)
 
