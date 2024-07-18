@@ -65,8 +65,6 @@ exclude_patterns = []
 # extensions.append("sphinx_immaterial")
 html_theme = "shibuya"  # "piccolo_theme" # "sphinx_book_theme"  # furo
 html_title = "Cool-chic"
-# html_logo = "_static/logo_cool_chic.png"
-# html_show_sphinx = False
 
 pygments_style = "sphinx"
 pygments_dark_style = "material"
@@ -105,9 +103,13 @@ wrap_signatures_with_css = True
 #     ("py:.*", dict(include_object_type_in_xref_tooltip=False)),
 # ]
 
+html_static_path = ["_static/"]
+html_favicon = "_static/favicon_16x16.png"
 html_theme_options = {
     "dark_code": True,
     "color_mode": "light",
+    "light_logo": "_static/coolchic-logo-light.png",
+    "dark_logo": "_static/coolchic-logo-dark.png",
     "globaltoc_expand_depth": 3,
     "accent_color": "orange",
     "announcement": (
@@ -122,5 +124,4 @@ html_context = {
     "source_user": "Orange-OpenSource",
     "source_repo": "Cool-Chic",
 }
-
 # html_static_path = ['_static']
