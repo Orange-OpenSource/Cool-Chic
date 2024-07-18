@@ -1,18 +1,62 @@
-Cool-chic
-=========
-
 .. raw:: html
 
     <style> .gray {color:gray} </style>
 
 .. role:: gray
 
+.. image:: assets/coolchic-logo-light.png
+  :align: center
+  :height: 200
+  :alt: Logo Cool-chic
+
+.. raw:: html
+
+   <div align="center">
+   <p align="center">
+      <br />
+      <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/results.html">Decode provided bitstreams</a>
+      ·
+      <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/results.html#clic20-pro-valid">Compression performance</a>
+   </p>
+   </div>
 
 **Cool-chic** (pronounced :gray:`/kul ʃik/` as in French 🥖🧀🍷) is a
 low-complexity neural image codec based on overfitting. It offers image coding
 performance competitive with H.266/VVC for 2000 multiplications per decoded
 pixel.
 
+
+Current & future features
+"""""""""""""""""""""""""
+
+.. raw:: html
+
+   &nbsp; &nbsp;⚬ &nbsp;<b>I/O format</b>
+   </br>
+   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp;✅ RGB, yuv420 8-bit and 10-bit
+   </br>
+   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp;❌ yuv444 8-bit and 10-bit
+   </br>
+   </br>
+   &nbsp; &nbsp;⚬ &nbsp;<b>Decoder</b>
+   </br>
+   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ✅ Fast C implementation
+   </br>
+   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ✅ Integer computation ARM
+   </br>
+   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ❌ Complete integerization
+   </br>
+   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ❌ Decrease memory footprint & faster decoding
+   </br>
+   </br>
+   &nbsp; &nbsp;⚬ &nbsp; &nbsp;<b>Coding performance</b>
+   </br>
+   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ✅ On par with VVC for image coding
+   </br>
+   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ❌ Upcoming improved Cool-chic video
+   </br>
+   </br>
+   </br>
 
 Cool-chic 3.2 improvements
 """"""""""""""""""""""""""

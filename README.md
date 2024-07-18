@@ -1,14 +1,63 @@
-#  🏎️ 🔥 __Cool-chic 3.2: Go fast boiii__ 🔥 🏎️
+[![Contributors][contributors-shield]][contributors-url]
+[![Forks][forks-shield]][forks-url]
+[![Stargazers][stars-shield]][stars-url]
+[![Issues][issues-shield]][issues-url]
+[![BSD-3 License][license-shield]][license-url]
+[![PyTorch][pytorch-shield]][pytorch-url]
+
+
+
+<!-- PROJECT LOGO -->
+<br />
+<div align="center">
+
+<picture>
+  <!-- User prefers light mode: -->
+  <source srcset="docs/source/assets/coolchic-logo-light.png" media="(prefers-color-scheme: light)" alt="Cool-chic Logo" height="200"/>
+
+  <!-- User prefers dark mode: -->
+  <source srcset="docs/source/assets/coolchic-logo-dark.png"  media="(prefers-color-scheme: dark)" alt="Cool-chic Logo" height="200"/>
+
+  <!-- User has no color preference: -->
+  <img src="docs/source/assets/coolchic-logo-dark.png" alt="Cool-chic Logo" height="200"/>
+</picture>
+  <p align="center">
+    <!-- Low-complexity neural image codec based on overfitting. -->
+    <br />
+    <a href="https://orange-opensource.github.io/Cool-Chic/"><strong>Explore the docs »</strong></a>
+    <br />
+    <br />
+    <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/results.html">Decode provided bitstreams</a>
+    ·
+    <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/results.html#clic20-pro-valid">Compression performance</a>
+  </p>
+</div>
+
+<!-- # What's Cool-chic? -->
 
 Cool-chic (pronounced <span class="ipa">/kul ʃik/</span> as in French 🥖🧀🍷) is
-is a low-complexity neural image codec based on overfitting. Image
-coding performance are __on par with VVC for 2000 multiplications__ per decoded
-pixels.
+is a low-complexity neural image codec based on overfitting. It offers image coding
+performance competitive with *H.266/VVC for 2000 multiplications* per decoded
+pixel.
 
-Check out the [Cool-chic documentation page!](https://orange-opensource.github.io/Cool-Chic/)
+#
+
+### Current & future features
+
+- I/O format
+  - ✅ RGB, yuv420 8-bit and 10-bit
+  - ❌ yuv444 8-bit and 10-bit
+- Decoder
+  - ✅ Fast C implementation
+  - ✅ Integer computation for the ARM
+  - ❌ Complete integerization
+  - ❌ Decrease memory footprint & faster decoding
+- Coding performance
+  - ✅ On par with VVC for image coding
+  - ❌ Upcoming improved Cool-chic video
 
 
-## Notable improvements
+### Latest release: __Cool-chic 3.2: Go fast boiii__ 🔥 🏎️
 
 - **Fast CPU-only decoder** as proposed in [_Overfitted image coding at reduced complexity_, Blard et al.](https://arxiv.org/abs/2403.11651)
     - Decode a 512x768 image in **100 ms**
@@ -16,7 +65,8 @@ Check out the [Cool-chic documentation page!](https://orange-opensource.github.i
 - Encoding time **reduced by 35%**
 - Rate **reduction of 5%** compared to Cool-chic 3.1
 
-Check-out the [**release history**](https://github.com/Orange-OpenSource/Cool-Chic/releases) to see previous versions of Cool-chic.
+Check-out the [release history](https://github.com/Orange-OpenSource/Cool-Chic/releases) to see previous versions of Cool-chic.
+
 
 # Setup
 
@@ -62,8 +112,8 @@ to reproduce the results inside the ```results/``` directory.
 
 <div style="text-align: center;">
     <!-- <img src="./results/image/kodak/rd.png" alt="Kodak rd results" width="800" style="centered"/> -->
-    <img src="./docs/source/assets/kodak/rd.png" alt="Kodak rd results" height="500" style="centered"/>
-    <img src="./docs/source/assets/kodak/perf_complexity.png" alt="Kodak performance complexity" height="500" style="centered"/>
+    <img src="./docs/source/assets/kodak/rd.png" alt="Kodak rd results" width="750" style="centered"/>
+    <img src="./docs/source/assets/kodak/perf_complexity.png" alt="Kodak performance complexity" width="750" style="centered"/>
     <!-- <img src="./results/image/jvet/rd.png" alt="CLIC rd results" width="800" style="centered"/> -->
 </div>
 <br/>
@@ -72,8 +122,8 @@ to reproduce the results inside the ```results/``` directory.
 
 <div style="text-align: center;">
     <!-- <img src="./results/image/kodak/rd.png" alt="Kodak rd results" width="800" style="centered"/> -->
-    <img src="./docs/source/assets/clic20-pro-valid/rd.png" alt="CLIC20 rd results" height="500" style="centered"/>
-    <img src="./docs/source/assets/clic20-pro-valid/perf_complexity.png" alt="CLIC20 performance complexity" height="500" style="centered"/>
+    <img src="./docs/source/assets/clic20-pro-valid/rd.png" alt="CLIC20 rd results" width="750" style="centered"/>
+    <img src="./docs/source/assets/clic20-pro-valid/perf_complexity.png" alt="CLIC20 performance complexity" width="750" style="centered"/>
     <!-- <img src="./results/image/jvet/rd.png" alt="CLIC rd results" width="800" style="centered"/> -->
 </div>
 <br/>
@@ -82,8 +132,8 @@ to reproduce the results inside the ```results/``` directory.
 
 <div style="text-align: center;">
     <!-- <img src="./results/image/kodak/rd.png" alt="Kodak rd results" width="800" style="centered"/> -->
-    <img src="./docs/source/assets/jvet/rd_classB.png" alt="JVET class B rd results" height="500" style="centered"/>
-    <img src="./docs/source/assets/jvet/perf_complexity_classB.png" alt="JVET class B performance complexity" height="500" style="centered"/>
+    <img src="./docs/source/assets/jvet/rd_classB.png" alt="JVET class B rd results" width="750" style="centered"/>
+    <img src="./docs/source/assets/jvet/perf_complexity_classB.png" alt="JVET class B performance complexity" width="750" style="centered"/>
     <!-- <img src="./results/image/jvet/rd.png" alt="CLIC rd results" width="800" style="centered"/> -->
 </div>
 <br/>
@@ -91,3 +141,32 @@ to reproduce the results inside the ```results/``` directory.
 # Thanks
 
 Special thanks go to Hyunjik Kim, Matthias Bauer, Lucas Theis, Jonathan Richard Schwarz and Emilien Dupont for their great work enhancing Cool-chic: [_C3: High-performance and low-complexity neural compression from a single image or video_, Kim et al.](https://arxiv.org/abs/2312.02753)
+
+<!-- MARKDOWN LINKS & IMAGES -->
+<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
+[contributors-shield]: https://img.shields.io/github/contributors/Orange-OpenSource/Cool-Chic.svg?style=for-the-badge
+[contributors-url]: https://github.com/Orange-OpenSource/Cool-Chic/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/Orange-OpenSource/Cool-Chic.svg?style=for-the-badge
+[forks-url]: https://github.com/Orange-OpenSource/Cool-Chic/network/members
+[stars-shield]: https://img.shields.io/github/stars/Orange-OpenSource/Cool-Chic.svg?style=for-the-badge
+[stars-url]: https://github.com/Orange-OpenSource/Cool-Chic/stargazers
+[issues-shield]: https://img.shields.io/github/issues/Orange-OpenSource/Cool-Chic.svg?style=for-the-badge
+[issues-url]: https://github.com/Orange-OpenSource/Cool-Chic/issues
+[license-shield]: https://img.shields.io/github/license/Orange-OpenSource/Cool-Chic.svg?style=for-the-badge
+[license-url]: https://github.com/Orange-OpenSource/Cool-Chic/blob/master/LICENSE.txt
+[pytorch-shield]: https://img.shields.io/badge/PyTorch-0769AD?style=for-the-badge&logo=pytorch&logoColor=white
+[pytorch-url]: https://pytorch.org/
+
+<div align="center">
+
+</br>
+
+#
+
+</br>
+
+<picture>
+  <!-- User has no color preference: -->
+  <img src="docs/source/assets/logo_orange.png" alt="Cool-chic Logo" height="150"/>
+</picture>
+</div>
