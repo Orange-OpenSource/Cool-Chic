@@ -23,6 +23,18 @@ encoder has many arguments allowing to tune Cool-chic for your need.
   architecture and complexity. This is set through the argument ``--dec_cfg``.
   Several encoder configuration files are available in ``cfg/dec/``.
 
+Working directory
+"""""""""""""""""
+
+The ``--workdir`` argument is used to specify a folder where all necessary data will be stored.
+This includes the encoder logs and the PyTorch model (``workdir/video_encoder.pt``).
+
+.. attention::
+
+  If present, the PyTorch model inside workdir ``workdir/video_encoder.pt`` is reloaded
+  by the ``coolchic/encode.py`` script. In order to encode
+  a new image using the same workdir, you must first clean out the workdir.
+
 I/O format
 """"""""""
 
