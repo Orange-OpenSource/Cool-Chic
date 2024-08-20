@@ -278,7 +278,7 @@ Using a ``512x768`` image from the Kodak dataset and 7 input features as an exem
   (venv) ~/Cool-Chic$ python coolchic/encode.py \
     --input=kodim01.png \
     --n_ft_per_res=1,1,1,1,1,1,1 \
-    --layers_synthesis=40-1-linear-relu,3-1-linear-relu,X-3-residual-relu,X-3-residual-none
+    --layers_synthesis=40-1-linear-relu,X-1-linear-relu,X-3-residual-relu,X-3-residual-none
 
   (venv) ~/Cool-Chic$ cat ./frame_000/archi.txt
 
