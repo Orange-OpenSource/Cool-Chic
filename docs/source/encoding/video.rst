@@ -3,7 +3,7 @@ Video coding configuration
 
 .. attention::
 
-   🛑 Cool-chic 3.2 temporarily disables video coding. If you really want to
+   🛑 Cool-chic 3.2 and 3.3 temporarily disable video coding. If you really want to
    compress videos you can
 
    * Go back to 3.1: ``git clone --branch v3.1

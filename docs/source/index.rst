@@ -62,7 +62,7 @@ Current & future features
    </br>
    </br>
 
-Cool-chic 3.2 improvements
+Cool-chic 3.3 improvements
 """"""""""""""""""""""""""
 
 * Make the **CPU-only decoder** even faster
