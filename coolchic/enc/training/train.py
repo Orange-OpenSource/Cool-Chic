@@ -107,7 +107,7 @@ def train(
         frequency_validation: Check (and print) the performance
             each ``frequency_validation`` iterations. This drives the patience
             mechanism. Defaults to 100.
-        patience: After ``patience`` validations without any
+        patience: After ``patience`` iterations without any
             improvement to the results, exit the training. Patience is disabled
             by setting ``patience = max_iterations``. If patience is used alongside
             cosine_scheduling_lr, then it does not end the training. Instead,

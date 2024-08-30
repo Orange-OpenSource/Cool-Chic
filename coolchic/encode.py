@@ -129,7 +129,7 @@ if __name__ == "__main__":
         "<kernel_size> is the spatial dimension of the kernel. Use 1 to mimic an MLP."
         "<type> is either 'linear' for a standard conv or 'residual' for a residual"
         " block i.e. layer(x) = x + conv(x). <non_linearity> Can be'none' for no"
-        " non-linearity, 'relu' for a ReLU, 'leakyrelu' for a LeakyReLU."
+        " non-linearity, 'relu' for a ReLU"
     )
     parser.add(
         "--arm",
@@ -193,7 +193,7 @@ if __name__ == "__main__":
             '|    `"Y8888888 P"Y8888P"    P"Y8888P"    8P\'"Y88                  P""Y8888PP88P     `Y88P""Y8P""Y8888PP   |\n'
             '|                                                                                                          |\n'
             '|                                                                                                          |\n'
-            '| version 3.2                                                                           © 2023-2024 Orange |\n'
+            '| version 3.3                                                                           © 2023-2024 Orange |\n'
             '*----------------------------------------------------------------------------------------------------------*\n'
 
         )

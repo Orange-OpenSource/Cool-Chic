@@ -15,6 +15,7 @@ __pycache__/
 *.nfs*
 
 test/test-workdir/
+test/out/
 venv/
 
 coolchic/CCLIB/

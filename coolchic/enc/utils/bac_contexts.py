@@ -6,26 +6,24 @@
 #
 # Authors: see CONTRIBUTORS.md
 
-import torch
+import math  # for math.isnan
 
-from typing import Optional, Tuple, Union
-from torch import Tensor
+import torch
 from enc.component.coolchic import _laplace_cdf
-import math # for math.isnan
-from enc.utils.misc import FIXED_POINT_FRACTIONAL_MULT, FIXED_POINT_FRACTIONAL_BITS, bac_state_idx_from_proba_0
-import os
+from enc.utils.misc import bac_state_idx_from_proba_0
 
 N_MUQ = 16
-N_SIGQ = 50 # taking a range of 10 to N_SIGQ - should be an integer multiple.
+N_SIGQ = 50  # taking a range of 10 to N_SIGQ - should be an integer multiple.
 
 # Should be in utils/constants.py
-SIG_LOG_MIN      = (-5+4) # -4.6
-SIG_LOG_MAX_EXCL = (5+4)
+SIG_LOG_MIN = -5 + 4  # -4.6
+SIG_LOG_MAX_EXCL = 5 + 4
 
 
 # Probability limits for arithmetic stability and reasonableness
 P_MIN = torch.tensor([0.001])
-P_MAX = torch.tensor([1-0.001])
+P_MAX = torch.tensor([1 - 0.001])
+
 
 # Convert proba to something reasonable, ie, not 0 or 1
 def reasonable_proba(p):
@@ -36,27 +34,34 @@ def reasonable_proba(p):
         p = P_MAX
     return p
 
+
 # Generate context-table information, taking [muidx][sigidx] to gt0,gt1,gt2,gt3,ppos states.
 def get_contexts(contexts_cpp: str = ""):
     # Get all possible sigmas, quantized prior to the exp.
-    inputs = torch.arange(SIG_LOG_MIN, SIG_LOG_MAX_EXCL, (SIG_LOG_MAX_EXCL-SIG_LOG_MIN)/N_SIGQ)
+    inputs = torch.arange(
+        SIG_LOG_MIN, SIG_LOG_MAX_EXCL, (SIG_LOG_MAX_EXCL - SIG_LOG_MIN) / N_SIGQ
+    )
     # Take log sig identifiers to a spread indicator.
-    sigs_quanted = torch.exp(inputs - 4).to('cpu')
+    sigs_quanted = torch.exp(inputs - 4).to("cpu")
 
-    probas = [] # index with [muidx][sigidx] to get {"gt0"...}
+    probas = []  # index with [muidx][sigidx] to get {"gt0"...}
 
-    R = torch.tensor([0]) # All our offsets here round to 0.
-    mu_min = 0-N_MUQ//2
-    mu_max = N_MUQ//2+1 # We do an extra element at the end to allow easy switching to -ve mus.
-                        # eg, [-8..+8] rather than [-8..+7]
+    R = torch.tensor([0])  # All our offsets here round to 0.
+    mu_min = 0 - N_MUQ // 2
+    mu_max = (
+        N_MUQ // 2 + 1
+    )  # We do an extra element at the end to allow easy switching to -ve mus.
+    # eg, [-8..+8] rather than [-8..+7]
 
     for mu_offset in range(mu_min, mu_max):
         mu_offset = torch.tensor([mu_offset])
         sigs = []
         for sig in sigs_quanted:
             # gtx is the proba of sending a 0 (ie, "not gtx").
-            gt0_surface = _laplace_cdf(R + 0.5, mu_offset/N_MUQ, sig) - _laplace_cdf(R - 0.5, mu_offset/N_MUQ, sig)
-            gt0 = gt0_surface/1.0
+            gt0_surface = _laplace_cdf(R + 0.5, mu_offset / N_MUQ, sig) - _laplace_cdf(
+                R - 0.5, mu_offset / N_MUQ, sig
+            )
+            gt0 = gt0_surface / 1.0
             gt0 = reasonable_proba(gt0)
             if gt0 == P_MAX:
                 # gt0 is maxxed out due to a spikey sigma.
@@ -65,50 +70,83 @@ def get_contexts(contexts_cpp: str = ""):
                 gt2 = torch.tensor([0.5])
                 gt3 = torch.tensor([0.5])
             else:
-                gt1_surface = (_laplace_cdf(R+1 + 0.5, mu_offset/N_MUQ, sig) - _laplace_cdf(R+1 - 0.5, mu_offset/N_MUQ, sig)) \
-                               +(_laplace_cdf(R-1 + 0.5, mu_offset/N_MUQ, sig) - _laplace_cdf(R-1 - 0.5, mu_offset/N_MUQ, sig))
+                gt1_surface = (
+                    _laplace_cdf(R + 1 + 0.5, mu_offset / N_MUQ, sig)
+                    - _laplace_cdf(R + 1 - 0.5, mu_offset / N_MUQ, sig)
+                ) + (
+                    _laplace_cdf(R - 1 + 0.5, mu_offset / N_MUQ, sig)
+                    - _laplace_cdf(R - 1 - 0.5, mu_offset / N_MUQ, sig)
+                )
                 if gt1_surface <= P_MIN:
                     # Protect extremely spikey sigma from having no large-valued populations.
                     gt1 = torch.tensor([0.5])
                     gt2 = torch.tensor([0.5])
                     gt3 = torch.tensor([0.5])
                 else:
-                    gt1 = gt1_surface/(1-gt0_surface)
+                    gt1 = gt1_surface / (1 - gt0_surface)
                     gt1 = reasonable_proba(gt1)
-                    gt2_surface = (_laplace_cdf(R+2 + 0.5, mu_offset/N_MUQ, sig) - _laplace_cdf(R+2 - 0.5, mu_offset/N_MUQ, sig)) \
-                                   +(_laplace_cdf(R-2 + 0.5, mu_offset/N_MUQ, sig) - _laplace_cdf(R-2 - 0.5, mu_offset/N_MUQ, sig))
+                    gt2_surface = (
+                        _laplace_cdf(R + 2 + 0.5, mu_offset / N_MUQ, sig)
+                        - _laplace_cdf(R + 2 - 0.5, mu_offset / N_MUQ, sig)
+                    ) + (
+                        _laplace_cdf(R - 2 + 0.5, mu_offset / N_MUQ, sig)
+                        - _laplace_cdf(R - 2 - 0.5, mu_offset / N_MUQ, sig)
+                    )
                     if gt2_surface <= P_MIN:
                         # Protect extremely spikey sigma from having no large-valued populations.
                         gt2 = torch.tensor([0.5])
                         gt3 = torch.tensor([0.5])
                     else:
-                        gt2 = gt2_surface/(1-gt0_surface-gt1_surface)
+                        gt2 = gt2_surface / (1 - gt0_surface - gt1_surface)
                         gt2 = reasonable_proba(gt2)
-                        gt3_surface = (_laplace_cdf(R+3 + 0.5, mu_offset/N_MUQ, sig) - _laplace_cdf(R+3 - 0.5, mu_offset/N_MUQ, sig)) \
-                                       +(_laplace_cdf(R-3 + 0.5, mu_offset/N_MUQ, sig) - _laplace_cdf(R-3 - 0.5, mu_offset/N_MUQ, sig))
+                        gt3_surface = (
+                            _laplace_cdf(R + 3 + 0.5, mu_offset / N_MUQ, sig)
+                            - _laplace_cdf(R + 3 - 0.5, mu_offset / N_MUQ, sig)
+                        ) + (
+                            _laplace_cdf(R - 3 + 0.5, mu_offset / N_MUQ, sig)
+                            - _laplace_cdf(R - 3 - 0.5, mu_offset / N_MUQ, sig)
+                        )
                         if gt3_surface <= P_MIN:
                             # Protect extremely spikey sigma from having no large-valued populations.
                             gt3 = torch.tensor([0.5])
                         else:
-                            gt3 = gt3_surface/(1-gt0_surface-gt1_surface-gt2_surface)
+                            gt3 = gt3_surface / (
+                                1 - gt0_surface - gt1_surface - gt2_surface
+                            )
                             gt3 = reasonable_proba(gt3)
 
             # proba of sending a 0, indicating +ve
-            pos_surface = 1.0-_laplace_cdf(R+0.5, mu_offset/N_MUQ, sig)
-            neg_surface = _laplace_cdf(R-0.5, mu_offset/N_MUQ, sig)
+            pos_surface = 1.0 - _laplace_cdf(R + 0.5, mu_offset / N_MUQ, sig)
+            neg_surface = _laplace_cdf(R - 0.5, mu_offset / N_MUQ, sig)
             if pos_surface <= P_MIN and neg_surface <= P_MIN:
                 ppos = torch.tensor([0.5])
             elif pos_surface <= P_MIN:
                 ppos = torch.tensor([0])
             elif neg_surface <= P_MIN:
                 ppos = torch.tensor([1])
-            else: # pos_surface >= P_MIN and neg_surface >= P_MIN:
-                ppos = pos_surface/(pos_surface+neg_surface)
+            else:  # pos_surface >= P_MIN and neg_surface >= P_MIN:
+                ppos = pos_surface / (pos_surface + neg_surface)
             ppos = reasonable_proba(ppos)
 
-            these_probas = {"gt0":gt0, "gt1":gt1, "gt2":gt2, "gt3":gt3, "ppos":ppos}
-            if math.isnan(gt0) or math.isnan(gt1) or math.isnan(gt2) or math.isnan(gt3) or math.isnan(ppos) \
-                or gt0 < 0 or gt1 < 0 or gt2 < 0 or gt3 < 0 or ppos < 0:
+            these_probas = {
+                "gt0": gt0,
+                "gt1": gt1,
+                "gt2": gt2,
+                "gt3": gt3,
+                "ppos": ppos,
+            }
+            if (
+                math.isnan(gt0)
+                or math.isnan(gt1)
+                or math.isnan(gt2)
+                or math.isnan(gt3)
+                or math.isnan(ppos)
+                or gt0 < 0
+                or gt1 < 0
+                or gt2 < 0
+                or gt3 < 0
+                or ppos < 0
+            ):
                 print("NAN in table!")
                 print("mu_offset", mu_offset, "sig", sig, "idx", len(probas))
                 print(these_probas)
@@ -127,21 +165,28 @@ def get_contexts(contexts_cpp: str = ""):
             gt2 = bac_state_idx_from_proba_0(ps["gt2"])
             gt3 = bac_state_idx_from_proba_0(ps["gt3"])
             ppos = bac_state_idx_from_proba_0(ps["ppos"])
-            these_ctxs = { "gt0": gt0, "gt1":gt1, "gt2":gt2, "gt3":gt3, "ppos":ppos }
+            these_ctxs = {"gt0": gt0, "gt1": gt1, "gt2": gt2, "gt3": gt3, "ppos": ppos}
             sig_ctxs.append(these_ctxs)
         contexts.append(sig_ctxs)
 
     if contexts_cpp != "":
         # print out the contexts to .h and .cpp files, allowing decoding from c++.
-        with open(contexts_cpp+".h", "wt") as f:
+        with open(contexts_cpp + ".h", "wt") as f:
             print(
-f'''// some numbers and indices related to mu and sig quantization.
+                f"""
+/*
+    Software Name: Cool-Chic
+    SPDX-FileCopyrightText: Copyright (c) 2023-2024 Orange
+    SPDX-License-Identifier: BSD 3-Clause "New"
+
+    This software is distributed under the BSD-3-Clause license.
+    Authors: see CONTRIBUTORS.md
+*/
+
+// some numbers and indices related to mu and sig quantization.
 int const N_MUQ = {N_MUQ};  // number of mu offsets.
 int const N_SIGQ = {N_SIGQ}; // number of sig values. now 50, so multiple of 10
 int const ZERO_MU = N_MUQ/2;
-
-int const FPSCALE = {FIXED_POINT_FRACTIONAL_MULT}; // integers holding a float *64.
-int const FPSHIFT = {FIXED_POINT_FRACTIONAL_BITS}; // 2^FPSHIFT == FPSCALE
 
 int const SIG_LOG_MIN = {SIG_LOG_MIN}; // this min is IN the set.
 int const SIG_LOG_MAX_EXCL = {SIG_LOG_MAX_EXCL}; // this max is NOT in the set.
@@ -153,27 +198,27 @@ void get_val_mu_indicies(int val_mu, int val_log_sig,
                          int &r_val_mu_rounded, int &r_val_mu_index, int &r_val_log_sig_index)
 {{
     int val_mu_rounded = val_mu;
-    val_mu_rounded = (val_mu_rounded >= 0) ? (val_mu_rounded+FPSCALE/2)>>FPSHIFT<<FPSHIFT : -((-val_mu_rounded+FPSCALE/2)>>FPSHIFT<<FPSHIFT);
+    val_mu_rounded = (val_mu_rounded >= 0) ? (val_mu_rounded+ARM_SCALE/2)>>ARM_PRECISION<<ARM_PRECISION : -((-val_mu_rounded+ARM_SCALE/2)>>ARM_PRECISION<<ARM_PRECISION);
 
     int val_mu_index = (val_mu - val_mu_rounded)*N_MUQ;
     // round to an index
-    val_mu_index = val_mu_index >= 0 ? ((val_mu_index+FPSCALE/2)>>FPSHIFT) : -((-val_mu_index+FPSCALE/2)>>FPSHIFT);
+    val_mu_index = val_mu_index >= 0 ? ((val_mu_index+ARM_SCALE/2)>>ARM_PRECISION) : -((-val_mu_index+ARM_SCALE/2)>>ARM_PRECISION);
     val_mu_index += N_MUQ/2;
 
     // no longer a table.
     int val_log_sig_index;
-    val_log_sig -= SIG_LOG_MIN*FPSCALE;
+    val_log_sig -= SIG_LOG_MIN*ARM_SCALE;
     if (val_log_sig < 0)
         val_log_sig_index = 0;
     else
     {{
-        val_log_sig_index = val_log_sig*(N_SIGQ/(SIG_LOG_MAX_EXCL-SIG_LOG_MIN))+FPSCALE/2;
-        val_log_sig_index >>= FPSHIFT;
+        val_log_sig_index = val_log_sig*(N_SIGQ/(SIG_LOG_MAX_EXCL-SIG_LOG_MIN))+ARM_SCALE/2;
+        val_log_sig_index >>= ARM_PRECISION;
         if (val_log_sig_index >= N_SIGQ)
             val_log_sig_index = N_SIGQ-1;
     }}
 
-    r_val_mu_rounded = val_mu_rounded>>FPSHIFT;
+    r_val_mu_rounded = val_mu_rounded>>ARM_PRECISION;
     r_val_mu_index = val_mu_index;
     r_val_log_sig_index = val_log_sig_index;
 }}
@@ -201,38 +246,57 @@ public:
     BinProbModel_Std m_ppos;
 }};
 
-extern MuSigGTs g_contexts[N_MUQ+1][N_SIGQ];''',
-    file=f)
+extern MuSigGTs g_contexts[N_MUQ+1][N_SIGQ];""",
+                file=f,
+            )
 
-        with open(contexts_cpp+".cpp", "wt") as f:
-            print(f'''
+        with open(contexts_cpp + ".cpp", "wt") as f:
+            print(
+                f"""
+/*
+    Software Name: Cool-Chic
+    SPDX-FileCopyrightText: Copyright (c) 2023-2024 Orange
+    SPDX-License-Identifier: BSD 3-Clause "New"
+
+    This software is distributed under the BSD-3-Clause license.
+    Authors: see CONTRIBUTORS.md
+*/
+
 #include "Contexts.h"
+#include "common.h"
 #include "cc-contexts.h"
 
-MuSigGTs g_contexts[N_MUQ+1][N_SIGQ] = {{''',
-        file=f)
+MuSigGTs g_contexts[N_MUQ+1][N_SIGQ] = {{""",
+                file=f,
+            )
 
             for mu_idx in range(len(contexts)):
                 print("{", file=f)
                 for sig_idx in range(len(contexts[mu_idx])):
                     ctxs = contexts[mu_idx][sig_idx]
-                    print("  MuSigGTs( %d,%d,%d,%d,%d ),"%( \
-                        ctxs["gt0"],
-                        ctxs["gt1"],
-                        ctxs["gt2"],
-                        ctxs["gt3"],
-                        ctxs["ppos"]), file=f)
+                    print(
+                        "  MuSigGTs( %d,%d,%d,%d,%d ),"
+                        % (
+                            ctxs["gt0"],
+                            ctxs["gt1"],
+                            ctxs["gt2"],
+                            ctxs["gt3"],
+                            ctxs["ppos"],
+                        ),
+                        file=f,
+                    )
                 print("},", file=f)
 
             print("};", file=f)
 
-        print(contexts_cpp+".h", "created")
-        print(contexts_cpp+".cpp", "created")
+        print(contexts_cpp + ".h", "created")
+        print(contexts_cpp + ".cpp", "created")
 
-    return contexts, sigs_quanted, probas # probas is only for estimation stats
+    return contexts, sigs_quanted, probas  # probas is only for estimation stats
+
 
 ## Given ARM outputs mu and log_scale, return indicies into MU and SIGMA tables.
-#def get_val_mu_indices(
+# def get_val_mu_indices(
 #        val_mu,
 #        val_log_sig,
 #        sigs_quanted = None
@@ -327,7 +391,7 @@ MuSigGTs g_contexts[N_MUQ+1][N_SIGQ] = {{''',
 #
 #    return val_mu_rounded, val_mu_index, val_log_sig_index
 #
-#def decode_latent_layer_bac_init(
+# def decode_latent_layer_bac_init(
 #                bitstream_bytes: bytes,
 #                layer_height: int,
 #                layer_width: int,
@@ -377,9 +441,9 @@ MuSigGTs g_contexts[N_MUQ+1][N_SIGQ] = {{''',
 #        'hls_sig_blksize': hls_sig_blksize,
 #        }
 #    return context
-#    
+#
 ## Now takes log_scale directly from arm.
-#def decode_latent_layer_bac_continue(
+# def decode_latent_layer_bac_continue(
 #            bac_context,
 #            current_y, pad, # flat-block neighbor pickup.
 #            indices, # wavefront order
@@ -462,6 +526,6 @@ MuSigGTs g_contexts[N_MUQ+1][N_SIGQ] = {{''',
 #        result.append(val_mu_rounded+coded_val)
 #        # print("baccode: y%d,x%d: %d"%(yidx, xidx, val_mu_rounded+coded_val), flush=True)
 #
-#    result = torch.tensor(result, dtype=torch.float32) 
+#    result = torch.tensor(result, dtype=torch.float32)
 #    #print("decoded x wave", result)
 #    return result

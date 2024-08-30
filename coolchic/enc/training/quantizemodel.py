@@ -15,10 +15,8 @@ from enc.utils.misc import exp_golomb_nbins
 from enc.training.loss import loss_function
 from enc.utils.manager import FrameEncoderManager
 from enc.component.frame import FrameEncoder
-from enc.training.test import test
 from enc.utils.codingstructure import Frame
 from enc.utils.misc import (
-    FIXED_POINT_FRACTIONAL_MULT,
     MAX_AC_MAX_VAL,
     POSSIBLE_EXP_GOL_COUNT,
     POSSIBLE_Q_STEP,

@@ -56,10 +56,10 @@ def load_frame_data_from_file(filename: str, idx_display_order: int) -> FrameDat
     """
 
     if filename.endswith(".yuv"):
-        # ! We only consider yuv420 currently. Extend to 444 later
-        bitdepth: POSSIBLE_BITDEPTH = 8 if "yuv420_8b" in filename else 10
-        frame_data_type: FRAME_DATA_TYPE = "yuv420"
-        data = read_yuv_420(filename, idx_display_order)
+        # ! We only consider yuv420 and 444 planar
+        bitdepth: POSSIBLE_BITDEPTH = 8 if "_8b" in filename else 10
+        frame_data_type: FRAME_DATA_TYPE = "yuv420" if "420" in filename else "yuv444"
+        data = read_yuv(filename, idx_display_order, frame_data_type, bitdepth)
 
     elif filename.endswith(".png"):
         bitdepth: POSSIBLE_BITDEPTH = 8
@@ -70,27 +70,26 @@ def load_frame_data_from_file(filename: str, idx_display_order: int) -> FrameDat
     return FrameData(bitdepth, frame_data_type, data)
 
 
-def read_yuv_420(filename: str, frame_idx: int) -> DictTensorYUV:
+def read_yuv(filename: str, frame_idx: int, frame_data_type: FRAME_DATA_TYPE, bit_depth: POSSIBLE_BITDEPTH) -> DictTensorYUV:
     """From a filename /a/b/c.yuv, read the desired frame_index
     and return a dictionary of tensor containing the YUV values:
         {
             'Y': [1, 1, H, W],
-            'U': [1, 1, H / 2, W / 2],
-            'V': [1, 1, H / 2, W / 2],
+            'U': [1, 1, H / S, W / S],
+            'V': [1, 1, H / S, W / S],
         }
+    S is either 1 (444 sampling) or 2 (420)
     The YUV values are in [0., 1.]
-
-    /!\ bit depth and resolution are inferred from the filename which should
-        be something like:
-            B-MarketPlace_1920x1080_60p_yuv420_10b.yuv
-
 
     Args:
         filename (str): Absolute path of the video to load
         frame_idx (int): Index of the frame to load, starting at 0.
+        bit depth (int):number of bits per component (8 or 10 bits).
+        frame_data_type chroma sampling (420,444):
 
     Returns:
-        DictTensorYUV: The YUV values (see format above).
+        DictTensorYUV: The YUV values (see format above) for 420.
+        pytorch tensor for 444 sampling format (consistent with rgb representation)
     """
 
     # Parse height and width from the filename
@@ -98,10 +97,13 @@ def read_yuv_420(filename: str, frame_idx: int) -> DictTensorYUV:
         int(tmp_str)
         for tmp_str in os.path.basename(filename).split(".")[0].split("_")[1].split("x")
     ]
-    w_uv, h_uv = [int(x / 2) for x in [w, h]]
+
+    if frame_data_type == "yuv420":
+        w_uv, h_uv = [int(x / 2) for x in [w, h]]
+    else:
+        w_uv, h_uv = w, h
 
     # Switch between 8 bit file and 10 bit
-    bit_depth = 8 if "yuv420_8b" in filename else 10
     byte_per_value = 1 if bit_depth == 8 else 2
 
     # We only handle YUV420 for now
@@ -118,7 +120,7 @@ def read_yuv_420(filename: str, frame_idx: int) -> DictTensorYUV:
         np.memmap(
             filename,
             mode="r",
-            shape=(n_val_per_frame),
+            shape=n_val_per_frame,
             offset=n_bytes_per_frame * frame_idx,
             dtype=np.uint16 if bit_depth == 10 else np.uint8,
         ).astype(np.float32)
@@ -134,7 +136,12 @@ def read_yuv_420(filename: str, frame_idx: int) -> DictTensorYUV:
 
     # PyTorch expect data in [0., 1.]; normalize by either 255 or 1023
     norm_factor = 2**bit_depth - 1
-    video = DictTensorYUV(y=y / norm_factor, u=u / norm_factor, v=v / norm_factor)
+
+    if frame_data_type == "yuv420":
+        video = DictTensorYUV(y=y / norm_factor, u=u / norm_factor, v=v / norm_factor)
+    else:
+        video = torch.cat([y, u, v], dim=1) / norm_factor
+
     return video
 
 

@@ -32,10 +32,7 @@ from enc.utils.codingstructure import (
     DictTensorYUV,
     convert_444_to_420,
 )
-from enc.utils.misc import (
-    FIXED_POINT_FRACTIONAL_MULT,
-    POSSIBLE_DEVICE,
-)
+from enc.utils.misc import POSSIBLE_DEVICE
 from enc.utils.yuv import yuv_dict_clamp
 
 
@@ -44,7 +41,7 @@ class FrameEncoderOutput:
     """Dataclass representing the output of FrameEncoder forward."""
 
     # Either a [B, 3, H, W] tensor representing the decoded image or a
-    # dictionary with the following keys:
+    # dictionary with the following keys for yuv420:
     #   {
     #         'y': [B, 1, H, W],
     #         'u': [B, 1, H / 2, W / 2],
@@ -318,12 +315,5 @@ def load_frame_encoder(raw_bytes: BytesIO) -> FrameEncoder:
 
     if "coolchic_full_precision_param" in loaded_data:
         frame_encoder.coolchic_encoder.full_precision_param = loaded_data["coolchic_full_precision_param"]
-
-    # TODO: Not really elegant...
-    # If we have a quantized ARM (i.e. with a quantization step present in
-    # coolchic_encoder.nn_q_step), we need to reset this
-    if frame_encoder.coolchic_encoder.nn_q_step.get("arm").get("weight") is not None:
-        print("NOT SETTING SET_QUANT ON LOAD")
-        # frame_encoder.coolchic_encoder.arm.set_quant(FIXED_POINT_FRACTIONAL_MULT)
 
     return frame_encoder

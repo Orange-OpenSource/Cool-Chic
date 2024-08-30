@@ -18,9 +18,10 @@
 #define xstr(x) tostr(x)
 
 // stride and plane_stride are assumed the same for in and out.
-void SYN_NAME(int KS, float *kw, float *kb, int h_in, int w_in, int stride_in, int plane_stride_in, int residue_origin_offset, int N_IN, float *in, int N_OUT, float *out, int residue, int relu)
+void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_in, int plane_stride_in, int residue_origin_offset, int N_IN, int32_t *in, int N_OUT, int32_t *out, int residue, int relu)
 {
     printf("%s(ks=%d N_IN=%d N_OUT=%d, residue=%d relu=%d\n", xstr(SYN_NAME), KS, N_IN, N_OUT, residue, relu);
+
     int const kstride = 1;
 #ifdef SYN_KS
     int const ks = SYN_KS;
@@ -38,7 +39,7 @@ void SYN_NAME(int KS, float *kw, float *kb, int h_in, int w_in, int stride_in, i
     int const n_out = N_OUT;
 #endif
 
-    float *in_layer[std::max(n_in, n_out)];
+    int32_t *in_layer[std::max(n_in, n_out)];
     in_layer[0] = in;
     for (int i = 1; i < std::max(n_in, n_out); i++)
         in_layer[i] = in_layer[i-1]+plane_stride_in;
@@ -52,14 +53,14 @@ void SYN_NAME(int KS, float *kw, float *kb, int h_in, int w_in, int stride_in, i
     }
 #else
     //not in-place
-    float *out_layer[n_out];
+    int32_t *out_layer[n_out];
     out_layer[0] = out;
     for (int i = 1; i < n_out; i++)
         out_layer[i] = out_layer[i-1]+plane_stride_in;
 #endif
 
     // here we collect the output during processing, and flush later.
-    float out_cache[n_out];
+    int32_t out_cache[n_out];
 
     // we want to operate the out kernels one after the other, using the same inputs.
     // then advance all the outs.
@@ -70,27 +71,35 @@ void SYN_NAME(int KS, float *kw, float *kb, int h_in, int w_in, int stride_in, i
         int offso = offs0;
         for (int x = 0; x < w_in-ks+1; x += kstride, offs += kstride, offso++)
         {
-            float *k = kw;
+            int32_t *k = kw;
             for (int ol = 0; ol < n_out; ol++)
             {
-                float sum = kb[ol];
+                int32_t sum = (int32_t)kb[ol];
                 if (residue)
-                    // sum += out_layer[ol][offso];
-                    sum += in_layer[ol][offso+residue_origin_offset];
+                {
+                    // a residue has not been multiplied.
+                    sum += (int32_t)in_layer[ol][offso+residue_origin_offset]<<SYN_MUL_PRECISION;
+                }
                 for (int il = 0; il < n_in; il++)
                 {
                     int offs2 = offs;
                     for (int yy = 0; yy < ks; yy++, offs2 += stride_in-ks)
                         for (int xx = 0; xx < ks; xx++, offs2++)
-                            sum += in_layer[il][offs2]*(*k++);
+                        {
+                            int32_t xxres = ((int32_t)in_layer[il][offs2]*(*k++));
+                            sum += xxres;
+                        }
                 }
+                sum >>= SYN_MUL_PRECISION; // take multiplied sum to output. // !!! check sign?
                 if (relu && sum < 0)
                     sum = 0;
                 out_cache[ol] = sum;
             }
             // flush.
             for (int ol = 0; ol < n_out; ol++)
+            {
                 out_layer[ol][offso] = out_cache[ol];
+            }
         }
     }
 }
@@ -98,3 +107,7 @@ void SYN_NAME(int KS, float *kw, float *kb, int h_in, int w_in, int stride_in, i
 #undef tostr
 #undef xstr
 #undef out_layer
+#undef SYN_NAME
+#undef SYN_KS
+#undef SYN_N_IN
+#undef SYN_N_OUT

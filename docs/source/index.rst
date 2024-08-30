@@ -31,11 +31,22 @@ Current & future features
 
 .. raw:: html
 
+   &nbsp; &nbsp;⚬ &nbsp; &nbsp;<b>Coding performance</b>
+   </br>
+   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ✅ On par with VVC for image coding
+   </br>
+   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ❌ Upcoming improved Cool-chic video
+   </br>
+   </br>
    &nbsp; &nbsp;⚬ &nbsp;<b>I/O format</b>
    </br>
-   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp;✅ RGB, yuv420 8-bit and 10-bit
+   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp;✅ PPM for 8-bit RGB images, yuv420 8-bit and 10-bit
    </br>
-   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp;❌ yuv444 8-bit and 10-bit
+   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp;❌ yuv444
+   </br>
+   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp;❌ Additional output precisions (12, 14 and 16-bit)
+   </br>
+   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp;❌ Output PNG instead of PPM for the decoded images
    </br>
    </br>
    &nbsp; &nbsp;⚬ &nbsp;<b>Decoder</b>
@@ -44,16 +55,9 @@ Current & future features
    </br>
    &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ✅ Integer computation ARM
    </br>
-   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ❌ Complete integerization
+   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ✅ Complete integerization
    </br>
-   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ❌ Decrease memory footprint & faster decoding
-   </br>
-   </br>
-   &nbsp; &nbsp;⚬ &nbsp; &nbsp;<b>Coding performance</b>
-   </br>
-   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ✅ On par with VVC for image coding
-   </br>
-   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ❌ Upcoming improved Cool-chic video
+   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ✅ Decrease memory footprint & faster decoding
    </br>
    </br>
    </br>
@@ -61,15 +65,12 @@ Current & future features
 Cool-chic 3.2 improvements
 """"""""""""""""""""""""""
 
-* **Fast CPU-only decoder** as proposed in `Overfitted image coding at reduced
-  complexity, Blard et al. <https://arxiv.org/abs/2403.11651>`_
+* Make the **CPU-only decoder** even faster
 
-  * Decode a 512x768 image in **100 ms**
-  * C API for **binary arithmetic coding**
-
-* Encoding (*i.e.* training) time **reduced by 35%**
-
-* **Rate reduction of 5%** compared to Cool-chic 3.1.
+  * Decode a 720p image in **100 ms**, **2x faster** than Cool-chic 3.2
+  * Full **integerization** of the decoder for replicability
+  * Reduce decoder **memory footprint**
+  * **Optimized** implementation of 3x3 convolutions & fusion of successive 1x1 convolutions
 
 
 Check-out the `release history
@@ -78,7 +79,7 @@ versions of Cool-chic.
 
 .. attention::
 
-   🛑 Cool-chic 3.2 temporarily disables video coding. If you really want to
+   🛑 Cool-chic 3.3 temporarily disables video coding. If you really want to
    compress videos you can
 
    * Go back to 3.1: ``git clone --branch v3.1

@@ -9,6 +9,7 @@
 
 
 #include "Contexts.h"
+#include "common.h"
 #include "cc-contexts.h"
 
 MuSigGTs g_contexts[N_MUQ+1][N_SIGQ] = {

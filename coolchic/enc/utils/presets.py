@@ -33,7 +33,7 @@ class TrainerPhase:
         freq_valid: Check (and print) the performance
             each ``frequency_validation`` iterations. This drives the patience
             mechanism. Defaults to 100.
-        patience: After ``patience`` validations without any
+        patience: After ``patience`` iterations without any
             improvement to the results, exit the training. Patience is disabled
             by setting ``patience = max_iterations``. If patience is used alongside
             cosine_scheduling_lr, then it does not end the training. Instead,
@@ -190,7 +190,7 @@ class Preset:
     should inherit from this class.
 
     Encoding preset defines how we encode each frame. They are similar to
-    conventional codecs preset *e.g* x264 ``--slow`` preset offers better
+    conventional codecs presets *e.g* x264 ``--slow`` preset offers better
     compression performance at the expense of a longer encoding.
 
     Here a preset defines two things: how the :doc:`warm-up <../training/warmup>`

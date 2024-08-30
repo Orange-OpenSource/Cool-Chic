@@ -11,8 +11,8 @@
 // TO BE INCLUDED WITH AVX_NAME AND NCONTEXTS DEFINED.
 
 
-void AVX_NAME(int32_t **kwtX_n_n, int32_t **kbX_n, // kwtX_n_n[n_hidden_layers] -- kernel weights, transposed.
-                                      int32_t *kwOUT_n_2, int32_t *kbOUT_2, // _n_2, weights not transposed.
+void AVX_NAME(weights_biases *kwtX_n_n, weights_biases *kbX_n, // kwtX_n_n[n_hidden_layers] -- kernel weights, transposed.
+                                      weights_biases *kwOUT_n_2, weights_biases *kbOUT_2, // _n_2, weights not transposed.
                                       int32_t *context_indicies, int32_t n_contexts_param, int32_t n_hidden_layers,
                                       int32_t *src,
                                       int src_h, int src_w, int src_pad,
@@ -29,7 +29,7 @@ void AVX_NAME(int32_t **kwtX_n_n, int32_t **kbX_n, // kwtX_n_n[n_hidden_layers] 
         exit(1);
     }
 
-    const __m256i m64_avx2 = _mm256_set1_epi32(FPSCALE);
+    const __m256i m64_avx2 = _mm256_set1_epi32(ARM_SCALE);
     const __m256i rotate_right = _mm256_setr_epi32(1, 2, 3, 4, 5, 6, 7, 0);
     const __m256i z = _mm256_setzero_si256();
     __m256i mul_avx2;
@@ -97,16 +97,16 @@ void AVX_NAME(int32_t **kwtX_n_n, int32_t **kbX_n, // kwtX_n_n[n_hidden_layers] 
 
         for (int hl = 0; hl < n_hidden_layers; hl++)
         {
-            int32_t *k = kwtX_n_n[hl];
-            out_avx2_src0_0 = _mm256_load_si256((const __m256i*)(kbX_n[hl]+0*8));
+            int32_t *k = kwtX_n_n[hl].data;
+            out_avx2_src0_0 = _mm256_load_si256((const __m256i*)(kbX_n[hl].data+0*8));
 #if NCONTEXTS >= 16
-            out_avx2_src0_1 = _mm256_load_si256((const __m256i*)(kbX_n[hl]+1*8));
+            out_avx2_src0_1 = _mm256_load_si256((const __m256i*)(kbX_n[hl].data+1*8));
 #endif
 #if NCONTEXTS >= 24
-            out_avx2_src0_2 = _mm256_load_si256((const __m256i*)(kbX_n[hl]+2*8));
+            out_avx2_src0_2 = _mm256_load_si256((const __m256i*)(kbX_n[hl].data+2*8));
 #endif
 #if NCONTEXTS >= 32
-            out_avx2_src0_3 = _mm256_load_si256((const __m256i*)(kbX_n[hl]+3*8));
+            out_avx2_src0_3 = _mm256_load_si256((const __m256i*)(kbX_n[hl].data+3*8));
 #endif
 
             __m256i in_avx2;
@@ -190,32 +190,22 @@ void AVX_NAME(int32_t **kwtX_n_n, int32_t **kbX_n, // kwtX_n_n[n_hidden_layers] 
             out_avx2_src0_3 = _mm256_blendv_epi8(z, out_avx2_src0_3, _mm256_cmpgt_epi32(out_avx2_src0_3, z));
 #endif
 
-            in_avx2 = _mm256_broadcastd_epi32(_mm_set1_epi32(FPSCALE/2));
+            in_avx2 = _mm256_broadcastd_epi32(_mm_set1_epi32(ARM_SCALE/2));
 
             out_avx2_src0_0 = _mm256_add_epi32(out_avx2_src0_0, in_avx2);
-            input_avx2_src0_0 = _mm256_srai_epi32(out_avx2_src0_0, FPSHIFT); // /FPSCALE -- src value is positive.
+            input_avx2_src0_0 = _mm256_srai_epi32(out_avx2_src0_0, ARM_PRECISION); // /ARM_SCALE -- src value is positive.
 #if NCONTEXTS >= 16
             out_avx2_src0_1 = _mm256_add_epi32(out_avx2_src0_1, in_avx2);
-            input_avx2_src0_1 = _mm256_srai_epi32(out_avx2_src0_1, FPSHIFT); // /FPSCALE -- src value is positive.
+            input_avx2_src0_1 = _mm256_srai_epi32(out_avx2_src0_1, ARM_PRECISION); // /ARM_SCALE -- src value is positive.
 #endif
 #if NCONTEXTS >= 24
             out_avx2_src0_2 = _mm256_add_epi32(out_avx2_src0_2, in_avx2);
-            input_avx2_src0_2 = _mm256_srai_epi32(out_avx2_src0_2, FPSHIFT); // /FPSCALE -- src value is positive.
+            input_avx2_src0_2 = _mm256_srai_epi32(out_avx2_src0_2, ARM_PRECISION); // /ARM_SCALE -- src value is positive.
 #endif
 #if NCONTEXTS >= 32
             out_avx2_src0_3 = _mm256_add_epi32(out_avx2_src0_3, in_avx2);
-            input_avx2_src0_3 = _mm256_srai_epi32(out_avx2_src0_3, FPSHIFT); // /FPSCALE -- src value is positive.
+            input_avx2_src0_3 = _mm256_srai_epi32(out_avx2_src0_3, ARM_PRECISION); // /ARM_SCALE -- src value is positive.
 #endif
-
-            //printf("hl%d:", hl);
-            //int32_t outputs[16];
-            //_mm256_storeu_si256((__m256i *)&outputs[0], input_avx2_src0_0);
-#if NCONTEXTS >= 16
-            //_mm256_storeu_si256((__m256i *)&outputs[8], input_avx2_src0_1);
-#endif
-            //for (int i = 0; i < 16; i++)
-            //    printf(" %d", outputs[i]);
-            //printf("\n"); fflush(stdout);
         }
 
         // FINAL N -> 2
@@ -224,7 +214,7 @@ void AVX_NAME(int32_t **kwtX_n_n, int32_t **kbX_n, // kwtX_n_n[n_hidden_layers] 
         // we want full registers for the multiplies, and wear the overhead
         // of a horizontal sum for each of the two outputs.
         int out[2];
-        int32_t *k = kwOUT_n_2;
+        int32_t *k = kwOUT_n_2->data;
         for (int ol = 0; ol < n_final_out; ol++)
         {
             mul_avx2 = _mm256_load_si256((const __m256i *)k); k += 8;
@@ -246,11 +236,11 @@ void AVX_NAME(int32_t **kwtX_n_n, int32_t **kbX_n, // kwtX_n_n[n_hidden_layers] 
 #endif
 
             // horizontal sum
-            int32_t sum = kbOUT_2[ol] + hsum_8x32(out_avx2_src0_0);
+            int32_t sum = kbOUT_2->data[ol] + hsum_8x32(out_avx2_src0_0);
             if (sum < 0)
-                sum = -((-sum+FPSCALE/2) >> FPSHIFT);
+                sum = -((-sum+ARM_SCALE/2) >> ARM_PRECISION);
             else
-                sum = (sum+FPSCALE/2) >> FPSHIFT;
+                sum = (sum+ARM_SCALE/2) >> ARM_PRECISION;
 
             // store.
             out[ol] = sum;
@@ -261,7 +251,6 @@ void AVX_NAME(int32_t **kwtX_n_n, int32_t **kbX_n, // kwtX_n_n[n_hidden_layers] 
                         bac_context,
                         out[0], out[1]
                     );
-        src[0] = xx<<FPSHIFT;
-        //printf("y %d x %d xx %d\n", y, x, xx); fflush(stdout);
+        src[0] = xx<<ARM_PRECISION;
     } // x, y
 }

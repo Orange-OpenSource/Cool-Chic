@@ -93,8 +93,8 @@ class UpsamplingConvTranspose2d(nn.Module):
 
     def initialize_parameters(self) -> None:
         """
-        Initialize the weight and the biases of the transpose conv layer
-        performing the upsampling.
+        Initialize **in-place ** the weights and the biases of the transposed
+        convolution layer performing the upsampling.
 
             - Biases are always set to zero.
 

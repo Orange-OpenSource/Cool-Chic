@@ -8,5 +8,7 @@
 */
 
 
-void ups_4x4x4_avx2(int KS, float *kw, int h_in, int w_in, float *in, float *out);
-void ups_4x2x2_avx2(int KS, float *kw, int h_in, int w_in, float *in, float *out);
+void ups_4x4x4_fromarm_avx2(int KS, int32_t *kw, int h_in, int w_in, int stride_in, int32_t *in, int stride_out, int32_t *out);
+void ups_4x4x4_fromups_avx2(int KS, int32_t *kw, int h_in, int w_in, int stride_in, int32_t *in, int stride_out, int32_t *out);
+void ups_4x2x2_fromarm_avx2(int KS, int32_t *kw, int h_in, int w_in, int stride_int, int32_t *in, int stride_out, int32_t *out);
+void ups_4x2x2_fromups_avx2(int KS, int32_t *kw, int h_in, int w_in, int stride_int, int32_t *in, int stride_out, int32_t *out);

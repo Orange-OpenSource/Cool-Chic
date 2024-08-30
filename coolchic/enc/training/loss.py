@@ -59,9 +59,9 @@ def _compute_mse(
     Returns:
         Tensor: One element tensor containing the MSE of x and y.
     """
-    flag_yuv = not (isinstance(x, Tensor))
+    flag_420 = not (isinstance(x, Tensor))
 
-    if not flag_yuv:
+    if not flag_420:
         return ((x - y) ** 2).mean()
     else:
         # Total number of pixels for all channels

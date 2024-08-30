@@ -10,27 +10,23 @@
 
 #include <stdio.h>
 #include <memory.h>
-// #include <immintrin.h>   // Probably not useful
+#include <cmath> // !!! abs
 #include <algorithm>
 
-// ks free, stride==1
-#undef SYN_NAME
-#undef SYN_KS
-#undef SYN_N_IN
-#undef SYN_N_OUT
+#include "common.h"
+#include "syn_cpu.h" // basic defines and expected declarations.
 
 #define SYN_NAME   custom_conv_ks1_inX_outX
 #define SYN_KS     1
 #include "syn_cpu.hpp"
-#undef SYN_NAME
-#undef SYN_KS
-#undef SYN_N_IN
-#undef SYN_N_OUT
 
 #define SYN_NAME   custom_conv_ksX_inX_outX
 #include "syn_cpu.hpp"
-#undef SYN_NAME
-#undef SYN_KS
-#undef SYN_N_IN
-#undef SYN_N_OUT
 
+#define SYN_NAME   custom_conv_ks1_inX_hiddenX_outX
+#define SYN_KS     1
+#include "synfused_cpu.hpp"
+
+#define SYN_NAME   custom_conv_ks3_inX_outX_lb
+#define SYN_KS     3
+#include "synlb_cpu.hpp"

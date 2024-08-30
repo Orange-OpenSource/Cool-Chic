@@ -17,7 +17,7 @@ struct cc_bs_gop_header
     int n_bytes_header;
     int img_h;
     int img_w;
-    int frame_data_type; // 0 rgb, 1 yuv420, 2 yuv444 (unsupported)
+    int frame_data_type; // 0 rgb, 1 yuv420, 2 yuv444
     int bitdepth;
     int intra_period;
     int p_period;
