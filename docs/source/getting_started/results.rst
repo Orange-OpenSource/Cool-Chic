@@ -38,7 +38,7 @@ Image compression
 Image compression performance are presented on the kodak dataset, clic20-pro-valid and jvet datasets.
 
 The following table sums up the compression performance obtained by Cool-chic
-3.2 against different anchors.
+3.3 against different anchors.
 
 +------------------+-----------------------+------------------------+-------------------------+------------------------+--------------------------------------+------------------------+
 | Dataset          | vs. Cool-chic 3.1 [%] | vs. C3, Kim et al. [%] | vs. HEVC (HM 16.20) [%] | vs. VVC (VTM 19.1) [%] | Avg decoder complexity [MAC / pixel] | Avg decoding time [ms] |
