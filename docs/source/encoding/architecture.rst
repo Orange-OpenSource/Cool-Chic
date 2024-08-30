@@ -263,13 +263,19 @@ by comas. Each layer is decomposed as follows:
 
 * ``type`` is either ``linear`` (normal convolution) or ``residual`` (convolution + skip connexion)
 
-* ``non_linearity`` can be ``relu``, ``leakyrelu``, ``gelu`` or ``none``
+* ``non_linearity`` can be ``relu`` or ``none``
 
 .. note::
 
     The number of input features for each layer is automatically inferred from
     the previous one or from the number of latent features.
 
+.. tip::
+
+    The C implementation of Cool-chic decoder is optimized for the most common
+    synthesis architectures. If the first two layers are 1x1 convolutions, they
+    are fused together. 3x3 convolutions at the end of the synthesis have their
+    dedicated faster implementation.
 
 Using a ``512x768`` image from the Kodak dataset and 7 input features as an exemple:
 
@@ -278,7 +284,7 @@ Using a ``512x768`` image from the Kodak dataset and 7 input features as an exem
   (venv) ~/Cool-Chic$ python coolchic/encode.py \
     --input=kodim01.png \
     --n_ft_per_res=1,1,1,1,1,1,1 \
-    --layers_synthesis=40-1-linear-relu,X-1-linear-relu,X-3-residual-relu,X-3-residual-none
+    --layers_synthesis=40-1-linear-relu,3-1-linear-relu,X-3-residual-relu,X-3-residual-none
 
   (venv) ~/Cool-Chic$ cat ./frame_000/archi.txt
 

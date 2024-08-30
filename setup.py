@@ -6,7 +6,7 @@ from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import setup
 from sys import platform
 
-__version__ = "3.2.0"
+__version__ = "3.3.0"
 
 CCLIB_PATH = 'coolchic/CCLIB'
 
@@ -36,7 +36,7 @@ ext_modules = [
         ],
         # Example: passing in the version to the compiled code
         define_macros=[("VERSION_INFO", __version__)],
-        extra_compile_args=["-O3"],
+        extra_compile_args=["-g", "-O3"],
     ),
     Pybind11Extension(
         "ccdecapi_cpu",
@@ -44,15 +44,16 @@ ext_modules = [
             "coolchic/cpp/ccdecapi_cpu.cpp",
             "coolchic/cpp/cc-bitstream.cpp",
             "coolchic/cpp/cc-contexts.cpp",
+            "coolchic/cpp/cc-frame-decoder.cpp",
+            "coolchic/cpp/frame-memory.cpp",
             "coolchic/cpp/arm_cpu.cpp",
             "coolchic/cpp/syn_cpu.cpp",
             "coolchic/cpp/BitStream.cpp",
             "coolchic/cpp/TDecBinCoderCABAC.cpp",
-            "coolchic/cpp/Contexts.cpp"
-        ],
+            "coolchic/cpp/Contexts.cpp"],
         # Example: passing in the version to the compiled code
-        define_macros=[("VERSION_INFO", __version__)],
-        extra_compile_args=["-O3"],
+        define_macros=[("VERSION_INFO", __version__), ("CCDECAPI_CPU", "1")],
+        extra_compile_args=["-g", "-O3"],
     ),
 ]
 
@@ -64,19 +65,20 @@ if platform != "darwin":
                 "coolchic/cpp/ccdecapi_avx2.cpp",
                 "coolchic/cpp/cc-bitstream.cpp",
                 "coolchic/cpp/cc-contexts.cpp",
+                "coolchic/cpp/cc-frame-decoder.cpp",
+                "coolchic/cpp/frame-memory.cpp",
                 "coolchic/cpp/arm_cpu.cpp",
                 "coolchic/cpp/arm_avx2.cpp",
                 "coolchic/cpp/ups_avx2.cpp",
                 "coolchic/cpp/syn_cpu.cpp",
                 "coolchic/cpp/syn_avx2.cpp",
-                "coolchic/cpp/rest_avx2.cpp",
                 "coolchic/cpp/BitStream.cpp",
                 "coolchic/cpp/TDecBinCoderCABAC.cpp",
                 "coolchic/cpp/Contexts.cpp"
             ],
             # Example: passing in the version to the compiled code
-            define_macros=[("VERSION_INFO", __version__)],
-            extra_compile_args=["-O3", "-mavx2"],
+            define_macros=[("VERSION_INFO", __version__), ("CCDECAPI_AVX2", "1")],
+            extra_compile_args=["-g", "-O3", "-mavx2"],
         )
     )
 
@@ -104,8 +106,11 @@ setup(
         "cmake",
         "ConfigArgParse",
         "psutil",
+        "pytest",
+        "pytest-order",
     ]
 )
 
 subprocess.call(f"mkdir -p {CCLIB_PATH}", shell=True)
+
 subprocess.call(f"mv *.so {CCLIB_PATH}", shell=True)

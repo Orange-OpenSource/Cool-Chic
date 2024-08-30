@@ -8,14 +8,15 @@
 */
 
 #include "TDecBinCoderCABAC.h"
-#include "cc-contexts.h"
 #include "common.h"
+#include "cc-contexts.h"
+#include "cc-bac.h"
 #include "arm_cpu.h"
 
 // generic: nctxts (8,16,24,32), hiddenlayers (0,1,2)
 // chains two 16_16, 16_16, final 16_2
-void custom_conv_11_int32_cpu_X_X_X(int32_t **kwtX_n_n, int32_t **kbX_n, // kwtX_n_n[n_hidden_layers] -- kernel weights, transposed.
-                                    int32_t *kwOUT_n_2, int32_t *kbOUT_2, // _n_2, weights not transposed.
+void custom_conv_11_int32_cpu_X_X_X(weights_biases *kwtX_n_n, weights_biases *kbX_n, // kwtX_n_n[n_hidden_layers] -- kernel weights, transposed.
+                                    weights_biases *kwOUT_n_2, weights_biases *kbOUT_2, // _n_2, weights not transposed.
                                     int32_t *context_indicies, int32_t n_contexts, int32_t n_hidden_layers,
                                     int32_t *SRC,
                                     int src_h, int src_w, int src_pad,
@@ -50,24 +51,21 @@ void custom_conv_11_int32_cpu_X_X_X(int32_t **kwtX_n_n, int32_t **kbX_n, // kwtX
         int32_t *outputs = &ioX[0][0]; // switches in outputsX
 
         // load input.
-        //printf("in");
         for (int i = 0; i < n_inout; i++)
         {
             inputs[i] = src[context_indicies[i]]; // gather
-            //printf(" %d", inputs[i]);
         }
-        //printf("\n");
 
         for (int hl = 0; hl < n_hidden_layers; hl++)
         {
             inputs = &ioX[(hl+0)%2][0];
             outputs = &ioX[(hl+1)%2][0];
             // operate the first kwt.
-            int32_t *kw = kwtX_n_n[hl];
-            int32_t *kb = kbX_n[hl];
+            int32_t *kw = kwtX_n_n[hl].data;
+            int32_t *kb = kbX_n[hl].data;
 
             for (int i = 0; i < n_inout; i++)
-                outputs[i] = kb[i] + inputs[i]*FPSCALE; // residual == 1
+                outputs[i] = kb[i] + inputs[i]*ARM_SCALE; // residual == 1
             for (int il = 0; il < n_inout; il++, kw += n_inout)
             {
                 for (int i = 0; i < n_inout; i++)
@@ -78,23 +76,23 @@ void custom_conv_11_int32_cpu_X_X_X(int32_t **kwtX_n_n, int32_t **kbX_n, // kwtX
                 if (outputs[i] < 0)
                     outputs[i] = 0;
                 else
-                    outputs[i] = (outputs[i]+(FPSCALE/2)) >> FPSHIFT;
+                    outputs[i] = (outputs[i]+(ARM_SCALE/2)) >> ARM_PRECISION;
             }
         }
 
         // FINAL 24 -> 2
         int32_t out[2];
-        int32_t *kw = kwOUT_n_2;
-        int32_t *kb = kbOUT_2;
+        int32_t *kw = kwOUT_n_2->data;
+        int32_t *kb = kbOUT_2->data;
         for (int ol = 0; ol < n_final_out; ol++, kw += n_inout)
         {
             int32_t sum = kb[ol];
             for (int il = 0; il < n_inout; il++)
                 sum += outputs[il]*kw[il];
             if (sum < 0)
-                sum = -((-sum+FPSCALE/2) >> FPSHIFT);
+                sum = -((-sum+ARM_SCALE/2) >> ARM_PRECISION);
             else
-                sum = (sum+FPSCALE/2) >> FPSHIFT;
+                sum = (sum+ARM_SCALE/2) >> ARM_PRECISION;
             out[ol] = sum;
         }
 
@@ -103,7 +101,6 @@ void custom_conv_11_int32_cpu_X_X_X(int32_t **kwtX_n_n, int32_t **kbX_n, // kwtX
                         bac_context,
                         out[0], out[1]
                     );
-        // printf("y %d x %d xx %d from %d %d\n", y, x, xx, out[0], out[1]); fflush(stdout);
-        src[0] = xx<<FPSHIFT;
+        src[0] = xx<<ARM_PRECISION;
     } // x, y
 }

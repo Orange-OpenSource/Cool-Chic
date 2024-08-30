@@ -18,7 +18,8 @@
 #define xstr(x) tostr(x)
 
 // stride and plane_stride are assumed the same for in and out.
-void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_in, int plane_stride_in, int residue_origin_offset, int N_IN, int32_t *in, int N_OUT, int32_t *out, int residue, int relu)
+// dedicated to 3x3 kernels that use a line-buffer for temporary storage, allowing in-place convolution.
+void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_in, int plane_stride_in, int residue_origin_offset, int N_IN, int32_t *in, int N_OUT, int32_t *out, int32_t *line_buffer, int residue, int relu)
 {
     printf("%s(ks=%d N_IN=%d N_OUT=%d, residue=%d relu=%d\n", xstr(SYN_NAME), KS, N_IN, N_OUT, residue, relu);
 
@@ -43,33 +44,44 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
     in_layer[0] = in;
     for (int i = 1; i < std::max(n_in, n_out); i++)
         in_layer[i] = in_layer[i-1]+plane_stride_in;
-#if SYN_KS == 1
-// always in-place for ks==1
-#define out_layer in_layer
-    if (out != NULL && out != in)
+    // in-place, must have line buffer.
+    int32_t **out_layer;
+    int32_t *lb[2]; // two line buffer pointers.
+    int h_out = h_in-ks+1;
+    int w_out = w_in-ks+1;
+    if (ks != 3)
     {
-        printf("%s: ks=%d n_in=%d n_out=%d: bad call: should be in-place, but out supplied\n", xstr(SYN_NAME), KS, N_IN, N_OUT);
+        printf("%s: bad call: in-place lb must have ks=3\n", xstr(SYN_NAME));
         exit(1);
     }
-#else
-    //not in-place
-    int32_t *out_layer[n_out];
-    out_layer[0] = out;
-    for (int i = 1; i < n_out; i++)
-        out_layer[i] = out_layer[i-1]+plane_stride_in;
-#endif
+    if (out == NULL || out == in)
+    {
+        // must have a line buffer.
+        if (line_buffer == NULL)
+        {
+            printf("%s: bad call, no line buffer supplied\n", xstr(SYN_NAME));
+            exit(1);
+        }
+        out_layer = in_layer;
+        lb[0] = line_buffer;
+        lb[1] = line_buffer+w_out*n_out;
+    }
+    else
+    {
+        printf("%s: bad call should have lb and in-place\n", xstr(SYN_NAME));
+        exit(1);
+    }
 
     // here we collect the output during processing, and flush later.
-    int32_t out_cache[n_out];
 
     // we want to operate the out kernels one after the other, using the same inputs.
     // then advance all the outs.
     int offs0 = 0;
-    for (int y = 0; y < h_in-ks+1; y += kstride, offs0 += stride_in)
+    for (int y = 0; y < h_out; y += kstride, offs0 += stride_in)
     {
         int offs = offs0;
         int offso = offs0;
-        for (int x = 0; x < w_in-ks+1; x += kstride, offs += kstride, offso++)
+        for (int x = 0; x < w_out; x += kstride, offs += kstride, offso++)
         {
             int32_t *k = kw;
             for (int ol = 0; ol < n_out; ol++)
@@ -93,15 +105,19 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
                 sum >>= SYN_MUL_PRECISION; // take multiplied sum to output. // !!! check sign?
                 if (relu && sum < 0)
                     sum = 0;
-                out_cache[ol] = sum;
-            }
-            // flush.
-            for (int ol = 0; ol < n_out; ol++)
-            {
-                out_layer[ol][offso] = out_cache[ol];
+                lb[y%2][ol*w_out+x] = sum;
             }
         }
+        // we are at the end of this line, flush previous line buffer, if any.
+        if (y >= 1)
+        {
+            for (int ol = 0; ol < n_out; ol++)
+                memcpy(&out_layer[ol][offs0-stride_in+residue_origin_offset], &lb[(y-1)%2][ol*w_out], w_out*sizeof(int32_t));
+        }
     }
+    // flush final line.
+    for (int ol = 0; ol < n_out; ol++)
+        memcpy(&out_layer[ol][offs0-stride_in+residue_origin_offset], &lb[(h_out-1)%2][ol*w_out], w_out*sizeof(int32_t));
 }
 
 #undef tostr

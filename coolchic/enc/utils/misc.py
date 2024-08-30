@@ -7,8 +7,6 @@
 # Authors: see CONTRIBUTORS.md
 
 
-import math
-import struct
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -17,7 +15,6 @@ from typing import Literal, Optional, Union
 import psutil
 import torch
 from torch import Tensor, nn
-from torch.distributions import Laplace
 
 # ============================ Device management ============================ #
 POSSIBLE_DEVICE = Literal["cpu", "cuda:0"]
@@ -88,6 +85,7 @@ class DescriptorCoolChic:
     upsampling: Optional[DescriptorNN] = None
     synthesis: Optional[DescriptorNN] = None
 
+
 # ======================= Some useful data structures ======================= #
 
 # =============== Neural network quantization & integerization ============== #
@@ -107,12 +105,12 @@ POSSIBLE_Q_STEP = {
         "bias": 2.0 ** POSSIBLE_Q_STEP_SHIFT["arm"]["bias"],
     },
     "upsampling": {
-        "weight": 2.0 ** torch.linspace(-15, 0, 16, device="cpu"),
-        "bias": 2.0 ** torch.tensor([0.]),
+        "weight": 2.0 ** torch.linspace(-12, 0, 13, device="cpu"),
+        "bias": 2.0 ** torch.tensor([0.0]),
     },
     "synthesis": {
-        "weight": 2.0 ** torch.linspace(-15, 0, 16, device="cpu"),
-        "bias": 2.0 ** torch.linspace(-15, 0, 16, device="cpu"),
+        "weight": 2.0 ** torch.linspace(-12, 0, 13, device="cpu"),
+        "bias": 2.0 ** torch.linspace(-24, 0, 25, device="cpu"),
     },
 }
 
@@ -227,7 +225,7 @@ def measure_expgolomb_rate(
         v = torch.cat(v)
 
         # This will be pretty long! Could it be vectorized?
-        rate_param[k] = exp_golomb_nbins(v, count = current_expgol_cnt)
+        rate_param[k] = exp_golomb_nbins(v, count=current_expgol_cnt)
 
     return rate_param
 
@@ -245,10 +243,14 @@ def exp_golomb_nbins(symbol: Tensor, count: int = 0) -> Tensor:
     """
 
     # We encode the sign equiprobably at the end thus one more bit if symbol != 0
-    nbins = 2 * torch.floor(torch.log2(symbol.abs() / (2 ** count) + 1)) + count + 1 + (symbol != 0)
+    nbins = (
+        2 * torch.floor(torch.log2(symbol.abs() / (2**count) + 1))
+        + count
+        + 1
+        + (symbol != 0)
+    )
     res = nbins.sum()
     return res
-
 
 
 # =============== Neural network quantization & integerization ============== #
@@ -275,84 +277,86 @@ def mem_info(strinfo: str = "Memory allocated") -> None:
     print(f'{" "*100}{str_display}')
     print(f'{" "*100}{"-"*L}')
 
+
 # BAC coding in python.
 # Now just maps a proba to a 'state-index' -- the state-index is used by C++ encoding & decoding.
 
 # precalculated table taken from direct measurements -- the (VTM) states to use in m_state[0] and m_state[1] are both (2*index+1) << 8.
-proba0MPS = torch.tensor([
-                0.9891080263649208,
-                0.9746796308915489,
-                0.9588652555405722,
-                0.9438961210609208,
-                0.9289674808078398,
-                0.9144650894999015,
-                0.8988797291640259,
-                0.8849083818638724,
-                0.8705505632961241,
-                0.8542913027588402,
-                0.8408964152537145,
-                0.8235910172675731,
-                0.8098350556562219,
-                0.7937188645720145,
-                0.7772227308111015,
-                0.7659913470050881,
-                0.743033931648849,
-                0.7348898852047242,
-                0.7178727301215397,
-                0.7071067811865476,
-                0.6870085695324213,
-                0.6729634236899158,
-                0.6597996876307916,
-                0.6433608266170463,
-                0.6299896359774878,
-                0.6155722066724582,
-                0.6040333034402598,
-                0.5832959652701518,
-                0.5705795714817147,
-                0.5520611562919205,
-                0.5412248551068882,
-                0.5244946637874729,
-                0.5,
-                0.4585020216023356,
-                0.4528797696244531,
-                0.43527528164806206,
-                0.42044820762685725,
-                0.39685943228600723,
-                0.39685943228600723,
-                0.37151696582442445,
-                0.3535533905932738,
-                0.3364817118449579,
-                0.32987697769322355,
-                0.31499481798874385,
-                0.29730177875068026,
-                0.2806219957472792,
-                0.2726269331663144,
-                0.25,
-                0.25,
-                0.2227349718384631,
-                0.2050858697731751,
-                0.19842971614300361,
-                0.1767766952966369,
-                0.16493848884661177,
-                0.14865088937534013,
-                0.1363134665831572,
-                0.125,
-                0.10254293488658756,
-                0.08838834764831845,
-                0.07432544468767006,
-                0.0625,
-                0.04419417382415922,
-                0.03125,
-                0.015625,
-        ])
+proba0MPS = torch.tensor(
+    [
+        0.9891080263649208,
+        0.9746796308915489,
+        0.9588652555405722,
+        0.9438961210609208,
+        0.9289674808078398,
+        0.9144650894999015,
+        0.8988797291640259,
+        0.8849083818638724,
+        0.8705505632961241,
+        0.8542913027588402,
+        0.8408964152537145,
+        0.8235910172675731,
+        0.8098350556562219,
+        0.7937188645720145,
+        0.7772227308111015,
+        0.7659913470050881,
+        0.743033931648849,
+        0.7348898852047242,
+        0.7178727301215397,
+        0.7071067811865476,
+        0.6870085695324213,
+        0.6729634236899158,
+        0.6597996876307916,
+        0.6433608266170463,
+        0.6299896359774878,
+        0.6155722066724582,
+        0.6040333034402598,
+        0.5832959652701518,
+        0.5705795714817147,
+        0.5520611562919205,
+        0.5412248551068882,
+        0.5244946637874729,
+        0.5,
+        0.4585020216023356,
+        0.4528797696244531,
+        0.43527528164806206,
+        0.42044820762685725,
+        0.39685943228600723,
+        0.39685943228600723,
+        0.37151696582442445,
+        0.3535533905932738,
+        0.3364817118449579,
+        0.32987697769322355,
+        0.31499481798874385,
+        0.29730177875068026,
+        0.2806219957472792,
+        0.2726269331663144,
+        0.25,
+        0.25,
+        0.2227349718384631,
+        0.2050858697731751,
+        0.19842971614300361,
+        0.1767766952966369,
+        0.16493848884661177,
+        0.14865088937534013,
+        0.1363134665831572,
+        0.125,
+        0.10254293488658756,
+        0.08838834764831845,
+        0.07432544468767006,
+        0.0625,
+        0.04419417382415922,
+        0.03125,
+        0.015625,
+    ]
+)
 
 
 # Return a 'stateindex' given a probability of sending 0.
 def bac_state_idx_from_proba_0(p0):
-
     # Search for p0 in the table.  that becomes the state.
     states = torch.argmin((proba0MPS - p0).abs())
     # print("states", states, flush=True)
     state = states.item()
 
-    return state*2+1 # [1..127:2]
+    return state * 2 + 1  # [1..127:2]

@@ -202,10 +202,6 @@ class VideoEncoder():
                     + "-" * 80
                 )
 
-                # Remove the ARM integerization before training, it will
-                # be set later by the quantize_model() function
-                # frame_encoder.coolchic_encoder.arm.set_quant(0)
-                # frame_encoder.to_device(device)
                 frame.to_device(device)
 
                 # Get the number of candidates from the initial warm-up phase

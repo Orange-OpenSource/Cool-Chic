@@ -18,8 +18,8 @@ namespace py = pybind11;
 #include "TDecBinCoderCABAC.h" // decoding weights/biases
 #include "TEncBinCoderCABAC.h" // encoding weights/bases, latents. 
 #include "Contexts.h"
-#include "cc-contexts.h"
 #include "common.h" // needed now for weights/biases decode.
+#include "cc-contexts.h"
 #include "BitStream.h"
 
 // encode weights and biases to a file.
@@ -266,13 +266,11 @@ void cc_code_latent_layer_bac(
             {
                 for (int bx = 0; bx < nbx; bx++)
                 {
-                    //printf("%d", !!blk_sig[by*nbx+bx]);
                     if (hls_sig_update)
                         layer_BAC.encodeBin(ctx, !!blk_sig[by*nbx+bx], true);
                     else
                         layer_BAC.encodeBinEP(!!blk_sig[by*nbx+bx]);
                 }
-                //printf("\n");
             }
 
 #if ENTROPY_CODING_DEBUG
@@ -311,7 +309,6 @@ void cc_code_latent_layer_bac(
                             layer_BAC.encodeBinEP(!!blk_flat[by*nbx+bx]);
                     }
                 }
-                //printf("\n");
             }
 #if ENTROPY_CODING_DEBUG
             if (hls_sig_update)
@@ -322,6 +319,7 @@ void cc_code_latent_layer_bac(
 
     // LATENTS
     for (int y = 0; y < layer_height; y++)
+    {
     for (int x = 0; x < layer_width; x++)
     {
         if (hls_sig_blksize > 0 && !blk_sig[(y>>hls_sig_shift)*nbx+(x>>hls_sig_shift)])
@@ -342,12 +340,13 @@ void cc_code_latent_layer_bac(
         int val_mu_index;
         int val_log_sig_index;
         get_val_mu_indicies(val_mu, val_log_sig, val_mu_rounded, val_mu_index, val_log_sig_index);
-        //printf("idx %d val %d val_mu_index %d val_log_sig_index %d val_mu_rounded %d\n", idx, val_to_code, val_mu_index, val_log_sig_index, val_mu_rounded);
         val_to_code = val_to_code - val_mu_rounded;
 
         auto coding_ctxs = &g_contexts[val_mu_index][val_log_sig_index];
         code_val(layer_BAC, coding_ctxs, val_to_code);
     }
+    }
+    fflush(stdout);
 
     layer_BAC.encodeBinTrm(1);
     layer_BAC.finish();

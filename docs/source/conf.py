@@ -113,9 +113,9 @@ html_theme_options = {
     "globaltoc_expand_depth": 3,
     "accent_color": "orange",
     "announcement": (
-        "<center>🏎️ 🔥 New release: <b>Cool-chic 3.2</b> <i>Go fast boiii!</i> 🏎️ 🔥 "
+        "<center> 🚀 Cool-chic 3.3 An even faster decoder! "
         "<a href=https://github.com/Orange-OpenSource/Cool-Chic>"
-        "Check out the git repository</a></center>"
+        "Check out the git repository</a> 🚀 </center>"
     ),
 }
 

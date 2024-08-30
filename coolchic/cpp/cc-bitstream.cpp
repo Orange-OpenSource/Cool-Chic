@@ -204,6 +204,7 @@ bool read_frame_header(FILE *bs, struct cc_bs_frame_header &frame_header)
         printf(" ");
         print_syn(frame_header.layers_synthesis[i]);
     }
+    printf("\n");
 
     print_lqi("arm", frame_header.arm_lqi);
     print_lqi("ups", frame_header.ups_lqi);

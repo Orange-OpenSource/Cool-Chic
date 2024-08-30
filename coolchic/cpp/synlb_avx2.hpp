@@ -17,12 +17,10 @@
 #define tostr(x) #x
 #define xstr(x) tostr(x)
 
-// only suitable for width%8 == 0
-
-// POSSIBLE IN-PLACE -- output overwrites input, to minimise cpu cache stress with multi-layer approach.
 // ALWAYS IN-PLACE for SYN_KS == 1
 // stride_in and plane_stride_in are assumed the same for out.
-void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_in, int plane_stride_in, int residue_origin_offset, int N_IN, int32_t *in, int N_OUT, int32_t *out, int residue, int relu)
+// dedicated to 3x3 kernels that use a line-buffer for temporary storage, allowing in-place convolution.
+void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_in, int plane_stride_in, int residue_origin_offset, int N_IN, int32_t *in, int N_OUT, int32_t *out, int32_t *line_buffer, int residue, int relu)
 {
     //printf("%s(ks=%d N_IN=%d N_OUT=%d, residue=%d, relu=%d\n", xstr(SYN_NAME), KS, N_IN, N_OUT, residue, relu);
     int const kstride = 1;
@@ -61,21 +59,34 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
     in_layer[0] = in;
     for (int i = 1; i < std::max(n_in, n_out); i++)
         in_layer[i] = in_layer[i-1]+plane_stride_in;
-//#if SYN_KS == 1
-//// possible in-place for ks==1 -- we do not check here.
-//#define out_layer in_layer
-//    if (out != NULL && out != in)
-//    {
-//        printf("%s: ks=%d n_in=%d n_out=%d: bad call: should be in-place, but out supplied\n", xstr(SYN_NAME), KS, N_IN, N_OUT);
-//        exit(1);
-//    }
-//#else
-    //not in-place
-    int32_t *out_layer[N_OUT];
-    out_layer[0] = out;
-    for (int i = 1; i < N_OUT; i++)
-        out_layer[i] = out_layer[i-1]+plane_stride_in;
-//#endif
+
+    // in-place, must have line buffer.
+    int32_t **out_layer;
+    int32_t *lb[2]; // two line buffer pointers.
+    int h_out = h_in-ks+1;
+    int w_out = w_in-ks+1;
+    if (ks != 3)
+    {
+        printf("%s: bad call: in-place lb must have ks=3\n", xstr(SYN_NAME));
+        exit(1);
+    }
+    if (out == NULL || out == in)
+    {
+        // must have a line buffer.
+        if (line_buffer == NULL)
+        {
+            printf("%s: bad call, no line buffer supplied\n", xstr(SYN_NAME));
+            exit(1);
+        }
+        out_layer = in_layer;
+        lb[0] = line_buffer;
+        lb[1] = line_buffer+w_out*n_out;
+    }
+    else
+    {
+        printf("%s: bad call should have lb and in-place\n", xstr(SYN_NAME));
+        exit(1);
+    }
 
     const __m256i z = _mm256_setzero_si256();
 
@@ -171,8 +182,8 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
                     for (int ol = 0; ol < atatime; ol++)
                     {
                         out_avx2[ol] = _mm256_srai_epi32(out_avx2[ol], SYN_MUL_PRECISION);
-                        _mm256_storeu_si256((__m256i_u*)&out_layer[olbase+ol][offso], out_avx2[ol]);
-
+                        //_mm256_storeu_si256((__m256i_u*)&out_layer[olbase+ol][offso], out_avx2[ol]);
+                        _mm256_storeu_si256((__m256i_u*)&lb[y%2][(olbase+ol)*w_out+x_blk*8], out_avx2[ol]);
                     }
                 }
                 else
@@ -184,13 +195,22 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
                         int32_t store[8];
                         out_avx2[ol] = _mm256_srai_epi32(out_avx2[ol], SYN_MUL_PRECISION);
                         _mm256_storeu_si256((__m256i_u*)&store[0], out_avx2[ol]);
-                        memcpy(&out_layer[olbase+ol][offso], &store[0], n_outs*sizeof(store[0]));
+                        memcpy(&lb[y%2][(olbase+ol)*w_out+x_blk*8], &store[0], n_outs*sizeof(store[0]));
                     }
                 }
             } // olbase
             offso += 8;
         } // x_blk
+        // we are at the end of this line, flush previous line buffer, if any.
+        if (y >= 1)
+        {
+            for (int ol = 0; ol < n_out; ol++)
+                memcpy(&out_layer[ol][offsi_base-stride_in+residue_origin_offset], &lb[(y-1)%2][ol*w_out], w_out*sizeof(int32_t));
+        }
     } // y
+    // flush final line.
+    for (int ol = 0; ol < n_out; ol++)
+        memcpy(&out_layer[ol][offsi_base-stride_in+residue_origin_offset], &lb[(h_out-1)%2][ol*w_out], w_out*sizeof(int32_t));
 }
 
 #undef tostr

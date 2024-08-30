@@ -9,6 +9,7 @@ import numpy as np
 if __name__ == '__main__':
 
     print("Starting sanity check...\n")
+    os.environ["MKL_SERVICE_FORCE_INTEL"] = "1"
 
     input_image = './test/data/192x128_kodim15.png'
     test_workdir = 'test/test-workdir/'

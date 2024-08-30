@@ -1,8 +1,8 @@
                                   BDR vtm [%]   BDR hm [%]   BDR coolchic-3-1 [%]   Avg C [MAC/px]   Avg time [ms]  
 
-      release-3-2-0-jvet_classB   19.433        -10.866      -7.223                 1803             485            
-      release-3-2-0-jvet_classC   10.638        -15.005      -2.479                 1942             186            
-      release-3-2-0-jvet_classD   11.05         -11.186      -1.374                 1086             30             
-      release-3-2-0-jvet_classE   32.503        -2.688       -9.105                 1814             332            
-      release-3-2-0-jvet_classF   20.233        -32.03       -3.206                 2201             456            
-  release-3-2-0-jvet_classBCDEF   18.865        -18.171      -5.164                 1769             306            
+      release-3-3-0-jvet_classB   19.529        -10.804      -7.152                 1803             260            
+      release-3-3-0-jvet_classC   10.687        -14.972      -2.442                 1942             75             
+      release-3-3-0-jvet_classD   11.098        -11.153      -1.339                 1086             21             
+      release-3-3-0-jvet_classE   32.729        -2.53        -8.955                 1814             106            
+      release-3-3-0-jvet_classF   20.302        -32.001      -3.135                 2201             152            
+  release-3-3-0-jvet_classBCDEF   18.954        -18.121      -5.093                 1769             130            

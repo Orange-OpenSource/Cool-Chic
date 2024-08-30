@@ -1,2 +1,2 @@
                                   BDR vtm [%]   BDR hm [%]   BDR c3 [%]   BDR coolchic-3-1 [%]   Avg C [MAC/px]   Avg time [ms]  
-             release-3-2-0-clic   -2.024        -24.888      -1.068       -4.28                  1907             857            
+           release-3-3-0-clic20   -1.946        -24.831      -0.991       -4.207                 1907             364            

@@ -79,7 +79,8 @@ class SynthesisConv2d(nn.Module):
             return y
 
     def initialize_parameters(self) -> None:
-        """Return **a copy** of the weights and biases inside the module.
+        """Initialize **in place** the weights and biases of the
+        ``SynthesisConv2d`` layer.
 
         * Biases are always set to zero.
 
@@ -142,9 +143,8 @@ class Synthesis(nn.Module):
                 \mathrm{conv}(\\mathbf{x}) & \\text{otherwise.} \\\\
             \\end{cases}
 
-    * ``non_linearity``: either ``none`` (no non linearity), ``relu`` or
-      ``leakyrelu``. Note that non linearity is applied after the residual
-      connexion if any.
+    * ``non_linearity``: either ``none`` (no non-linearity) or ``relu``.
+        The non-linearity is applied after the residual connexion if any.
 
     Example of a convolution layer with 40 input features, 3 output features, a
     residual connexion followed with a relu: ``40-3-residual-relu``
@@ -153,8 +153,8 @@ class Synthesis(nn.Module):
     possible_non_linearity = {
         "none": nn.Identity,
         "relu": nn.ReLU,
-        "leakyrelu": nn.LeakyReLU,
-        # "gelu": nn.GELU,  # Unsupported by the fast decoder
+        # "leakyrelu": nn.LeakyReLU,    # Unsupported by the decoder
+        # "gelu": nn.GELU,              # Unsupported by the decoder
     }
 
     possible_mode = ["linear", "residual"]

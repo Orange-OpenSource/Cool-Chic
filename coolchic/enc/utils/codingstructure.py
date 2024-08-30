@@ -132,7 +132,7 @@ def convert_420_to_444(yuv420: DictTensorYUV) -> Tensor:
 
 @dataclass
 class FrameData:
-    """FrameData is a dataclass storing the actual pixel value of a frame and
+    """FrameData is a dataclass storing the actual pixel values of a frame and
     a few additional information about its size, bitdepth of color space.
 
     Args:

@@ -6,7 +6,6 @@
 #
 # Authors: see CONTRIBUTORS.md
 
-import inspect
 import math
 import typing
 from dataclasses import dataclass, field, fields
@@ -122,15 +121,8 @@ class CoolChicEncoderParameter:
         return s
 
 
-
 class CoolChicEncoderOutput(TypedDict):
     """``TypedDict`` representing the output of CoolChicEncoder forward.
-
-    .. hint::
-
-        ``torch.jit`` requires I/O of modules to be either ``Tensor``, ``List``
-        or ``Dict``. So we don't use a python dataclass here and rely on
-        ``TypedDict`` instead.
 
     Args:
         raw_out (Tensor): Output of the synthesis :math:`([B, C, H, W])`.
@@ -157,9 +149,6 @@ class CoolChicEncoder(nn.Module):
                 `CoolChicEncoderParameter` for more information
         """
         super().__init__()
-
-        # ? What is this for?
-        torch.set_printoptions(threshold=10000000)
 
         # Everything is stored inside param
         self.param = param

@@ -44,29 +44,29 @@ pixel.
 
 ### Current & future features
 
-- I/O format
-  - ✅ RGB, yuv420 8-bit and 10-bit
-  - ❌ yuv444 8-bit and 10-bit
-- Decoder
-  - ✅ Fast C implementation
-  - ✅ Integer computation for the ARM
-  - ❌ Complete integerization
-  - ❌ Decrease memory footprint & faster decoding
 - Coding performance
   - ✅ On par with VVC for image coding
   - ❌ Upcoming improved Cool-chic video
+- I/O format
+  - ✅ PPM for 8-bit RGB images, yuv420 8-bit and 10-bit
+  - ❌ yuv444
+  - ❌ Additional output precisions (12, 14 and 16-bit)
+  - ❌ Output PNG instead of PPM for the decoded images
+- Decoder
+  - ✅ Fast C implementation
+  - ✅ Integer computation for the ARM
+  - ✅ Complete integerization
+  - ✅ Decrease memory footprint & faster decoding
 
+### Latest release: 🚀 __Cool-chic 3.3: An even faster decoder!__ 🚀
 
-### Latest release: __Cool-chic 3.2: Go fast boiii__ 🔥 🏎️
-
-- **Fast CPU-only decoder** as proposed in [_Overfitted image coding at reduced complexity_, Blard et al.](https://arxiv.org/abs/2403.11651)
-    - Decode a 512x768 image in **100 ms**
-    - C API for **binary arithmetic coding**
-- Encoding time **reduced by 35%**
-- Rate **reduction of 5%** compared to Cool-chic 3.1
+- Make the **CPU-only decoder** even faster.
+    - Decode a 720p image in **100 ms**, **2x faster** than Cool-chic 3.2
+    - Full **integerization** of the decoder for replicability
+    - Reduce decoder **memory footprint**
+    - **Optimized** implementation of 3x3 convolutions & fusion of successive 1x1 convolutions
 
 Check-out the [release history](https://github.com/Orange-OpenSource/Cool-Chic/releases) to see previous versions of Cool-chic.
-
 
 # Setup
 
@@ -99,14 +99,9 @@ to reproduce the results inside the ```results/``` directory.
 
 | Dataset          | Vs. Cool-chic 3.1                            | Vs. [_C3_, Kim et al.](https://arxiv.org/abs/2312.02753) | Vs. HEVC (HM 16.20)                          | Vs. VVC (VTM 19.1)                           | Avg decoder MAC / pixel          | Avg decoding time [ms]           |
 |------------------|----------------------------------------------|----------------------------------------------------------|----------------------------------------------|----------------------------------------------|----------------------------------|----------------------------------|
-| kodak            | <span style="color:green" > - 1.9 % </span>  | <span style="color:green"> - 3.5 %  </span>              | <span style="color:green" > - 16.4 % </span> | <span style="color:#f50" > + 4.4 %   </span> | 1880                             | 168                              |
-| clic20-pro-valid | <span style="color:green" > - 4.3 % </span>  | <span style="color:green"> - 1.1 %  </span>              | <span style="color:green" > - 24.9 % </span> | <span style="color:green"> - 2.0 %   </span> | 1907                             | 857                              |
-| jvet class B     | <span style="color:green" > - 7.2 % </span>  | <span style="color:gray"> /  </span>                     | <span style="color:green" > - 10.9 % </span> | <span style="color:#f50"> + 19.4 %   </span> | 1803                             | 485                              |
-<!-- | jvet class C     | <span style="color:green" > - 2.5 % </span>  | <span style="color:gray"> /  </span>                     | <span style="color:green" > - 15.0 % </span> | <span style="color:#f50"> + 10.7 %   </span> | 1942                             | 186                              |
-| jvet class D     | <span style="color:green" > - 1.4 % </span>  | <span style="color:gray"> /  </span>                     | <span style="color:green" > - 11.2 % </span> | <span style="color:#f50"> + 11.0 %   </span> | 1086                             | 30                               |
-| jvet class E     | <span style="color:green" > - 9.1 % </span>  | <span style="color:gray"> /  </span>                     | <span style="color:green" >  - 2.7 % </span> | <span style="color:#f50"> + 32.5 %   </span> | 1814                             | 332                              |
-| jvet class F     | <span style="color:green" > - 3.2 % </span>  | <span style="color:gray"> /  </span>                     | <span style="color:green" > - 32.0 % </span> | <span style="color:#f50"> + 20.2 %   </span> | 2201                             | 456                              | -->
-
+| kodak            | <span style="color:green" > - 1.9 % </span>  | <span style="color:green"> - 3.4 %  </span>              | <span style="color:green" > - 16.4 % </span> | <span style="color:#f50" > + 4.5 %   </span> | 1880                             | 96                               |
+| clic20-pro-valid | <span style="color:green" > - 4.2 % </span>  | <span style="color:green"> - 1.0 %  </span>              | <span style="color:green" > - 24.8 % </span> | <span style="color:green"> - 1.9 %   </span> | 1907                             | 364                              |
+| jvet class B     | <span style="color:green" > - 7.2 % </span>  | <span style="color:gray"> /  </span>                     | <span style="color:green" > - 10.8 % </span> | <span style="color:#f50"> + 19.5 %   </span> | 1803                             | 260                              |
 
 ### Kodak
 
