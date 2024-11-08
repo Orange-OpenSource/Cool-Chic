@@ -57,7 +57,7 @@
     .. grid-item-card:: :octicon:`file-media` I/O format
         :link: https://orange-opensource.github.io/Cool-Chic/encoding/overview.html#i-o-format
 
-        Encode PNG, PPM and YUV file with a bitdepth of 8 to 16
+        Encode PNG, PPM and YUV 420 & 444 files with a bitdepth of 8 to 16
         bits.
 
 |
