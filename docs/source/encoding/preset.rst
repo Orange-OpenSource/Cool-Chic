@@ -61,8 +61,13 @@ Recipes
 Cool-chic encoding works with tweakable recipes *i.e.* different training
 parameters. Currently available recipes are:
 
-* ``c3x`` Inspired by `C3: High-performance and low-complexity neural compression from a single image or video, Kim et al <https://arxiv.org/abs/2312.02753>`_
-  * Composed of two main phases: 1. additive noise model and softround for the latent quantization 2. Actual quantization with softround in the backward
+* ``c3x`` Inspired by `C3: High-performance and low-complexity neural
+  compression from a single image or video, Kim et al
+  <https://arxiv.org/abs/2312.02753>`_. It is composed of two main phases:
+
+    1. additive noise model and softround for the latent quantization
+
+    2. Actual quantization with softround in the backward
 
 * ``debug`` Extremely fast preset with very bad performance only for debugging purposes.
 

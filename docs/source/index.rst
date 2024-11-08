@@ -1,108 +1,86 @@
+:layout: landing
+:description: Cool-chic is a low-complexity neural image codec, offering coding
+    performance on par with VVC and fast CPU-only decoding.
+
 .. raw:: html
 
-    <style> .gray {color:gray} </style>
+    <style> .accent {color:blue} </style>
 
-.. role:: gray
+
+.. role:: accent
+
+
+.. Cool-chic
+.. =========
 
 .. image:: assets/coolchic-logo-light.png
-  :align: center
-  :height: 200
-  :alt: Logo Cool-chic
-
-.. raw:: html
-
-   <div align="center">
-   <p align="center">
-      <br />
-      <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/results.html">Decode provided bitstreams</a>
-      ·
-      <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/results.html#clic20-pro-valid">Compression performance</a>
-   </p>
-   </div>
-
-**Cool-chic** (pronounced :gray:`/kul ʃik/` as in French 🥖🧀🍷) is a
-low-complexity neural image codec based on overfitting. It offers image coding
-performance competitive with H.266/VVC for 2000 multiplications per decoded
-pixel.
+   :height: 200
+   :align: center
+   :alt: Logo Cool-chic
 
 
-Current & future features
-"""""""""""""""""""""""""
+.. rst-class:: lead
 
-.. raw:: html
-
-   &nbsp; &nbsp;⚬ &nbsp; &nbsp;<b>Coding performance</b>
-   </br>
-   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ✅ On par with VVC for image coding
-   </br>
-   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ❌ Upcoming improved Cool-chic video
-   </br>
-   </br>
-   &nbsp; &nbsp;⚬ &nbsp;<b>I/O format</b>
-   </br>
-   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp;✅ PPM for 8-bit RGB images, yuv420 8-bit and 10-bit
-   </br>
-   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp;❌ yuv444
-   </br>
-   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp;❌ Additional output precisions (12, 14 and 16-bit)
-   </br>
-   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp;❌ Output PNG instead of PPM for the decoded images
-   </br>
-   </br>
-   &nbsp; &nbsp;⚬ &nbsp;<b>Decoder</b>
-   </br>
-   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ✅ Fast C implementation
-   </br>
-   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ✅ Integer computation ARM
-   </br>
-   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ✅ Complete integerization
-   </br>
-   &nbsp; &nbsp;&nbsp; &nbsp; - &nbsp; ✅ Decrease memory footprint & faster decoding
-   </br>
-   </br>
-   </br>
-
-Cool-chic 3.3 improvements
-""""""""""""""""""""""""""
-
-* Make the **CPU-only decoder** even faster
-
-  * Decode a 720p image in **100 ms**, **2x faster** than Cool-chic 3.2
-  * Full **integerization** of the decoder for replicability
-  * Reduce decoder **memory footprint**
-  * **Optimized** implementation of 3x3 convolutions & fusion of successive 1x1 convolutions
+   Cool-chic (pronounced :accent:`/kul ʃik/` as in French 🥖🧀🍷) is a low-complexity neural
+   image codec based on overfitting. It offers coding performance on par with
+   H.266/VVC for 1000 multiplications per decoded pixel, allowing for fast
+   CPU-only decoding.
 
 
-Check-out the `release history
-<https://github.com/Orange-OpenSource/Cool-Chic/releases>`_ to see previous
-versions of Cool-chic.
+.. container:: buttons
 
-.. attention::
+   `Docs <https://orange-opensource.github.io/Cool-Chic/getting_started/quickstart.html>`_
+   `What's new in 3.4? <https://orange-opensource.github.io/Cool-Chic/getting_started/new_stuff.html>`_
+   `Decode some bitstreams <https://orange-opensource.github.io/Cool-Chic/getting_started/results.html>`_
+   `Coding performance <https://orange-opensource.github.io/Cool-Chic/getting_started/results.html#clic20-pro-valid>`_
 
-   🛑 Cool-chic 3.3 temporarily disables video coding. If you really want to
-   compress videos you can
 
-   * Go back to 3.1: ``git clone --branch v3.1
-     https://github.com/Orange-OpenSource/Cool-Chic.git``
+.. grid:: 1 1 1 2
+    :gutter: 2
+    :class-row: surface
 
-   * Wait for Cool-chic 4.0 for better and faster video coding 😉.
+    .. grid-item-card:: :octicon:`trophy` Great coding performance
+      :link: https://orange-opensource.github.io/Cool-Chic/getting_started/results.html
 
-Thanks
-""""""
+      Cool-chic compresses images as well as H.266/VVC
 
-Special thanks go to:
+    .. grid-item-card:: :octicon:`rocket` Fast CPU-only decoder
+      :link: https://orange-opensource.github.io/Cool-Chic/getting_started/results.html
 
-* **Hyunjik Kim, Matthias Bauer, Lucas Theis, Jonathan Richard Schwarz and Emilien
-  Dupont** for their great work enhancing Cool-chic: `C3: High-performance and
-  low-complexity neural compression from a single image or video, Kim et al.
-  <https://arxiv.org/abs/2312.02753>`_
+      Decode a 1280x720 image in 100 ms on CPU with our decoder written in C
 
+    .. grid-item-card:: :octicon:`flame` Fixed-point decoder
+
+        Fixed-point arithmetic at the decoder for bit-exact results on different
+        hardwares.
+
+    .. grid-item-card:: :octicon:`file-media` I/O format
+        :link: https://orange-opensource.github.io/Cool-Chic/encoding/overview.html#i-o-format
+
+        Encode PNG, PPM and YUV file with a bitdepth of 8 to 16
+        bits.
+
+|
+
+|
 
 .. image:: assets/logo_orange.png
-  :align: center
-  :height: 150
-  :alt: Logo orange
+   :height: 100
+   :align: center
+   :alt: Logo Orange
 
+
+
+|
+
+|
+
+
+
+Special thanks to **Hyunjik Kim, Matthias Bauer, Lucas Theis, Jonathan Richard
+Schwarz and Emilien Dupont** for their great work enhancing Cool-chic: `C3:
+High-performance and low-complexity neural compression from a single image or
+video, Kim et al. <https://arxiv.org/abs/2312.02753>`_
 
 
 .. toctree::
@@ -111,6 +89,7 @@ Special thanks go to:
    :hidden:
 
    Quickstart <getting_started/quickstart>
+   What's new in 3.4? <getting_started/new_stuff>
    Example <getting_started/example>
 
 .. toctree::
@@ -146,7 +125,7 @@ Special thanks go to:
    :hidden:
 
    At a glance <code_documentation/overview>
-   Encoder <code_documentation/encoder/index>
+   enc <code_documentation/encoder/index>
 
 .. Decoder <code_documentation/decoder/index>
 

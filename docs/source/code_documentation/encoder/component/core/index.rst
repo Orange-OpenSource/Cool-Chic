@@ -8,7 +8,7 @@ how these modules are related.
 
 .. toctree::
 
-   ARM <arm>
-   Quantizer <quantizer>
-   Upsampling <upsampling>
-   Synthesis <synthesis>
+   arm <arm>
+   quantizer <quantizer>
+   upsampling <upsampling>
+   synthesis <synthesis>

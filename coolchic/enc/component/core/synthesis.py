@@ -46,8 +46,11 @@ class SynthesisConv2d(nn.Module):
         """
         super().__init__()
 
-        self.pad = int((kernel_size - 1) / 2)
         self.residual = residual
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.pad = int((kernel_size - 1) / 2)
 
         # -------- Instantiate empty parameters, set by the initialize function
         self.groups = 1  # Hardcoded for now
@@ -168,6 +171,9 @@ class Synthesis(nn.Module):
                 following the notation detailed above.
         """
         super().__init__()
+
+        self.synth_branches = nn.ModuleList()
+        self.input_ft = input_ft
         layers_list = nn.ModuleList()
 
         # Construct the hidden layer(s)
@@ -211,6 +217,7 @@ class Synthesis(nn.Module):
         """
         return self.layers(x)
 
+
     def get_param(self) -> OrderedDict[str, Tensor]:
         """Return **a copy** of the weights and biases inside the module.
 
@@ -229,7 +236,7 @@ class Synthesis(nn.Module):
         self.load_state_dict(param)
 
     def reinitialize_parameters(self) -> None:
-        """Re-initialize in place the parameters of all the SynthesisConv2d layer."""
+        """Re-initialize in place the params of all the ``SynthesisConv2d`` layers."""
         for layer in self.layers.children():
             if isinstance(layer, SynthesisConv2d):
                 layer.initialize_parameters()

@@ -4,7 +4,13 @@
  * #define CCDECAPI_CPU
  * or
  * #define CCDECAPI_AVX2
+ * or
+ * #define CCDECAPI_AVX2_OPTIONAL
  */
+
+#if defined(CCDECAPI_AVX2_OPTIONAL)
+#define CCDECAPI_AVX2
+#endif
 
 #include <stdlib.h>
 #include <iostream>
@@ -28,55 +34,97 @@ float time_bac_seconds = 0.0;
 float time_arm_seconds = 0.0;
 float time_ups_seconds = 0.0;
 float time_syn_seconds = 0.0;
+float time_blend_seconds = 0.0;
 float time_warp_seconds = 0.0;
 float time_bpred_seconds = 0.0;
 float time_all_seconds = 0.0;
 
+// like std::byteswap, but that's only in c++23 onwards!
+inline unsigned short byteswap(unsigned short x)
+{
+    unsigned short hi = x&0xFF00;
+    unsigned short lo = x&0x00FF;
+    return (lo<<8)|(hi>>8);
+}
+
+// like ends_with in c++20 and onwards.
+inline bool ends_with(const std::string& a, const std::string& b)
+{
+    if (b.size() > a.size())
+        return false;
+    return std::equal(a.begin() + a.size() - b.size(), a.end(), b.begin());
+}
+
 // only use nc == 3
-void ppm_out(int nc, int pixel_depth, struct frame_memory &in_info, char const *outname)
+void ppm_out(int nc, int bit_depth, struct frame_memory &in_info, FILE *fout)
 {
     int const h = in_info.h;
     int const w = in_info.w;
     int const stride = in_info.stride;
     int const plane_stride = in_info.plane_stride;
+    int const max_sample_val = (1<<bit_depth)-1;
     int32_t *ins = in_info.origin();
-    FILE *fout = fopen(outname, "wb");
-    if (fout == NULL)
+    //printf("writing %d-bit ppm\n", bit_depth);
+
+    if (nc != 3)
     {
-        printf("Cannot open %s for writing.\n", outname);
+        printf("only 3-color image output supported for the moment\n");
         exit(1);
     }
 
-    if (nc == 3)
+    fprintf(fout, "P6\n");
+    fprintf(fout, "%d %d\n", w, h);
+    fprintf(fout, "%d\n", max_sample_val);
+    int32_t *inR = ins;
+    int32_t *inG = inR+plane_stride;
+    int32_t *inB = inG+plane_stride;
+
+    if (bit_depth <= 8)
     {
-        fprintf(fout, "P6\n");
-        fprintf(fout, "%d %d\n", w, h);
-        fprintf(fout, "255\n");
-        int32_t *inR = ins;
-        int32_t *inG = inR+plane_stride;
-        int32_t *inB = inG+plane_stride;
         for (int y = 0; y < h; y++, inR += stride-w, inG += stride-w, inB += stride-w)
             for (int x = 0; x < w; x++)
             {
                 // precision is SYN_LAYER_PRECISION
-                int r = ((*inR++)*255+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
-                int g = ((*inG++)*255+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
-                int b = ((*inB++)*255+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
+                int r = ((*inR++)*max_sample_val+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
+                int g = ((*inG++)*max_sample_val+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
+                int b = ((*inB++)*max_sample_val+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
                 if (r < 0) r = 0;
                 if (g < 0) g = 0;
                 if (b < 0) b = 0;
-                if (r > 255) r = 255;
-                if (g > 255) g = 255;
-                if (b > 255) b = 255;
+                if (r > max_sample_val) r = max_sample_val;
+                if (g > max_sample_val) g = max_sample_val;
+                if (b > max_sample_val) b = max_sample_val;
                 unsigned char pix[3];
                 pix[0] = r;
                 pix[1] = g;
                 pix[2] = b;
-                fwrite(pix, 3, 1, fout);
+                fwrite(pix, 3, sizeof(pix[0]), fout);
+            }
+    }
+    else
+    {
+        for (int y = 0; y < h; y++, inR += stride-w, inG += stride-w, inB += stride-w)
+            for (int x = 0; x < w; x++)
+            {
+                // precision is SYN_LAYER_PRECISION
+                int r = ((*inR++)*max_sample_val+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
+                int g = ((*inG++)*max_sample_val+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
+                int b = ((*inB++)*max_sample_val+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
+                if (r < 0) r = 0;
+                if (g < 0) g = 0;
+                if (b < 0) b = 0;
+                if (r > max_sample_val) r = max_sample_val;
+                if (g > max_sample_val) g = max_sample_val;
+                if (b > max_sample_val) b = max_sample_val;
+                unsigned short pix[3];
+                pix[0] = byteswap(r);
+                pix[1] = byteswap(g);
+                pix[2] = byteswap(b);
+                fwrite(pix, 3, sizeof(pix[0]), fout);
             }
     }
 
-    fclose(fout);
+    fflush(fout);
 }
 
 // we 'stabilise' the yuv to (0..255) as integers, as well as uv subsample.
@@ -294,7 +342,7 @@ unsigned short *get_raw_444_10b(struct frame_memory &in)
 // incoming 420 is planar, outgoing 444 is planar.
 void convert_420_444_8b(frame_memory &out, unsigned char *in, int h, int w)
 {
-    out.update_to(h, w, 3, 0);
+    out.update_to(h, w, 0, 3);
 
     unsigned char *src = in;
     int32_t *dst = out.plane_origin(0);
@@ -329,7 +377,7 @@ void convert_420_444_8b(frame_memory &out, unsigned char *in, int h, int w)
 // incoming 420 is planar, outgoing 444 is planar.
 void convert_420_444_10b(frame_memory &out, unsigned short *in, int h, int w)
 {
-    out.update_to(h, w, 3, 0);
+    out.update_to(h, w, 0, 3);
 
     unsigned short *src = in;
     int32_t *dst = out.plane_origin(0);
@@ -397,7 +445,7 @@ void dump_yuv444_10b(unsigned short *frame_444, int h, int w, FILE *fout, int fr
 // incoming 444 is planar, outgoing 444 is planar.
 void store_444_8b(frame_memory &out, unsigned char *in, int h, int w)
 {
-    out.update_to(h, w, 3, 0);
+    out.update_to(h, w, 0, 3);
 
     unsigned char *src = in;
     int32_t *dst = out.plane_origin(0);
@@ -421,7 +469,7 @@ void store_444_8b(frame_memory &out, unsigned char *in, int h, int w)
 // incoming 444 is planar, outgoing 444 is planar.
 void store_444_10b(frame_memory &out, unsigned short *in, int h, int w)
 {
-    out.update_to(h, w, 3, 0);
+    out.update_to(h, w, 0, 3);
 
     unsigned short *src = in;
     int32_t *dst = out.plane_origin(0);
@@ -449,7 +497,7 @@ void warp(struct frame_memory &warp_result, struct frame_memory &raw_info, int r
 {
     const auto time_warp_start = std::chrono::steady_clock::now();
 
-    warp_result.update_to(ref.h, ref.w, 3, 0);
+    warp_result.update_to(ref.h, ref.w, 0, 3);
 
     int32_t *src = ref.origin();
     int const src_stride = ref.stride;
@@ -560,7 +608,7 @@ void bpred(struct frame_memory &bpred_result, struct frame_memory &raw_info, int
     int raw_stride = raw_info.stride;
     int raw_plane_stride = raw_info.plane_stride;
 
-    bpred_result.update_to(h, w, 3, 0);
+    bpred_result.update_to(h, w, 0, 3);
     int32_t *out = bpred_result.origin();
 
     int32_t *src0 = pred0.origin();
@@ -622,14 +670,14 @@ void process_inter(struct frame_memory &pred, struct frame_memory &raw_cc_output
     }
 }
 
-#ifdef CCDECAPI_CPU
-int cc_decode_cpu(std::string &bitstream_filename, std::string &out_filename)
+#if defined(CCDECAPI_CPU)
+int cc_decode_cpu(std::string &bitstream_filename, std::string &out_filename, int output_bitdepth, int output_chroma_format, int verbosity)
+#elif defined(CCDECAPI_AVX2_OPTIONAL)
+int cc_decode_avx2_optional(std::string &bitstream_filename, std::string &out_filename, int output_bitdepth, int output_chroma_format, bool use_avx2, int verbosity)
+#elif defined(CCDECAPI_AVX2)
+int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename, int output_bitdepth, int output_chroma_format, int verbosity)
 #else
-#ifdef CCDECAPI_AVX2
-int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename)
-#else
-#error must have one of CCDECAPI_CPU or CCDECAPI_AVX2 defined.
-#endif
+#error must have one of CCDECAPI_CPU, CCDECAPI_AVX2 or CCDECAPI_AVX2_OPTIONAL defined.
 #endif
 {
     if (bitstream_filename == "")
@@ -641,7 +689,7 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename)
     const auto time_all_start = std::chrono::steady_clock::now();
 
     cc_bs bs;
-    if (!bs.open(bitstream_filename))
+    if (!bs.open(bitstream_filename, verbosity))
     {
         printf("cannot open %s for reading\n", bitstream_filename.c_str());
         return 1;
@@ -661,7 +709,11 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename)
         }
     }
 
-    struct cc_frame_decoder frame_decoder(gop_header);
+#if defined(CCDECAPI_AVX2_OPTIONAL)
+    struct cc_frame_decoder frame_decoder(gop_header, output_bitdepth, output_chroma_format, use_avx2, verbosity);
+#else
+    struct cc_frame_decoder frame_decoder(gop_header, output_bitdepth, output_chroma_format, verbosity);
+#endif
     for (int frame_coding_idx = 0; frame_coding_idx <= gop_header.intra_period; frame_coding_idx++)
     {
         // raw_cc_output either
@@ -670,7 +722,7 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename)
         // [9] (B: residue+xy+alpha+xy+beta)
 
         // from bitstream.
-        cc_bs_frame *frame_symbols = bs.decode_frame();
+        cc_bs_frame *frame_symbols = bs.decode_frame(verbosity);
         if (frame_symbols == NULL)
         {
             return 1;
@@ -706,7 +758,7 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename)
                 if (frames_444[idx].raw() != NULL)
                 {
                     ref_prev = &frames_444[idx];
-                    printf("refprev: %d\n", idx);
+                    //printf("refprev: %d\n", idx);
                     break;
                 }
             // find next if B.
@@ -715,7 +767,7 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename)
                     if (frames_444[idx].raw() != NULL)
                     {
                         ref_next = &frames_444[idx];
-                        printf("refnext: %d\n", idx);
+                        //printf("refnext: %d\n", idx);
                         break;
                     }
             process_inter(frame_444, *raw_cc_output, gop_header.img_h, gop_header.img_w, ref_prev, ref_next, frame_header.flow_gain);
@@ -723,9 +775,9 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename)
         }
 
         // YUV 420
-        if (gop_header.frame_data_type == 1)
+        if (ends_with(out_filename, ".yuv") && frame_decoder.m_output_chroma_format == 420)
         {
-            if (gop_header.bitdepth == 8)
+            if (frame_decoder.m_output_bitdepth == 8)
             {
                 unsigned char *frame_420 = convert_444_420_8b(*frame_444p);
                 if (out_filename != "")
@@ -733,7 +785,7 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename)
                 convert_420_444_8b(frames_444[frame_header.display_index], frame_420, gop_header.img_h, gop_header.img_w);
                 delete[] frame_420;
             }
-            else if (gop_header.bitdepth == 10)
+            else if (frame_decoder.m_output_bitdepth == 10)
             {
                 unsigned short *frame_420 = convert_444_420_10b(*frame_444p);
                 if (out_filename != "")
@@ -744,13 +796,14 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename)
             }
             else
             {
-                printf("Unkown YUV bitdepth %d. Should be 8 or 10.", gop_header.bitdepth);
+                printf("Unknown YUV bitdepth %d. Should be 8 or 10.\n", frame_decoder.m_output_bitdepth);
+                exit(1);
             }
         }
         // YUV 444
-        else if (gop_header.frame_data_type == 2)
+        else if (ends_with(out_filename, ".yuv") && frame_decoder.m_output_chroma_format == 444)
         {
-            if (gop_header.bitdepth == 8)
+            if (frame_decoder.m_output_bitdepth == 8)
             {
                 unsigned char *raw_frame_444 = get_raw_444_8b(*frame_444p);
                 if (out_filename != "")
@@ -758,7 +811,7 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename)
                 store_444_8b(frames_444[frame_header.display_index], raw_frame_444, gop_header.img_h, gop_header.img_w);
             }
 
-            else if (gop_header.bitdepth == 10)
+            else if (frame_decoder.m_output_bitdepth == 10)
             {
                 unsigned short *raw_frame_444 = get_raw_444_10b(*frame_444p);
                 if (out_filename != "")
@@ -767,15 +820,15 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename)
             }
             else
             {
-                printf("Unkown YUV bitdepth %d. Should be 8 or 10.", gop_header.bitdepth);
+                printf("Unknown YUV bitdepth %d. Should be 8 or 10.\n", frame_decoder.m_output_bitdepth);
+                exit(1);
             }
         }
-
         else
         {
             // rgb
             if (out_filename != "")
-                ppm_out(3, 3, *frame_444p, out_filename.c_str());
+                ppm_out(3, frame_decoder.m_output_bitdepth, *frame_444p, fout);
             if (gop_header.intra_period > 0)
             {
                 printf("do not want to copy rgb in rgb video\n");
@@ -788,23 +841,39 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename)
         const std::chrono::duration<double> elapsed_all = (time_all_end-time_all_start);
         time_all_seconds = (float)elapsed_all.count();
 
-        printf("time: arm %g ups %g syn %g warp %g bpred %g all %g\n",
-                time_arm_seconds, time_ups_seconds, time_syn_seconds, time_warp_seconds, time_bpred_seconds, time_all_seconds);
+        if (verbosity >= 1)
+            printf("time: arm %g ups %g syn %g blend %g warp %g bpred %g all %g\n",
+                    time_arm_seconds, time_ups_seconds, time_syn_seconds, time_blend_seconds, time_warp_seconds, time_bpred_seconds, time_all_seconds);
         fflush(stdout);
     }
 
     if (fout != NULL)
+    {
         fclose(fout);
-
-    printf("decode done\n");
+        printf("%s created\n", out_filename.c_str());
+    }
 
     return 0;
 }
 
 
-#if 0
+#ifdef CCDEC_EXE
+
+// A main() and associated parameters for standalone executable.
+#ifndef CCDECAPI_AVX2_OPTIONAL
+// we are expecting 'optional' -- we have a run-time parameter for choosing cpu or avx2 or auto.
+#error CCDEC_EXE needs CCDECAPI_AVX2_OPTIONAL
+no.
+#endif
+
 char const *param_bitstream = "--input=";
 char const *param_out       = "--output=";
+char const *param_bitdepth  = "--output_bitdepth=";
+char const *param_chroma    = "--output_chroma_format=";
+char const *param_cpu       = "--cpu";
+char const *param_auto      = "--auto";
+char const *param_avx2      = "--avx2";
+char const *param_v         = "--v=";
 
 void usage(char const *msg = NULL)
 {
@@ -812,7 +881,11 @@ void usage(char const *msg = NULL)
         printf("%s\n", msg);
     printf("Usage:\n");
     printf("    %s: .hevc to decode\n", param_bitstream);
-    printf("    %s: reconstruction if desired: ppm (image) or yuv420 (video) only\n", param_out);
+    printf("    [%s]: reconstruction if desired: ppm (image) or yuv420 (video) only\n", param_out);
+    printf("    [%s]: output bitdepth 0 => take from bitstream\n", param_bitdepth);
+    printf("    [%s]: output chroma subsampling 420 or 444 for yuv; 0 => take from bitstream\n", param_chroma);
+    printf("    [%s|%s|%s]: optimized instruction set with which to decode\n", param_cpu, param_avx2, param_auto);
+    printf("    [%s]: verbosity\n", param_v);
     exit(msg != NULL);
 }
 
@@ -821,6 +894,12 @@ int main(int argc, const char* argv[])
 
     std::string bitstream_filename;
     std::string out = "out";
+    int output_bitdepth = 0;
+    int output_chroma_format = 0;
+    bool explicit_instruction_set = false;
+    bool use_avx2 = false;
+    bool use_auto = false;
+    int  verbosity = 0;
 
     for (int i = 1; i < argc; i++)
     {
@@ -828,6 +907,27 @@ int main(int argc, const char* argv[])
             bitstream_filename = argv[i]+strlen(param_bitstream);
         else if (strncmp(argv[i], param_out, strlen(param_out)) == 0)
             out = argv[i]+strlen(param_out);
+        else if (strncmp(argv[i], param_bitdepth, strlen(param_bitdepth)) == 0)
+            output_bitdepth = atoi(argv[i]+strlen(param_bitdepth));
+        else if (strncmp(argv[i], param_chroma, strlen(param_chroma)) == 0)
+            output_chroma_format = atoi(argv[i]+strlen(param_chroma));
+        else if (strncmp(argv[i], param_avx2, strlen(param_avx2)) == 0
+                 || strncmp(argv[i], param_cpu, strlen(param_cpu)) == 0
+                 || strncmp(argv[i], param_auto, strlen(param_auto)) == 0)
+        {
+            if (explicit_instruction_set)
+            {
+                printf("%s: only a single --auto, --avx2 or --cpu\n", argv[i]);
+                exit(1);
+            }
+            explicit_instruction_set = true;
+            use_avx2 = strncmp(argv[i], param_avx2, strlen(param_avx2)) == 0;
+            use_auto = strncmp(argv[i], param_auto, strlen(param_auto)) == 0;
+        }
+        else if (strncmp(argv[i], param_v, strlen(param_v)) == 0)
+        {
+            verbosity = atoi(argv[i]+strlen(param_v));
+        }
         else
         {
             std::string error_message = "unknown parameter ";
@@ -839,12 +939,16 @@ int main(int argc, const char* argv[])
     if (bitstream_filename == "")
         usage("must specify a bitstream");
 
-#ifdef CCDECAPI_CPU
-    int result = cc_decode_cpu(bitstream_filename, out);
-#else
-    int result = cc_decode_avx2(bitstream_filename, out);
-#endif
-    printf("decode exit code: %d\n", result);
+    if (!explicit_instruction_set)
+        use_auto = true;
+    if (use_auto)
+    {
+        if (__builtin_cpu_supports("avx2"))
+        {
+            use_avx2 = true;
+        }
+    }
+    int result = cc_decode_avx2_optional(bitstream_filename, out, output_bitdepth, output_chroma_format, use_avx2, verbosity);
     return result;
 }
 #endif

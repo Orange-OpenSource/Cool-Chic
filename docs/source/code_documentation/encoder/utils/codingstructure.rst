@@ -18,11 +18,11 @@ Coding Structure
     :members:
     :exclude-members: __init__
 
-.. autoclass:: DictTensorYUV
-    :members:
+.. .. autoclass:: DictTensorYUV
+..     :members:
 
-.. autofunction:: yuv_dict_to_device
+.. .. autofunction:: yuv_dict_to_device
 
-.. autofunction:: convert_444_to_420
+.. .. autofunction:: convert_444_to_420
 
-.. autofunction:: convert_420_to_444
+.. .. autofunction:: convert_420_to_444

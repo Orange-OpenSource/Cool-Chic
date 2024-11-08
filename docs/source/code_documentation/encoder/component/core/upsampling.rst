@@ -9,5 +9,8 @@ Upsampling
 .. autoclass:: Upsampling
        :members:
 
-.. autoclass:: UpsamplingConvTranspose2d
+.. autoclass:: UpsamplingSeparableSymmetricConvTranspose2d
+       :members:
+
+.. autoclass:: UpsamplingSeparableSymmetricConv2d
        :members:
