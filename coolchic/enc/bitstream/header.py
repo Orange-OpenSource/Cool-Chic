@@ -98,7 +98,7 @@ from enc.utils.misc import MAX_AC_MAX_VAL, DescriptorCoolChic
 
 # Quick & dirty copy and paste from utils.coding_structure
 _FRAME_DATA_TYPE = ["rgb", "yuv420", "yuv444"]
-_POSSIBLE_BITDEPTH = [8, 10]
+_POSSIBLE_BITDEPTH = [8, 9, 10, 11, 12, 13, 14, 15, 16]
 _POSSIBLE_SYNTHESIS_MODE = [k for k in Synthesis.possible_mode]
 _POSSIBLE_SYNTHESIS_NON_LINEARITY = [k for k in Synthesis.possible_non_linearity]
 
@@ -107,7 +107,7 @@ class GopHeader(TypedDict):
     n_bytes_header: int  # Number of bytes for the header
     img_size: Tuple[int, int]  # Format: (height, width)
     frame_data_type: FRAME_DATA_TYPE  # RGB, YUV 4:2:0, YUV 4:4:4
-    bitdepth: POSSIBLE_BITDEPTH  # 8 or 10
+    bitdepth: POSSIBLE_BITDEPTH  # 8 through 16
     intra_period: int  # See coding_structure.py
     p_period: int  # See coding_structure.py
 
@@ -291,8 +291,12 @@ def write_frame_header(
     n_bytes_header += (
         1  # Context size and Hidden layer dimension ARM, n. hidden layers ARM
     )
-    n_bytes_header += 1  # Upsampling kernel size, static upsampling kernel flag
-    n_bytes_header += 1  # Number hidden layer Synthesis
+
+    n_bytes_header += 1 # (n_ups_kernel << 4)|(ups_k_size)
+    n_bytes_header += 1 # (n_ups_preconcat_kernel << 4)|(ups_preconcat_k_size)
+
+    n_bytes_header += 1  # Number of synthesis branches
+    n_bytes_header += 1  # Number hidden layer Synthesis per branch
     # Hidden Synthesis layer out#, kernelsz, mode+nonlinearity
     n_bytes_header += 3 * len(frame_encoder.coolchic_encoder_param.layers_synthesis)
     n_bytes_header += 1  # Flow gain
@@ -357,17 +361,20 @@ def write_frame_header(
         + frame_encoder.coolchic_encoder_param.n_hidden_layers_arm
     ).to_bytes(1, byteorder="big", signed=False)
 
-    assert frame_encoder.coolchic_encoder_param.upsampling_kernel_size < 2**7, (
-        f"Upsampling"
-        f" kernel size should be small than {2 ** 7}. Found"
-        f" {frame_encoder.coolchic_encoder_param.upsampling_kernel_size}"
-    )
-
     byte_to_write += (
-        frame_encoder.coolchic_encoder_param.upsampling_kernel_size * 2**1
-        + int(frame_encoder.coolchic_encoder_param.static_upsampling_kernel)
+        # (frame_encoder.coolchic_encoder_param.n_ups_kernel<<4)|(frame_encoder.coolchic_encoder_param.ups_k_size)
+        ((frame_encoder.coolchic_encoder_param.latent_n_grids-1)<<4)|(frame_encoder.coolchic_encoder_param.ups_k_size)
+    ).to_bytes(1, byteorder="big", signed=False)
+    byte_to_write += (
+        # (frame_encoder.coolchic_encoder_param.n_ups_preconcat_kernel<<4)|(frame_encoder.coolchic_encoder_param.ups_preconcat_k_size)
+        ((frame_encoder.coolchic_encoder_param.latent_n_grids-1)<<4)|(frame_encoder.coolchic_encoder_param.ups_preconcat_k_size)
     ).to_bytes(1, byteorder="big", signed=False)
 
+    # Continue to send this byte for compatibility
+    _dummy_n_synth_branch = 1
+    byte_to_write += (
+        _dummy_n_synth_branch  # frame_encoder.coolchic_encoder_param.n_synth_branch
+    ).to_bytes(1, byteorder="big", signed=False)
     byte_to_write += len(
         frame_encoder.coolchic_encoder_param.layers_synthesis
     ).to_bytes(1, byteorder="big", signed=False)
@@ -464,161 +471,3 @@ def write_frame_header(
         print("expected", n_bytes_header)
         print("got", os.path.getsize(header_path))
         exit(1)
-
-
-def read_frame_header(bitstream: bytes) -> FrameHeader:
-    """Read the first few bytes of a bitstream file located at
-    <bitstream_path> and parse the different information.
-
-    Args:
-        bitstream_path (str): Path where the bitstream is located.
-
-    Returns:
-        FrameHeader: The parsed info from the bitstream.
-    """
-
-    ptr = 0
-    n_bytes_header = int.from_bytes(
-        bitstream[ptr : ptr + 2], byteorder="big", signed=False
-    )
-    ptr += 2
-
-    display_index = int.from_bytes(
-        bitstream[ptr : ptr + 1], byteorder="big", signed=False
-    )
-    ptr += 1
-
-    raw_arm = int.from_bytes(bitstream[ptr : ptr + 1], byteorder="big", signed=False)
-    ptr += 1
-    dim_arm = 8 * (raw_arm // (2**4))
-    n_hidden_layers_arm = raw_arm % (2**4)
-
-    raw_upsampling = int.from_bytes(
-        bitstream[ptr : ptr + 1], byteorder="big", signed=False
-    )
-    ptr += 1
-    upsampling_kernel_size = raw_upsampling // (2**1)
-    static_upsampling_kernel = bool(raw_upsampling % (2**1))
-
-    n_hidden_dim_synthesis = int.from_bytes(
-        bitstream[ptr : ptr + 1], byteorder="big", signed=False
-    )
-    ptr += 1
-    layers_synthesis = []
-    for i in range(n_hidden_dim_synthesis):
-        out_ft = int.from_bytes(bitstream[ptr : ptr + 1], byteorder="big", signed=False)
-        ptr += 1
-        kernel_size = int.from_bytes(
-            bitstream[ptr : ptr + 1], byteorder="big", signed=False
-        )
-        ptr += 1
-        mode_non_linearity = int.from_bytes(
-            bitstream[ptr : ptr + 1], byteorder="big", signed=False
-        )
-        ptr += 1
-        mode = _POSSIBLE_SYNTHESIS_MODE[mode_non_linearity // 16]
-        non_linearity = _POSSIBLE_SYNTHESIS_NON_LINEARITY[mode_non_linearity % 16]
-        layers_synthesis.append(f"{out_ft}-{kernel_size}-{mode}-{non_linearity}")
-
-    flow_gain = int.from_bytes(bitstream[ptr : ptr + 1], byteorder="big", signed=False)
-    ptr += 1
-
-    ac_max_val_nn = int.from_bytes(
-        bitstream[ptr : ptr + 2], byteorder="big", signed=False
-    )
-    ptr += 2
-    ac_max_val_latent = int.from_bytes(
-        bitstream[ptr : ptr + 2], byteorder="big", signed=False
-    )
-    ptr += 2
-    hls_sig_blksize = int.from_bytes(bitstream[ptr: ptr + 1], byteorder='big', signed=True)
-    ptr += 1
-
-    q_step_index_nn: DescriptorCoolChic = {}
-    for nn_name in ["arm", "upsampling", "synthesis"]:
-        q_step_index_nn[nn_name] = {}
-        for nn_param in ["weight", "bias"]:
-            q_step_index_nn[nn_name][nn_param] = int.from_bytes(
-                bitstream[ptr : ptr + 1], byteorder="big", signed=False
-            )
-            # # # Hack -- 255 -> -1 for upsampling bias.  Indicating no bias.
-            # # if q_step_index_nn[nn_name][nn_param] == 255:
-            # #     q_step_index_nn[nn_name][nn_param] = -1
-            # #     print("got -1:", nn_name, nn_param)
-            ptr += 1
-
-    scale_index_nn: DescriptorCoolChic = {}
-    for nn_name in ["arm", "upsampling", "synthesis"]:
-        scale_index_nn[nn_name] = {}
-        for nn_param in ["weight", "bias"]:
-            # if q_step_index_nn[nn_name][nn_param] < 0:
-            #     scale_index_nn[nn_name][nn_param] = -1
-            # else:
-            scale_index_nn[nn_name][nn_param] = int.from_bytes(
-                bitstream[ptr : ptr + 1], byteorder="big", signed=False
-            )
-            ptr += 1
-
-    n_bytes_nn: DescriptorCoolChic = {}
-    for nn_name in ["arm", "upsampling", "synthesis"]:
-        n_bytes_nn[nn_name] = {}
-        for nn_param in ["weight", "bias"]:
-            # if q_step_index_nn[nn_name][nn_param] < 0:
-            #     n_bytes_nn[nn_name][nn_param] = -1
-            # else:
-            n_bytes_nn[nn_name][nn_param] = int.from_bytes(
-                bitstream[ptr : ptr + 2], byteorder="big", signed=False
-            )
-            ptr += 2
-
-    latent_n_resolutions = int.from_bytes(
-        bitstream[ptr : ptr + 1], byteorder="big", signed=False
-    )
-    ptr += 1
-    latent_n_2d_grid = int.from_bytes(
-        bitstream[ptr : ptr + 1], byteorder="big", signed=False
-    )
-    ptr += 1
-
-    n_ft_per_latent = []
-    for _ in range(latent_n_resolutions):
-        n_ft_per_latent.append(
-            int.from_bytes(bitstream[ptr : ptr + 1], byteorder="big", signed=False)
-        )
-        ptr += 1
-
-    n_bytes_per_latent = []
-    for _ in range(latent_n_2d_grid):
-        n_bytes_per_latent.append(
-            int.from_bytes(bitstream[ptr : ptr + 3], byteorder="big", signed=False)
-        )
-        ptr += 3
-
-    header_info: FrameHeader = {
-        "n_bytes_header": n_bytes_header,
-        "latent_n_resolutions": latent_n_resolutions,
-        "latent_n_2d_grid": latent_n_2d_grid,
-        "n_bytes_per_latent": n_bytes_per_latent,
-        "n_ft_per_latent": n_ft_per_latent,
-        "n_hidden_layers_arm": n_hidden_layers_arm,
-        "dim_arm": dim_arm,
-        "upsampling_kernel_size": upsampling_kernel_size,
-        "static_upsampling_kernel": static_upsampling_kernel,
-        "flow_gain": flow_gain,
-        "layers_synthesis": layers_synthesis,
-        "q_step_index_nn": q_step_index_nn,
-        "scale_index_nn": scale_index_nn,
-        "n_bytes_nn": n_bytes_nn,
-        "ac_max_val_nn": ac_max_val_nn,
-        "ac_max_val_latent": ac_max_val_latent,
-        "hls_sig_blksize": hls_sig_blksize,
-        "display_index": display_index,
-    }
-
-    print("\nContent of the frame header:")
-    print("------------------------------")
-    for k, v in header_info.items():
-        print(f"{k:>20}: {v}")
-    print("         ------------------------")
-
-    return header_info

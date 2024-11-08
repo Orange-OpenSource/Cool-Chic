@@ -6,7 +6,6 @@
 #
 # Authors: see CONTRIBUTORS.md
 
-import math
 import os
 import subprocess
 import time
@@ -18,7 +17,7 @@ from dec.nn import decode_network
 from enc.bitstream.utils import get_sub_bitstream_path
 from enc.bitstream.header import write_frame_header, write_gop_header
 from CCLIB.ccencapi import cc_code_latent_layer_bac, cc_code_wb_bac
-from enc.component.core.arm import Arm, ArmInt
+from enc.bitstream.armint import ArmInt
 from enc.component.core.synthesis import Synthesis
 from enc.component.core.upsampling import Upsampling
 from enc.component.frame import FrameEncoder
@@ -54,7 +53,7 @@ def get_ac_max_val_nn(frame_encoder: FrameEncoder) -> int:
         # Retrieve all the weights and biases for the ARM MLP
         for k, v in module_to_encode.named_parameters():
 
-            if k.endswith('.w') or k.endswith('.weight'):
+            if "weight" in k:
                 cur_possible_q_step = POSSIBLE_Q_STEP.get(cur_module_name).get("weight")
 
                 # Find the index of the closest quantization step in the list of
@@ -74,12 +73,20 @@ def get_ac_max_val_nn(frame_encoder: FrameEncoder) -> int:
                         torch.round((v/FIXED_POINT_FRACTIONAL_MULT) / cur_possible_q_step[cur_q_step_index]).flatten()
                     )
                 else:
+                    # No longer relevant without the bi-branch synthesis!
+                    # # # Blending -- we get the transformed weight, not the underlying sigmoid parameter.
+                    # # # plus: only if >1 branch.
+                    # # if cur_module_name == "synthesis" and k.endswith(".parametrizations.weight.original"):
+                    # #     if "branch_blender" in k and frame_encoder.coolchic_encoder_param.n_synth_branch == 1:
+                    # #         continue # Do not emit unused blender weight.
+                    # #     xformed_weights = getattr(module_to_encode, k.replace(".parametrizations.weight.original", "")).weight
+                    # #     v = xformed_weights
                     model_param_quant.append(
                         torch.round(v / cur_possible_q_step[cur_q_step_index]).flatten()
                     )
 
 
-            elif k.endswith('.b') or k.endswith('.bias'):
+            elif "bias" in k:
                 # Find the index of the closest quantization step in the list of
                 # the possible quantization step.
                 cur_possible_q_step = POSSIBLE_Q_STEP.get(cur_module_name).get("bias")
@@ -158,9 +165,6 @@ def encode_video(video_encoder: VideoEncoder, bitstream_path: str, hls_sig_blksi
     # ======================== GOP HEADER ======================== #
 
     for idx_coding_order in range(video_encoder.coding_structure.get_number_of_frames()):
-        frame = video_encoder.coding_structure.get_frame_from_coding_order(idx_coding_order)
-        # assert frame.already_encoded, f'Frame {frame.display_order} has not been encoded yet!'
-
         # Retrieve the frame encoder corresponding to the frame
         frame_encoder, _ = video_encoder.all_frame_encoders.get(str(idx_coding_order))
 
@@ -208,6 +212,12 @@ def encode_frame(
     frame_encoder.set_to_eval()
     frame_encoder.to_device('cpu')
 
+    # upsampling has bias parameters, but we do not use them.
+    have_bias = { "arm": True,
+                  "upsampling": False,
+                  "synthesis": True,
+                }
+
     subprocess.call(f'rm -f {bitstream_path}', shell=True)
 
     # Load the references
@@ -219,7 +229,6 @@ def encode_frame(
 
     # Move to pure-int Arm.  Transfer the quantized weights from the fp Arm.
     arm_fp_param = frame_encoder.coolchic_encoder.arm.get_param()
-    print("recovered arm params", arm_fp_param.keys())
     arm_int = ArmInt(
         frame_encoder.coolchic_encoder.param.dim_arm,
         frame_encoder.coolchic_encoder.param.n_hidden_layers_arm,
@@ -228,7 +237,6 @@ def encode_frame(
     )
     frame_encoder.coolchic_encoder.arm = arm_int
     frame_encoder.coolchic_encoder.arm.set_param_from_float(arm_fp_param)
-    print("set armint(pureint) params")
 
     # ================= Encode the MLP into a bitstream file ================ #
     ac_max_val_nn = get_ac_max_val_nn(frame_encoder)
@@ -254,7 +262,7 @@ def encode_frame(
 
             Q_STEPS = POSSIBLE_Q_STEP.get(cur_module_name)
 
-            if k.endswith(".w") or k.endswith(".weight"):
+            if "weight" in k:
                 # Find the index of the closest quantization step in the list of
                 # the possible quantization step.
                 cur_possible_q_step = POSSIBLE_Q_STEP.get(cur_module_name).get("weight")
@@ -271,7 +279,6 @@ def encode_frame(
 
                 # Quantize the weight with the actual quantization step and add it
                 # to the list of (quantized) weights
-                # print(cur_module_name, k, v)
                 if cur_module_name == "arm":
                     # Our weights are stored as fixed point, we use shifts to get the integer values of quantized results.
                     # Our int vals are int(floatval << FPFBITS)
@@ -283,11 +290,19 @@ def encode_frame(
                         v = torch.where(v < 0, neg_v, pos_v)
                     weights.append(v.flatten())
                 else:
+                    # No longer relevant without the bi-branch synth
+                    # # # Blending -- we get the transformed weight, not the underlying sigmoid parameter.
+                    # # # plus: only if >1 branch.
+                    # # if cur_module_name == "synthesis" and k.endswith(".parametrizations.weight.original"):
+                    # #     if "branch_blender" in k and frame_encoder.coolchic_encoder_param.n_synth_branch == 1:
+                    # #         continue # Do not emit unused blender weight.
+                    # #     xformed_weights = getattr(module_to_encode, k.replace(".parametrizations.weight.original", "")).weight
+                    # #     v = xformed_weights
                     weights.append(
                         torch.round(v / cur_possible_q_step[cur_q_step_index]).flatten()
                     )
 
-            elif k.endswith(".b") or k.endswith(".bias"):
+            elif "bias" in k and have_bias[cur_module_name]:
                 # Find the index of the closest quantization step in the list of
                 # the Q_STEPS quantization step.
                 cur_possible_q_step = POSSIBLE_Q_STEP.get(cur_module_name).get("bias")
@@ -321,14 +336,15 @@ def encode_frame(
 
         # Gather them
         weights = torch.cat(weights).flatten()
-        have_bias = len(bias) != 0
-        if have_bias:
+        if have_bias[cur_module_name]:
             bias = torch.cat(bias).flatten()
+        else:
+            q_step_index_nn[cur_module_name]['bias'] = 0 # we actually send this in the header.
 
         # ----------------- Actual entropy coding
         # It happens on cpu
         weights = weights.cpu()
-        if have_bias:
+        if have_bias[cur_module_name]:
             bias = bias.cpu()
 
         cur_bitstream_path = f'{bitstream_path}_{cur_module_name}_weight'
@@ -346,7 +362,7 @@ def encode_frame(
 
         n_bytes_nn[cur_module_name]['weight'] = os.path.getsize(cur_bitstream_path)
 
-        if have_bias:
+        if have_bias[cur_module_name]:
             cur_bitstream_path = f'{bitstream_path}_{cur_module_name}_bias'
 
             # either code directly (normal), or search for best (backwards compatible).
@@ -362,6 +378,7 @@ def encode_frame(
 
             n_bytes_nn[cur_module_name]['bias'] = os.path.getsize(cur_bitstream_path)
         else:
+            scale_index_nn[cur_module_name]['bias'] = 0
             n_bytes_nn[cur_module_name]['bias'] = 0
     # ================= Encode the MLP into a bitstream file ================ #
 
@@ -386,18 +403,21 @@ def encode_frame(
             )
         elif module_name == 'upsampling':
             empty_module = Upsampling(
-                    frame_encoder.coolchic_encoder.param.upsampling_kernel_size,
-                    frame_encoder.coolchic_encoder.param.static_upsampling_kernel
+                    frame_encoder.coolchic_encoder.param.ups_k_size,
+                    frame_encoder.coolchic_encoder.param.ups_preconcat_k_size,
+                    # frame_encoder.coolchic_encoder.param.n_ups_kernel,
+                    frame_encoder.coolchic_encoder.param.latent_n_grids - 1,
+                    # frame_encoder.coolchic_encoder.param.n_ups_preconcat_kernel,
+                    frame_encoder.coolchic_encoder.param.latent_n_grids - 1,
                 )
 
         Q_STEPS = POSSIBLE_Q_STEP.get(module_name)
 
-        have_bias = q_step_index_nn[module_name].get('bias') >= 0
         loaded_module = decode_network(
             empty_module,
             DescriptorNN(
                 weight = f'{bitstream_path}_{module_name}_weight',
-                bias = f'{bitstream_path}_{module_name}_bias' if have_bias else "",
+                bias = f'{bitstream_path}_{module_name}_bias' if have_bias[module_name] else "",
             ),
             DescriptorNN (
                 weight=Q_STEPS["weight"][q_step_index_nn[module_name]["weight"]],
@@ -408,8 +428,7 @@ def encode_frame(
                 bias=(
                     scale_index_nn[module_name]["bias"]
                 )
-                if have_bias
-                else 0,
+                if have_bias[module_name] else 0,
             ),
             ac_max_val_nn
         )
@@ -456,7 +475,6 @@ def encode_frame(
         for index_lat_feature in range(c_i):
             y_this_ft = current_y[:, index_lat_feature, :, :].flatten().cpu()
             mu_this_ft = current_mu[:, index_lat_feature, :, :].flatten().cpu()
-            scale_this_ft = current_scale[:, index_lat_feature, :, :].flatten().cpu()
             log_scale_this_ft = current_log_scale[:, index_lat_feature, :, :].flatten().cpu()
 
             if y_this_ft.abs().max() == 0:

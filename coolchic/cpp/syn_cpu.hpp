@@ -20,7 +20,7 @@
 // stride and plane_stride are assumed the same for in and out.
 void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_in, int plane_stride_in, int residue_origin_offset, int N_IN, int32_t *in, int N_OUT, int32_t *out, int residue, int relu)
 {
-    printf("%s(ks=%d N_IN=%d N_OUT=%d, residue=%d relu=%d\n", xstr(SYN_NAME), KS, N_IN, N_OUT, residue, relu);
+    //printf("%s(ks=%d N_IN=%d N_OUT=%d, residue=%d relu=%d\n", xstr(SYN_NAME), KS, N_IN, N_OUT, residue, relu);
 
     int const kstride = 1;
 #ifdef SYN_KS
@@ -90,9 +90,16 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
                             sum += xxres;
                         }
                 }
-                sum >>= SYN_MUL_PRECISION; // take multiplied sum to output. // !!! check sign?
-                if (relu && sum < 0)
-                    sum = 0;
+                // take multiplied sum to output after reluing.
+                if (sum < 0)
+                {
+                    if (relu)
+                        sum = 0;
+                    else
+                        sum = -(-sum >> SYN_MUL_PRECISION);
+                }
+                else
+                    sum >>= SYN_MUL_PRECISION;
                 out_cache[ol] = sum;
             }
             // flush.

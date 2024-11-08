@@ -51,9 +51,9 @@ def _quantize_parameters(
         sent_param = torch.round(v / current_q_step)
 
         if sent_param.abs().max() > MAX_AC_MAX_VAL:
-            print(
-                f"Sent param {k} exceed MAX_AC_MAX_VAL! Q step {current_q_step} too small."
-            )
+            #print(
+            #    f"Sent param {k} exceed MAX_AC_MAX_VAL! Q step {current_q_step} too small."
+            #)
             return None
 
         q_param[k] = sent_param * current_q_step
@@ -187,7 +187,7 @@ def quantize_model(
                     # to obtain the sent latent.
                     current_sent_param = (parameter_value / current_q_step.get(weight_or_bias)).view(-1)
 
-                    if parameter_name.endswith(weight_or_bias):
+                    if weight_or_bias in parameter_name:
                         sent_param.append(current_sent_param)
 
                 # Integer, sent parameters

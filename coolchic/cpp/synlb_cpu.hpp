@@ -21,7 +21,7 @@
 // dedicated to 3x3 kernels that use a line-buffer for temporary storage, allowing in-place convolution.
 void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_in, int plane_stride_in, int residue_origin_offset, int N_IN, int32_t *in, int N_OUT, int32_t *out, int32_t *line_buffer, int residue, int relu)
 {
-    printf("%s(ks=%d N_IN=%d N_OUT=%d, residue=%d relu=%d\n", xstr(SYN_NAME), KS, N_IN, N_OUT, residue, relu);
+    //printf("%s(ks=%d N_IN=%d N_OUT=%d, residue=%d relu=%d\n", xstr(SYN_NAME), KS, N_IN, N_OUT, residue, relu);
 
     int const kstride = 1;
 #ifdef SYN_KS
@@ -40,12 +40,17 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
     int const n_out = N_OUT;
 #endif
 
-    int32_t *in_layer[std::max(n_in, n_out)];
+    int32_t *in_layer[n_in];
     in_layer[0] = in;
-    for (int i = 1; i < std::max(n_in, n_out); i++)
+    for (int i = 1; i < n_in; i++)
         in_layer[i] = in_layer[i-1]+plane_stride_in;
+
+    int32_t *out_layer[n_out];
+    out_layer[0] = out;
+    for (int i = 1; i < n_out; i++)
+        out_layer[i] = out_layer[i-1]+plane_stride_in;
+
     // in-place, must have line buffer.
-    int32_t **out_layer;
     int32_t *lb[2]; // two line buffer pointers.
     int h_out = h_in-ks+1;
     int w_out = w_in-ks+1;
@@ -54,23 +59,14 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
         printf("%s: bad call: in-place lb must have ks=3\n", xstr(SYN_NAME));
         exit(1);
     }
-    if (out == NULL || out == in)
+    // must have a line buffer.
+    if (line_buffer == NULL)
     {
-        // must have a line buffer.
-        if (line_buffer == NULL)
-        {
-            printf("%s: bad call, no line buffer supplied\n", xstr(SYN_NAME));
-            exit(1);
-        }
-        out_layer = in_layer;
-        lb[0] = line_buffer;
-        lb[1] = line_buffer+w_out*n_out;
-    }
-    else
-    {
-        printf("%s: bad call should have lb and in-place\n", xstr(SYN_NAME));
+        printf("%s: bad call, no line buffer supplied\n", xstr(SYN_NAME));
         exit(1);
     }
+    lb[0] = line_buffer;
+    lb[1] = line_buffer+w_out*n_out;
 
     // here we collect the output during processing, and flush later.
 
@@ -102,9 +98,16 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
                             sum += xxres;
                         }
                 }
-                sum >>= SYN_MUL_PRECISION; // take multiplied sum to output. // !!! check sign?
-                if (relu && sum < 0)
-                    sum = 0;
+                // take multiplied sum to output after reluing.
+                if (sum < 0)
+                {
+                    if (relu)
+                        sum = 0;
+                    else
+                        sum = -(-sum >> SYN_MUL_PRECISION);
+                }
+                else
+                    sum >>= SYN_MUL_PRECISION;
                 lb[y%2][ol*w_out+x] = sum;
             }
         }
@@ -112,12 +115,12 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
         if (y >= 1)
         {
             for (int ol = 0; ol < n_out; ol++)
-                memcpy(&out_layer[ol][offs0-stride_in+residue_origin_offset], &lb[(y-1)%2][ol*w_out], w_out*sizeof(int32_t));
+                memcpy(&out_layer[ol][offs0-stride_in], &lb[(y-1)%2][ol*w_out], w_out*sizeof(int32_t));
         }
     }
     // flush final line.
     for (int ol = 0; ol < n_out; ol++)
-        memcpy(&out_layer[ol][offs0-stride_in+residue_origin_offset], &lb[(h_out-1)%2][ol*w_out], w_out*sizeof(int32_t));
+        memcpy(&out_layer[ol][offs0-stride_in], &lb[(h_out-1)%2][ol*w_out], w_out*sizeof(int32_t));
 }
 
 #undef tostr

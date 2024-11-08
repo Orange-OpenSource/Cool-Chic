@@ -19,13 +19,18 @@ namespace py = pybind11;
 // encode latents layer to a file.
 int cc_decode_cpu(
     std::string &in_bitstream_filename,
-    std::string &out_ppm_filename);
+    std::string &out_ppm_filename,
+    int output_bitdepth = 0,
+    int output_chroma_format = 0,
+    int verbosity = 0);
 
 PYBIND11_MODULE(ccdecapi_cpu, m) {
     m.doc() = "ccdecoding"; // optional module docstring
     m.def("cc_decode_cpu", &cc_decode_cpu, "decode a bitstream");
 }
 
+#ifndef CCDECAPI_CPU
 #define CCDECAPI_CPU
-#include "ccdecapi.hpp"
+#endif
+#include "ccdecapi.cpp"
 #undef CCDECAPI_CPU

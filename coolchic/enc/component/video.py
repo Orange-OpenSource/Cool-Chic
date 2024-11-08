@@ -23,7 +23,7 @@ from enc.training.train import train
 from enc.training.warmup import warmup
 from enc.utils.codingstructure import CodingStructure, Frame, FrameData
 from enc.utils.misc import POSSIBLE_DEVICE, TrainingExitCode, is_job_over, mem_info
-from enc.utils.yuv import load_frame_data_from_file
+from enc.io.io import load_frame_data_from_file
 
 class VideoEncoder():
 
@@ -168,6 +168,8 @@ class VideoEncoder():
                     + "-" * 80
                 )
 
+                print("\n" + frame.data.to_string() + "\n")
+
                 # ----- Set the parameters for the frame
                 frame_encoder_manager = copy.deepcopy(
                     self.shared_frame_encoder_manager
@@ -225,6 +227,8 @@ class VideoEncoder():
                 with open(f"{frame_workdir}/archi.txt", "w") as f_out:
                     f_out.write(str(list_candidates[0].coolchic_encoder) + "\n\n")
                     f_out.write(list_candidates[0].coolchic_encoder.str_complexity() + "\n")
+
+                print(list_candidates[0].coolchic_encoder.pretty_string() + "\n\n")
 
                 # Use warm-up to find the best initialization among the list
                 # of candidates parameters.
@@ -502,7 +506,7 @@ def load_video_encoder(load_path: str) -> VideoEncoder:
     """
     print(f"Loading a video encoder from {load_path}")
 
-    raw_data = torch.load(load_path, map_location="cpu")
+    raw_data = torch.load(load_path, map_location="cpu", weights_only=False)
 
     # Calling the VideoEncoder constructor automatically reload the
     # original frames.

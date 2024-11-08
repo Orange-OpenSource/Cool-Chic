@@ -55,13 +55,17 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
 #endif
 #endif
 
-    int32_t *in_layer[std::max(n_in, n_out)];
+    int32_t *in_layer[n_in];
     in_layer[0] = in;
-    for (int i = 1; i < std::max(n_in, n_out); i++)
+    for (int i = 1; i < n_in; i++)
         in_layer[i] = in_layer[i-1]+plane_stride_in;
 
+    int32_t *out_layer[n_out];
+    out_layer[0] = out;
+    for (int i = 1; i < n_out; i++)
+        out_layer[i] = out_layer[i-1]+plane_stride_in;
+
     // in-place, must have line buffer.
-    int32_t **out_layer;
     int32_t *lb[2]; // two line buffer pointers.
     int h_out = h_in-ks+1;
     int w_out = w_in-ks+1;
@@ -70,23 +74,14 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
         printf("%s: bad call: in-place lb must have ks=3\n", xstr(SYN_NAME));
         exit(1);
     }
-    if (out == NULL || out == in)
+    // must have a line buffer.
+    if (line_buffer == NULL)
     {
-        // must have a line buffer.
-        if (line_buffer == NULL)
-        {
-            printf("%s: bad call, no line buffer supplied\n", xstr(SYN_NAME));
-            exit(1);
-        }
-        out_layer = in_layer;
-        lb[0] = line_buffer;
-        lb[1] = line_buffer+w_out*n_out;
-    }
-    else
-    {
-        printf("%s: bad call should have lb and in-place\n", xstr(SYN_NAME));
+        printf("%s: bad call, no line buffer supplied\n", xstr(SYN_NAME));
         exit(1);
     }
+    lb[0] = line_buffer;
+    lb[1] = line_buffer+w_out*n_out;
 
     const __m256i z = _mm256_setzero_si256();
 
@@ -170,32 +165,43 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
                         }
                     }
                 }
+                int n_outs = (x_blk < xlim_blk-1) ? 8 : xlast_blk_size;
+                int32_t store[8];
                 if (relu)
                 {
+                    // -ves to zero, >> for rest.
                     for (int ol = 0; ol < atatime; ol++)
                     {
                         out_avx2[ol] = _mm256_blendv_epi8(z, out_avx2[ol], _mm256_cmpgt_epi32(out_avx2[ol], z));
-                    }
-                }
-                if (x_blk < xlim_blk-1)
-                {
-                    for (int ol = 0; ol < atatime; ol++)
-                    {
                         out_avx2[ol] = _mm256_srai_epi32(out_avx2[ol], SYN_MUL_PRECISION);
-                        //_mm256_storeu_si256((__m256i_u*)&out_layer[olbase+ol][offso], out_avx2[ol]);
-                        _mm256_storeu_si256((__m256i_u*)&lb[y%2][(olbase+ol)*w_out+x_blk*8], out_avx2[ol]);
+                        if (n_outs == 8)
+                        {
+                            _mm256_storeu_si256((__m256i_u*)&lb[y%2][(olbase+ol)*w_out+x_blk*8], out_avx2[ol]);
+                        }
+                        else
+                        {
+                            _mm256_storeu_si256((__m256i_u*)&store[0], out_avx2[ol]);
+                            memcpy(&lb[y%2][(olbase+ol)*w_out+x_blk*8], &store[0], n_outs*sizeof(store[0]));
+                        }
                     }
                 }
                 else
                 {
-                    int n_outs = xlast_blk_size;
-                    // partial last line.
+                    // need different treatment for -ve and +ve.
                     for (int ol = 0; ol < atatime; ol++)
                     {
-                        int32_t store[8];
-                        out_avx2[ol] = _mm256_srai_epi32(out_avx2[ol], SYN_MUL_PRECISION);
-                        _mm256_storeu_si256((__m256i_u*)&store[0], out_avx2[ol]);
-                        memcpy(&lb[y%2][(olbase+ol)*w_out+x_blk*8], &store[0], n_outs*sizeof(store[0]));
+                        __m256i sr  = _mm256_srai_epi32(out_avx2[ol], SYN_MUL_PRECISION);
+                        __m256i negsrneg = _mm256_sub_epi32(z, _mm256_srai_epi32(_mm256_sub_epi32(z, out_avx2[ol]), SYN_MUL_PRECISION));
+                        out_avx2[ol] = _mm256_blendv_epi8(negsrneg, sr, _mm256_cmpgt_epi32(out_avx2[ol], z));
+                        if (n_outs == 8)
+                        {
+                            _mm256_storeu_si256((__m256i_u*)&lb[y%2][(olbase+ol)*w_out+x_blk*8], out_avx2[ol]);
+                        }
+                        else
+                        {
+                            _mm256_storeu_si256((__m256i_u*)&store[0], out_avx2[ol]);
+                            memcpy(&lb[y%2][(olbase+ol)*w_out+x_blk*8], &store[0], n_outs*sizeof(store[0]));
+                        }
                     }
                 }
             } // olbase
@@ -205,12 +211,12 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
         if (y >= 1)
         {
             for (int ol = 0; ol < n_out; ol++)
-                memcpy(&out_layer[ol][offsi_base-stride_in+residue_origin_offset], &lb[(y-1)%2][ol*w_out], w_out*sizeof(int32_t));
+                memcpy(&out_layer[ol][offsi_base-stride_in], &lb[(y-1)%2][ol*w_out], w_out*sizeof(int32_t));
         }
     } // y
     // flush final line.
     for (int ol = 0; ol < n_out; ol++)
-        memcpy(&out_layer[ol][offsi_base-stride_in+residue_origin_offset], &lb[(h_out-1)%2][ol*w_out], w_out*sizeof(int32_t));
+        memcpy(&out_layer[ol][offsi_base-stride_in], &lb[(h_out-1)%2][ol*w_out], w_out*sizeof(int32_t));
 }
 
 #undef tostr

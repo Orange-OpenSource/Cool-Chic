@@ -169,7 +169,6 @@ def quantize(
         Quantized tensor
     """
     # ----- Check user input
-    # TODO: How long is it to do such assert?
     assert quantizer_noise_type in typing.get_args(POSSIBLE_QUANTIZATION_NOISE_TYPE), (
         f"quantizer_noise_type must be in {POSSIBLE_QUANTIZATION_NOISE_TYPE}"
         f" found {quantizer_noise_type}"
@@ -226,7 +225,6 @@ def quantize(
             # From the forward point of view (i.e. entering into the torch.no_grad()), we have
             # y = softround(x) - softround(x) + round(x) = round(x). From the backward point of view
             # we have y = softround(x) meaning that dy / dx = d softround(x) / dx.
-            # TODO: check whether it works?
             y = softround(x, soft_round_temperature)
             with torch.no_grad():
                 y = y - softround(x, soft_round_temperature) + torch.round(x)

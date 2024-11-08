@@ -7,7 +7,7 @@ frame.
 
 .. toctree::
 
-   Component <component/index>
-   Training <training/index>
-   Utils <utils/index>
+   component <component/index>
+   training <training/index>
+   io <io/index>
 
