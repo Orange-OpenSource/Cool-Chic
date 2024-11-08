@@ -49,7 +49,7 @@ pixel.
 #### 🏆 **Coding performance**: Cool-chic compresses images as well as H.266/VVC 🏆
 #### 🚀 **Fast CPU-only decoder**: Decode a 1280x720 image in 100 ms on CPU with our decoder written in C 🚀
 #### 🔥 **Fixed-point decoder**: Fixed-point arithmetic at the decoder for bit-exact results on different hardwares 🔥
-#### 🖼️ **I/O format**: Encode PNG, PPM and YUV file with a bitdepth of 8 to 16 bits 🖼️
+#### 🖼️ **I/O format**: Encode PNG, PPM and YUV 420 & 444 files with a bitdepth of 8 to 16 bits 🖼️
 
 </div>
 
