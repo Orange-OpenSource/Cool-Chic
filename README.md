@@ -101,23 +101,6 @@ You're good to go!
 The Cool-chic page provides [comprehensive rate-distortion results and compressed bitstreams](https://orange-opensource.github.io/Cool-Chic/getting_started/results.html) allowing
 to reproduce the results inside the ```results/``` directory.
 
-<style type="text/css">
-.tg  {border-collapse:collapse;border-spacing:0;margin:0px auto;}
-.tg td{border-color:black;border-style:solid;border-width:1px;font-family:Arial, sans-serif;font-size:14px;
-  overflow:hidden;padding:10px 5px;word-break:normal;}
-.tg th{border-color:black;border-style:solid;border-width:1px;font-family:Arial, sans-serif;font-size:14px;
-  font-weight:normal;overflow:hidden;padding:10px 5px;word-break:normal;}
-.tg .tg-m5nv{border-color:#656565;text-align:center;vertical-align:top}
-.tg .tg-dfl2{border-color:#656565;font-family:inherit;text-align:center;vertical-align:top}
-.tg .tg-uflc{border-color:#656565;color:#009901;text-align:center;vertical-align:top}
-.tg .tg-86ol{border-color:#656565;font-family:inherit;font-weight:bold;text-align:center;vertical-align:top}
-.tg .tg-qch7{border-color:#656565;color:#009901;font-family:inherit;text-align:center;vertical-align:top}
-.tg .tg-arzi{border-color:#656565;color:#cb0000;text-align:center;vertical-align:top}
-.tg .tg-xd3r{border-color:#656565;color:#cb0000;font-family:inherit;text-align:center;vertical-align:top}
-.tg .tg-5niz{border-color:#656565;color:#9b9b9b;font-family:inherit;text-align:center;vertical-align:top}
-.tg .tg-x9uu{border-color:#656565;font-weight:bold;text-align:center;vertical-align:top}
-.tg .tg-1keu{border-color:#656565;color:#9b9b9b;text-align:center;vertical-align:top}
-</style>
 <table class="tg"><thead>
   <tr>
     <th class="tg-86ol" rowspan="2"></th>
@@ -137,91 +120,36 @@ to reproduce the results inside the ```results/``` directory.
 <tbody>
   <tr>
     <td class="tg-86ol">kodak</td>
-    <td class="tg-qch7">-4.2 %</td>
-    <td class="tg-xd3r">+7.5 %</td>
-    <td class="tg-qch7">-0.9 %</td>
-    <td class="tg-qch7">-4.3 %</td>
-    <td class="tg-qch7">-17.2 %</td>
-    <td class="tg-xd3r">+3.4 % </td>
+    <td class="tg-qch7"><span style="color:green" > -4.2 % </span></td>
+    <td class="tg-xd3r"><span style="color:red"   > +7.5 % </span></td>
+    <td class="tg-qch7"><span style="color:green" > -0.9 % </span></td>
+    <td class="tg-qch7"><span style="color:green" > -4.3 % </span></td>
+    <td class="tg-qch7"><span style="color:green" > -17.2 % </span></td>
+    <td class="tg-xd3r"><span style="color:red"   > +3.4 %  </span></td>
     <td class="tg-dfl2">1303</td>
     <td class="tg-dfl2">74</td>
   </tr>
   <tr>
     <td class="tg-86ol">clic20-pro-valid</td>
-    <td class="tg-qch7">-13.2 %</td>
-    <td class="tg-qch7">-0.2 %</td>
-    <td class="tg-qch7">-0.3 %</td>
-    <td class="tg-qch7">-1.3 %</td>
-    <td class="tg-qch7">-25.1 %</td>
-    <td class="tg-qch7">-2.3 %<br></td>
+    <td class="tg-qch7"><span style="color:green" > -13.2 % </span></td>
+    <td class="tg-qch7"><span style="color:green" > -0.2 % </span></td>
+    <td class="tg-qch7"><span style="color:green" > -0.3 % </span></td>
+    <td class="tg-qch7"><span style="color:green" > -1.3 % </span></td>
+    <td class="tg-qch7"><span style="color:green" > -25.1 % </span></td>
+    <td class="tg-qch7"><span style="color:green" > -2.3 %<br> </span></td>
     <td class="tg-dfl2">1357</td>
     <td class="tg-dfl2">354</td>
   </tr>
   <tr>
-    <td class="tg-86ol">jvet (BCDEF)</td>
-    <td class="tg-5niz">/</td>
-    <td class="tg-5niz">/</td>
-    <td class="tg-qch7">-0.2 %</td>
-    <td class="tg-5niz">/</td>
-    <td class="tg-qch7">-18.3 %</td>
-    <td class="tg-xd3r">+18.6 %</td>
+    <td class="tg-86ol">jvet </td>
+    <td class="tg-5niz"><span style="color:gray" >/</span></td>
+    <td class="tg-5niz"><span style="color:gray" >/</span></td>
+    <td class="tg-qch7"><span style="color:green" >-0.2 %</span></td>
+    <td class="tg-5niz"><span style="color:gray" >/</span></td>
+    <td class="tg-qch7"><span style="color:green" >-18.3 %</span></td>
+    <td class="tg-xd3r"><span style="color:red" >+18.6 %</span></td>
     <td class="tg-dfl2">1249</td>
     <td class="tg-dfl2">143</td>
-  </tr>
-  <tr>
-    <td class="tg-x9uu">jvet (class B)</td>
-    <td class="tg-1keu">/</td>
-    <td class="tg-1keu">/</td>
-    <td class="tg-arzi">+0.9%</td>
-    <td class="tg-1keu">/</td>
-    <td class="tg-uflc">-9.9 %</td>
-    <td class="tg-arzi">+20.7 %</td>
-    <td class="tg-m5nv">1300</td>
-    <td class="tg-m5nv">282</td>
-  </tr>
-  <tr>
-    <td class="tg-x9uu">jvet (class C)</td>
-    <td class="tg-1keu">/</td>
-    <td class="tg-1keu">/</td>
-    <td class="tg-uflc">-1.3%</td>
-    <td class="tg-1keu">/</td>
-    <td class="tg-uflc">-16.1 %</td>
-    <td class="tg-arzi">+9.2 %</td>
-    <td class="tg-m5nv">1289</td>
-    <td class="tg-m5nv">69</td>
-  </tr>
-  <tr>
-    <td class="tg-x9uu">jvet (class D)</td>
-    <td class="tg-1keu">/</td>
-    <td class="tg-1keu">/</td>
-    <td class="tg-uflc">-1.4%</td>
-    <td class="tg-1keu">/</td>
-    <td class="tg-uflc">-12.4 %</td>
-    <td class="tg-arzi">+9.6 %</td>
-    <td class="tg-m5nv">948</td>
-    <td class="tg-m5nv">18</td>
-  </tr>
-  <tr>
-    <td class="tg-x9uu">jvet (class E)</td>
-    <td class="tg-1keu">/</td>
-    <td class="tg-1keu">/</td>
-    <td class="tg-uflc">-3.8%</td>
-    <td class="tg-1keu">/</td>
-    <td class="tg-uflc">-6.2 %</td>
-    <td class="tg-arzi">+27.8 %</td>
-    <td class="tg-m5nv">1347</td>
-    <td class="tg-m5nv">125</td>
-  </tr>
-  <tr>
-    <td class="tg-x9uu">jvet (class F)</td>
-    <td class="tg-1keu">/</td>
-    <td class="tg-1keu">/</td>
-    <td class="tg-arzi">+0.2%</td>
-    <td class="tg-1keu">/</td>
-    <td class="tg-uflc">-31.8 %</td>
-    <td class="tg-arzi">+20.6 %</td>
-    <td class="tg-m5nv">1249</td>
-    <td class="tg-m5nv">182</td>
   </tr>
 </tbody></table>
 
