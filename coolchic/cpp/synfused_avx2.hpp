@@ -13,12 +13,12 @@
 // N_IN (7)
 // N_HIDDEN (16 or 40)
 // N_OUT (3)
-// HIDDEN always RELU, OUT always NONE
+// HIDDEN always RELU
 void SYN_NAME(int KS,
               int32_t *kw7_40, int32_t *kb40, int32_t *kw40_3, int32_t *kb3,
               int h_in, int w_in, int stride_in, int plane_stride_in, int N_IN, int N_HIDDEN, int32_t *in, int N_OUT, int32_t *out)
 {
-    printf("%s(ks=%d N_IN=%d N_HIDDEN=%d N_OUT=%d\n", xstr(SYN_NAME), KS, N_IN, N_HIDDEN, N_OUT);
+    //printf("%s(ks=%d N_IN=%d N_HIDDEN=%d N_OUT=%d\n", xstr(SYN_NAME), KS, N_IN, N_HIDDEN, N_OUT);
 
 #ifdef SYN_KS
     int const ks = SYN_KS;
@@ -46,6 +46,7 @@ void SYN_NAME(int KS,
     int const n_hidden8 = n_hidden/8;
 
     int32_t *src = in;
+    int32_t *dst = out;
 
     if (KS != ks)
     {
@@ -71,8 +72,8 @@ void SYN_NAME(int KS,
     const __m256i rotate_right = _mm256_setr_epi32(1, 2, 3, 4, 5, 6, 7, 0);
     const __m256i z = _mm256_setzero_si256();
 
-    for (int y = 0; y < h_in; y++, src += src_pad+src_pad) // eol of this, and bol of next.
-    for (int x = 0; x < w_in; x++, src++)
+    for (int y = 0; y < h_in; y++, src += src_pad+src_pad, dst += src_pad+src_pad) // eol of this, and bol of next.
+    for (int x = 0; x < w_in; x++, src++, dst++)
     {
         __m256i input_avx2_src = _mm256_i32gather_epi32(&src[0], ind_intel_0, sizeof(int32_t));
         __m256i hidden_avx2[n_hidden/8];
@@ -123,8 +124,11 @@ void SYN_NAME(int KS,
 
             // horizontal sum
             int32_t sum = kb[ol] + hsum_8x32(out_avx2);
-            sum >>= SYN_MUL_PRECISION; // take multiplied sum to output. // !!! check sign?
-            src[ol*plane_stride_in] = sum;
+            if (sum < 0)
+                sum = -(-sum >> SYN_MUL_PRECISION);
+            else
+                sum >>= SYN_MUL_PRECISION;
+            dst[ol*plane_stride_in] = sum;
         }
     } // x, y
 }

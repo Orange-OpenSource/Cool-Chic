@@ -11,10 +11,12 @@ import typing
 from dataclasses import dataclass, field, fields
 from typing import Any, Dict, List, Optional, OrderedDict, Tuple, TypedDict
 
+from enc.visu.console import pretty_string_nn, pretty_string_ups
 from torch import nn, Tensor
 
 import torch
 from fvcore.nn import FlopCountAnalysis, flop_count_table
+
 from enc.component.core.arm import (
     Arm,
     _get_neighbor,
@@ -72,11 +74,13 @@ class CoolChicEncoderParameter:
         n_hidden_layers_arm (int, Optional): Number of hidden layers in the
             ARM. Set ``n_hidden_layers_arm = 0`` for a linear ARM. Defaults
             to 2.
-        upsampling_kernel_size (int, Optional): Kernel size for the upsampler.
-            See the :doc:`upsampling documentation <core/upsampling>` for more
-            information. Defaults to 8.
-        static_upsampling_kernel (bool, Optional): Set this flag to ``True`` to
-            prevent learning the upsampling kernel. Defaults to ``False``.
+        ups_k_size (int, Optional): Upsampling kernel size for the transposed
+            convolutions. See the :doc:`upsampling documentation <core/upsampling>`
+            for more information. Defaults to 8.
+        ups_preconcat_k_size (int, Optional): Upsampling kernel size for the
+            pre-concatenation convolutions. See the
+            :doc:`upsampling documentation <core/upsampling>` for more
+            information. Defaults to 7.
         encoder_gain (int, Optional): Multiply the latent by this value before
             quantization. See the documentation of Cool-chic forward pass.
             Defaults to 16.
@@ -85,9 +89,9 @@ class CoolChicEncoderParameter:
     n_ft_per_res: List[int]
     dim_arm: int = 24
     n_hidden_layers_arm: int = 2
-    upsampling_kernel_size: int = 8
-    static_upsampling_kernel: bool = False
     encoder_gain: int = 16
+    ups_k_size: int = 8
+    ups_preconcat_k_size: int = 7
 
     # ==================== Not set by the init function ===================== #
     #: Automatically computed, number of different latent resolutions
@@ -192,7 +196,13 @@ class CoolChicEncoder(nn.Module):
 
         # ===================== Upsampling stuff ===================== #
         self.upsampling = Upsampling(
-            self.param.upsampling_kernel_size, self.param.static_upsampling_kernel
+            ups_k_size=self.param.ups_k_size,
+            ups_preconcat_k_size=self.param.ups_preconcat_k_size,
+            # Instantiate one different upsampling and pre-concatenation
+            # filters for each of the upsampling step. Could also be set to one
+            # to share the same filter across all latents.
+            n_ups_kernel=self.param.latent_n_grids - 1,
+            n_ups_preconcat_kernel=self.param.latent_n_grids - 1,
         )
         # ===================== Upsampling stuff ===================== #
 
@@ -239,17 +249,19 @@ class CoolChicEncoder(nn.Module):
         self.arm = Arm(self.param.dim_arm, self.param.n_hidden_layers_arm)
         # ===================== ARM related stuff ==================== #
 
+        # Something like ['arm', 'synthesis', 'upsampling']
+        self.modules_to_send = [tmp.name for tmp in fields(DescriptorCoolChic)]
+
         # ======================== Monitoring ======================== #
         # Pretty string representing the decoder complexity
         self.flops_str = ""
         # Total number of multiplications to decode the image
         self.total_flops = 0.0
+        self.flops_per_module = {k: 0 for k in self.modules_to_send}
         # Fill the two attributes aboves
         self.get_flops()
         # ======================== Monitoring ======================== #
 
-        # Something like ['arm', 'synthesis', 'upsampling']
-        self.modules_to_send = [tmp.name for tmp in fields(DescriptorCoolChic)]
 
         # Track the quantization step of each neural network, None if the
         # module is not yet quantized
@@ -413,6 +425,7 @@ class CoolChicEncoder(nn.Module):
             additional_data["detailed_log_scale"] = []
             additional_data["detailed_rate_bit"] = []
             additional_data["detailed_centered_latent"] = []
+            additional_data["hpfilters"] = []
 
             # "Pointer" for the reading of the 1D scale, mu and rate
             cnt = 0
@@ -586,6 +599,9 @@ class CoolChicEncoder(nn.Module):
         # print("Ignoring get_flops")
         # Count the number of floating point operations here. It must be done before
         # torch scripting the different modules.
+
+        self = self.train(mode=False)
+
         flops = FlopCountAnalysis(
             self,
             (
@@ -601,8 +617,13 @@ class CoolChicEncoder(nn.Module):
         flops.uncalled_modules_warnings(False)
 
         self.total_flops = flops.total()
+        for k in self.flops_per_module:
+            self.flops_per_module[k] = flops.by_module()[k]
+
         self.flops_str = flop_count_table(flops)
         del flops
+
+        self = self.train(mode=True)
 
     def get_network_rate(self) -> DescriptorCoolChic:
         """Return the rate (in bits) associated to the parameters
@@ -706,3 +727,63 @@ class CoolChicEncoder(nn.Module):
             if hasattr(layer, "qb"):
                 if layer.qb is not None:
                     self.arm.mlp[idx_layer].qb = layer.qb.to(device)
+
+    def pretty_string(self) -> str:
+        """Get a pretty string representing the layer of a ``CoolChicEncoder``"""
+
+        s = ""
+
+        if not self.flops_str:
+            self.get_flops()
+
+        n_pixels = self.param.img_size[-2] * self.param.img_size[-1]
+        total_mac_per_pix = self.get_total_mac_per_pixel()
+
+
+        title = f"Cool-chic architecture {total_mac_per_pix:.0f} MAC / pixel"
+        s += (
+            f"\n{title}\n"
+            f"{'-' * len(title)}\n\n"
+        )
+
+        complexity = self.flops_per_module['upsampling'] / n_pixels
+        share_complexity = 100 * complexity / total_mac_per_pix
+        title = f"Upsampling {complexity:.0f} MAC/pixel ; {share_complexity:.1f} % of the complexity"
+        s += (
+            f"{title}\n"
+            f"{'=' * len(title)}\n"
+            "Note: all upsampling layers are separable and symmetric "
+            "(transposed) convolutions.\n\n"
+
+        )
+        s += pretty_string_ups(self.upsampling, "")
+
+        complexity = self.flops_per_module['arm'] / n_pixels
+        share_complexity = 100 * complexity / total_mac_per_pix
+        title = f"ARM {complexity:.0f} MAC/pixel ; {share_complexity:.1f} % of the complexity"
+        s += (
+            f"\n\n\n{title}\n"
+            f"{'=' * len(title)}\n\n\n"
+
+        )
+        input_arm = f"{self.arm.dim_arm}-pixel context"
+        output_arm = "mu, log scale"
+        s += pretty_string_nn(
+            self.arm.mlp, "", input_arm, output_arm
+        )
+
+        complexity = self.flops_per_module['synthesis'] / n_pixels
+        share_complexity = 100 * complexity / total_mac_per_pix
+        title = f"Synthesis {complexity:.0f} MAC/pixel ; {share_complexity:.1f} % of the complexity"
+        s += (
+            f"\n\n\n{title}\n"
+            f"{'=' * len(title)}\n\n\n"
+
+        )
+        input_syn = f"{self.synthesis.input_ft} features"
+        output_syn = "Decoded image"
+        s += pretty_string_nn(
+            self.synthesis.layers, "", input_syn, output_syn
+        )
+
+        return s

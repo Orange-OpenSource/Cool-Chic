@@ -10,7 +10,6 @@
 
 #include <stdio.h>
 #include <memory.h>
-#include <cmath> // !!! abs
 #include <algorithm>
 
 #include "common.h"
@@ -30,3 +29,5 @@
 #define SYN_NAME   custom_conv_ks3_inX_outX_lb
 #define SYN_KS     3
 #include "synlb_cpu.hpp"
+
+#include "synblend_cpu.hpp"

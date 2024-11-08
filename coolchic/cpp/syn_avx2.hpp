@@ -61,21 +61,10 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
     in_layer[0] = in;
     for (int i = 1; i < std::max(n_in, n_out); i++)
         in_layer[i] = in_layer[i-1]+plane_stride_in;
-//#if SYN_KS == 1
-//// possible in-place for ks==1 -- we do not check here.
-//#define out_layer in_layer
-//    if (out != NULL && out != in)
-//    {
-//        printf("%s: ks=%d n_in=%d n_out=%d: bad call: should be in-place, but out supplied\n", xstr(SYN_NAME), KS, N_IN, N_OUT);
-//        exit(1);
-//    }
-//#else
-    //not in-place
     int32_t *out_layer[N_OUT];
     out_layer[0] = out;
     for (int i = 1; i < N_OUT; i++)
         out_layer[i] = out_layer[i-1]+plane_stride_in;
-//#endif
 
     const __m256i z = _mm256_setzero_si256();
 
@@ -159,32 +148,44 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
                         }
                     }
                 }
+                int n_outs = (x_blk < xlim_blk-1) ? 8 : xlast_blk_size;
+                int32_t store[8];
                 if (relu)
                 {
+                    // -ves to zero, >> for rest.
                     for (int ol = 0; ol < atatime; ol++)
                     {
                         out_avx2[ol] = _mm256_blendv_epi8(z, out_avx2[ol], _mm256_cmpgt_epi32(out_avx2[ol], z));
-                    }
-                }
-                if (x_blk < xlim_blk-1)
-                {
-                    for (int ol = 0; ol < atatime; ol++)
-                    {
                         out_avx2[ol] = _mm256_srai_epi32(out_avx2[ol], SYN_MUL_PRECISION);
-                        _mm256_storeu_si256((__m256i_u*)&out_layer[olbase+ol][offso], out_avx2[ol]);
+                        if (n_outs == 8)
+                        {
+                            _mm256_storeu_si256((__m256i_u*)&out_layer[olbase+ol][offso], out_avx2[ol]);
+                        }
+                        else
+                        {
+                            _mm256_storeu_si256((__m256i_u*)&store[0], out_avx2[ol]);
+                            memcpy(&out_layer[olbase+ol][offso], &store[0], n_outs*sizeof(store[0]));
+                        }
 
                     }
                 }
                 else
                 {
-                    int n_outs = xlast_blk_size;
-                    // partial last line.
+                    // need different treatment for -ve and +ve.
                     for (int ol = 0; ol < atatime; ol++)
                     {
-                        int32_t store[8];
-                        out_avx2[ol] = _mm256_srai_epi32(out_avx2[ol], SYN_MUL_PRECISION);
-                        _mm256_storeu_si256((__m256i_u*)&store[0], out_avx2[ol]);
-                        memcpy(&out_layer[olbase+ol][offso], &store[0], n_outs*sizeof(store[0]));
+                        __m256i sr  = _mm256_srai_epi32(out_avx2[ol], SYN_MUL_PRECISION);
+                        __m256i negsrneg = _mm256_sub_epi32(z, _mm256_srai_epi32(_mm256_sub_epi32(z, out_avx2[ol]), SYN_MUL_PRECISION));
+                        out_avx2[ol] = _mm256_blendv_epi8(negsrneg, sr, _mm256_cmpgt_epi32(out_avx2[ol], z));
+                        if (n_outs == 8)
+                        {
+                            _mm256_storeu_si256((__m256i_u*)&out_layer[olbase+ol][offso], out_avx2[ol]);
+                        }
+                        else
+                        {
+                            _mm256_storeu_si256((__m256i_u*)&store[0], out_avx2[ol]);
+                            memcpy(&out_layer[olbase+ol][offso], &store[0], n_outs*sizeof(store[0]));
+                        }
                     }
                 }
             } // olbase

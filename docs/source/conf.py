@@ -15,9 +15,9 @@ sys.path.insert(0, basedir)
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'Cool-chic'
-copyright = '2024 Orange'
-author = 'Théo Ladune'
-release = '3.2'
+copyright = '2023 - 2024 Orange'
+author = 'Théo Ladune, Pierrick Philippe'
+release = '3.4'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -33,6 +33,7 @@ extensions = [
     'sphinx.ext.todo',
     "sphinx_copybutton",
     "sphinx.ext.autodoc.typehints",
+    "sphinx_design"
 ]
 
 # Napoleon settings
@@ -55,7 +56,6 @@ napoleon_attr_annotations = True
 
 # autodoc_mock_imports = ["torch"]
 
-# templates_path = ['_templates']
 exclude_patterns = []
 
 # -- Options for HTML output -------------------------------------------------
@@ -110,12 +110,12 @@ html_theme_options = {
     "color_mode": "light",
     "light_logo": "_static/coolchic-logo-light.png",
     "dark_logo": "_static/coolchic-logo-dark.png",
-    "globaltoc_expand_depth": 3,
-    "accent_color": "orange",
+    "globaltoc_expand_depth": 1,
+    "accent_color": "red",
     "announcement": (
-        "<center> 🚀 Cool-chic 3.3 An even faster decoder! "
+        "<center> 🎉 Cool-chic 3.4: 30% less complex! "
         "<a href=https://github.com/Orange-OpenSource/Cool-Chic>"
-        "Check out the git repository</a> 🚀 </center>"
+        "Check out the git repository</a> 🎉 </center>"
     ),
 }
 
@@ -125,3 +125,4 @@ html_context = {
     "source_repo": "Cool-Chic",
 }
 # html_static_path = ['_static']
+templates_path = ["_templates"]

@@ -1,8 +1,8 @@
-                                  BDR vtm [%]   BDR hm [%]   BDR coolchic-3-1 [%]   Avg C [MAC/px]   Avg time [ms]  
+                                  BD-rate vs. vtm [%]   BD-rate vs. hm [%]   BD-rate vs. coolchic-3-3 [%]   Complexity [MAC/pix]   Decoding time [ms]  
 
-      release-3-3-0-jvet_classB   19.529        -10.804      -7.152                 1803             260            
-      release-3-3-0-jvet_classC   10.687        -14.972      -2.442                 1942             75             
-      release-3-3-0-jvet_classD   11.098        -11.153      -1.339                 1086             21             
-      release-3-3-0-jvet_classE   32.729        -2.53        -8.955                 1814             106            
-      release-3-3-0-jvet_classF   20.302        -32.001      -3.135                 2201             152            
-  release-3-3-0-jvet_classBCDEF   18.954        -18.121      -5.093                 1769             130            
+      release-3-4-0-jvet_classB   20.684                -9.925               0.962                          1300                   282                 
+      release-3-4-0-jvet_classC   9.175                 -16.089              -1.293                         1289                   69                  
+      release-3-4-0-jvet_classD   9.566                 -12.405              -1.436                         948                    18                  
+      release-3-4-0-jvet_classE   27.752                -6.16                -3.756                         1347                   125                 
+      release-3-4-0-jvet_classF   20.625                -31.76               0.197                          1374                   182                 
+  release-3-4-0-jvet_classBCDEF   18.683                -18.258              -0.231                         1249                   143                 

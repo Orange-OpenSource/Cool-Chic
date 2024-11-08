@@ -16,7 +16,7 @@ This repository is based on several papers successively enhancing Cool-chic. Che
 
 * May: `Overfitted image coding at reduced complexity, Blard et al <https://arxiv.org/abs/2403.11651>`_
 
-  * Study the complexity-performance trade-off of Cool-chic & introduce a near real-time CPU only decoder. Corresponds to Cool-chic 3.2
+  * Study the complexity-performance trade-off of Cool-chic & introduce a near real-time CPU only decoder. Corresponds to Cool-chic 3.2 & Cool-chic 3.3
 
   * ``git clone https://github.com/Orange-OpenSource/Cool-Chic.git``
 
@@ -61,9 +61,13 @@ have not (yet?) been integrated  in this repository.
 2024
 ****
 
+* October: `Redefining Visual Quality: The Impact of Loss Functions on INR-Based Image Compression, Catania et al. <https://ieeexplore.ieee.org/abstract/document/10647328>`_
+
+  * Encode images with Cool-chic using different training loss more aligned with the perceptive metrics.
+
 * April: `Human–Machine Collaborative Image Compression Method Based on Implicit Neural Representations, Li et al. <https://ieeexplore.ieee.org/document/10323534>`_
 
-  * Propose to adapt Cool-chic to accomodate simultaneous coding for human and machine.
+  * Propose to adapt Cool-chic to accommodate simultaneous coding for human and machine.
 
 * January: `Fast Implicit Neural Representation Image Codec in Resource-limited Devices, Liu et al. <https://arxiv.org/abs/2401.12587>`_
 
@@ -82,7 +86,7 @@ have not (yet?) been integrated  in this repository.
 
 * November: `Enhanced Quantified Local Implicit Neural Representation for Image Compression, Zhang et al. <https://ieeexplore.ieee.org/document/10323534>`_
 
-  * Propose a CNN-based post-filter (similar to Cool-chic 2.0) & a SGA-based quantization close to the softround mecanism introduced by C3
+  * Propose a CNN-based post-filter (similar to Cool-chic 2.0) & a SGA-based quantization close to the softround mechanism introduced by C3
 
 * September: `Implicit Neural Multiple Description for DNA-based data storage, Le et al. <https://arxiv.org/abs/2309.06956>`_
 

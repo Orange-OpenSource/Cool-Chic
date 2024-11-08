@@ -10,13 +10,15 @@
 
 import math
 from dataclasses import dataclass, field
-from typing import List, Literal, Optional, Tuple, TypedDict, Union
+from typing import List, Literal, Optional, Tuple, Union
 
-import torch
-import torch.nn.functional as F
 from torch import Tensor
 
 from enc.utils.misc import POSSIBLE_DEVICE
+
+from enc.io.format.data_type import FRAME_DATA_TYPE, POSSIBLE_BITDEPTH
+from enc.io.format.yuv import DictTensorYUV, convert_420_to_444, yuv_dict_to_device
+
 
 # The different frame types:
 #       - I frames have no reference (intra)
@@ -44,90 +46,6 @@ FRAME_TYPE = Literal["I", "P", "B"]
 # between two I-frames. First GOP P-period is 1, while second P period is 4
 # which is the distance of the P-frame prediction.
 #
-FRAME_DATA_TYPE = Literal["rgb", "yuv420", "yuv444"]
-POSSIBLE_BITDEPTH = Literal[8, 10]
-
-
-class DictTensorYUV(TypedDict):
-    """``TypedDict`` representing a YUV420 frame..
-
-    .. hint::
-
-        ``torch.jit`` requires I/O of modules to be either ``Tensor``, ``List``
-        or ``Dict``. So we don't use a python dataclass here and rely on
-        ``TypedDict`` instead.
-
-    Args:
-        y (Tensor): :math:`([B, 1, H, W])`.
-        u (Tensor): :math:`([B, 1, \\frac{H}{2}, \\frac{W}{2}])`.
-        v (Tensor): :math:`([B, 1, \\frac{H}{2}, \\frac{W}{2}])`.
-    """
-
-    y: Tensor
-    u: Tensor
-    v: Tensor
-
-
-def yuv_dict_to_device(yuv: DictTensorYUV, device: POSSIBLE_DEVICE) -> DictTensorYUV:
-    """Send a ``DictTensor`` to a device.
-
-    Args:
-        yuv: Data to be sent to a device.
-        device: The requested device
-
-    Returns:
-        Data on the appropriate device.
-    """
-    return DictTensorYUV(
-        y=yuv.get("y").to(device), u=yuv.get("u").to(device), v=yuv.get("v").to(device)
-    )
-
-
-# ============================== YUV upsampling ============================= #
-def convert_444_to_420(yuv444: Tensor) -> DictTensorYUV:
-    """From a 4D YUV 444 tensor :math:`(B, 3, H, W)`, return a
-    ``DictTensorYUV``. The U and V tensors are down sampled using a nearest
-    neighbor downsampling.
-
-    Args:
-        yuv444: YUV444 data :math:`(B, 3, H, W)`
-
-    Returns:
-        YUV420 dictionary of 4D tensors
-    """
-    assert yuv444.dim() == 4, f"Number of dimension should be 5, found {yuv444.dim()}"
-
-    b, c, h, w = yuv444.size()
-    assert c == 3, f"Number of channel should be 3, found {c}"
-
-    # No need to downsample y channel but it should remain a 5D tensor
-    y = yuv444[:, 0, :, :].view(b, 1, h, w)
-
-    # Downsample U and V channels together
-    uv = F.interpolate(yuv444[:, 1:3, :, :], scale_factor=(0.5, 0.5), mode="nearest")
-    u, v = uv.split(1, dim=1)
-
-    yuv420 = DictTensorYUV(y=y, u=u, v=v)
-    return yuv420
-
-
-def convert_420_to_444(yuv420: DictTensorYUV) -> Tensor:
-    """Convert a DictTensorYUV to a 4D tensor:math:`(B, 3, H, W)`.
-    The U and V tensors are up sampled using a nearest neighbor upsampling
-
-    Args:
-        yuv420: YUV420 dictionary of 4D tensor
-
-    Returns:
-        YUV444 Tensor :math:`(B, 3, H, W)`
-    """
-    u = F.interpolate(yuv420.get("u"), scale_factor=(2, 2))
-    v = F.interpolate(yuv420.get("v"), scale_factor=(2, 2))
-    yuv444 = torch.cat((yuv420.get("y"), u, v), dim=1)
-    return yuv444
-
-
-# ============================== YUV upsampling ============================= #
 
 
 @dataclass
@@ -136,7 +54,8 @@ class FrameData:
     a few additional information about its size, bitdepth of color space.
 
     Args:
-        bitdepth (POSSIBLE_BITDEPTH): Bitdepth, either ``"8"`` or ``"10"``.
+        bitdepth (POSSIBLE_BITDEPTH): Bitdepth, should be in
+            ``[8, 9, 10, 11, 12, 13, 14, 15, 16]``.
         frame_data_type (FRAME_DATA_TYPE): Data type, either ``"rgb"``,
             ``"yuv420"``, ``"yuv444"``.
         data (Union[Tensor, DictTensorYUV]): The actual RGB or YUV data
@@ -172,6 +91,15 @@ class FrameData:
         elif self.frame_data_type == "yuv420":
             self.data = yuv_dict_to_device(self.data, device)
 
+    def to_string(self) -> str:
+        """Pretty string describing the frame data."""
+        s = "Frame data information:\n"
+        s += "-----------------------\n"
+        s += f"{'Resolution (H, W)':<26}: {self.img_size[0]}, {self.img_size[1]}\n"
+        s += f"{'Bitdepth':<26}: {self.bitdepth}\n"
+        s += f"{'Data type':<26}: {self.frame_data_type}"
+
+        return s
 
 @dataclass
 class Frame:

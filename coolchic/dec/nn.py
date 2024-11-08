@@ -7,11 +7,10 @@
 # Authors: see CONTRIBUTORS.md
 
 
-import numpy as np
 import torch
 import torch.nn as nn
 
-from enc.utils.misc import FIXED_POINT_FRACTIONAL_MULT, DescriptorNN
+from enc.utils.misc import DescriptorNN
 from CCLIB.ccencapi import cc_decode_wb
 
 
@@ -40,7 +39,7 @@ def decode_network(
     Returns:
         nn.Module: The decoded module
     """
-    have_bias = q_step_nn.bias > 0
+    have_bias = bitstream_path.bias != ""
 
     # Instantiate two range coder objects to decode simultaneously weight and bias
     bac_ctx_weight = cc_decode_wb(bitstream_path.weight)
@@ -49,12 +48,10 @@ def decode_network(
 
     loaded_param = {}
     for k, v in empty_module.named_parameters():
-        if k.endswith('.w') or k.endswith('.weight'):
-            cur_scale = scale_nn.weight
+        if "weight" in k:
             cur_q_step = q_step_nn.weight
             cur_param = bac_ctx_weight.decode_wb_continue(len(v.flatten()), scale_nn.weight)
-        elif k.endswith('.b') or k.endswith('.bias'):
-            cur_scale = scale_nn.bias
+        elif "bias" in k and have_bias:
             cur_q_step = q_step_nn.bias
             cur_param = bac_ctx_bias.decode_wb_continue(len(v.flatten()), scale_nn.bias)
         else:
@@ -68,5 +65,5 @@ def decode_network(
     if "arm" in bitstream_path.weight:
         empty_module.set_param_from_float(loaded_param)
     else:
-        empty_module.load_state_dict(loaded_param)
+        empty_module.load_state_dict(loaded_param, strict = have_bias)
     return empty_module

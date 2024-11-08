@@ -1,2 +1,2 @@
-                                  BDR vtm [%]   BDR hm [%]   BDR c3 [%]   BDR coolchic-3-1 [%]   Avg C [MAC/px]   Avg time [ms]  
-            release-3-3-0-kodak   4.469         -16.377      -3.432       -1.88                  1880             96             
+                                  BD-rate vs. vtm [%]   BD-rate vs. hm [%]   BD-rate vs. cheng20 [%]   BD-rate vs. elic [%]   BD-rate vs. c3 [%]   BD-rate vs. coolchic-3-3 [%]   Complexity [MAC/pix]   Decoding time [ms]  
+            release-3-4-0-kodak   3.414                 -17.241              -4.184                    7.516                  -4.285               -0.874                         1303                   74                  
