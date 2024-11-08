@@ -38,15 +38,12 @@ This includes the encoder logs and the PyTorch model (``workdir/video_encoder.pt
 I/O format
 """"""""""
 
-Cool-chic is able to encode PNG files and YUV 420 files. The naming of YUV files
+Cool-chic is able to encode PPM, PNG, YUV420 & YUV 444 files. The naming of YUV files
 must comply with the following convention
 
 .. code:: bash
 
-    --input=<videoname>_<Width>x<Height>_<framerate>p_yuv420_<bitdepth>b.yuv
-
-Note that Cool-chic support both 8-bit and 10-bit YUV file. Support for YUV 444
-is not yet implemented.
+    --input=<videoname>_<Width>x<Height>_<framerate>p_yuv<chromasampling>_<bitdepth>b.yuv
 
 Note that Cool-Chic outputs either `PPM
 <https://en.wikipedia.org/wiki/Portable_pixmap>`_ (and not PNG!) or `YUV
