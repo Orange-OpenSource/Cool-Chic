@@ -27,44 +27,48 @@
     <a href="https://orange-opensource.github.io/Cool-Chic/"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/results.html">Decode provided bitstreams</a>
+    <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/new_stuff.html">What's new in 3.4?</a>
     ·
-    <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/results.html#clic20-pro-valid">Compression performance</a>
+    <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/results.html">Decode some bitstreams</a>
+    ·
+    <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/results.html#clic20-pro-valid">Coding performance</a>
   </p>
 </div>
 
 <!-- # What's Cool-chic? -->
 
 Cool-chic (pronounced <span class="ipa">/kul ʃik/</span> as in French 🥖🧀🍷) is
-is a low-complexity neural image codec based on overfitting. It offers image coding
-performance competitive with *H.266/VVC for 2000 multiplications* per decoded
+a low-complexity neural image codec based on overfitting. It offers image coding
+performance competitive with **H.266/VVC for 1000 multiplications** per decoded
 pixel.
+
+
+
+<div align="center">
+
+#### 🏆 **Coding performance**: Cool-chic compresses images as well as H.266/VVC 🏆
+#### 🚀 **Fast CPU-only decoder**: Decode a 1280x720 image in 100 ms on CPU with our decoder written in C 🚀
+#### 🔥 **Fixed-point decoder**: Fixed-point arithmetic at the decoder for bit-exact results on different hardwares 🔥
+#### 🖼️ **I/O format**: Encode PNG, PPM and YUV file with a bitdepth of 8 to 16 bits 🖼️
+
+</div>
 
 #
 
-### Current & future features
 
-- Coding performance
-  - ✅ On par with VVC for image coding
-  - ❌ Upcoming improved Cool-chic video
-- I/O format
-  - ✅ PPM for 8-bit RGB images, yuv420 8-bit and 10-bit
-  - ❌ yuv444
-  - ❌ Additional output precisions (12, 14 and 16-bit)
-  - ❌ Output PNG instead of PPM for the decoded images
-- Decoder
-  - ✅ Fast C implementation
-  - ✅ Integer computation for the ARM
-  - ✅ Complete integerization
-  - ✅ Decrease memory footprint & faster decoding
+<div align="center">
 
-### Latest release: 🚀 __Cool-chic 3.3: An even faster decoder!__ 🚀
+### Latest release: 🎉 __Cool-chic 3.4: 30% less complex!__ 🎉
 
-- Make the **CPU-only decoder** even faster.
-    - Decode a 720p image in **100 ms**, **2x faster** than Cool-chic 3.2
-    - Full **integerization** of the decoder for replicability
-    - Reduce decoder **memory footprint**
-    - **Optimized** implementation of 3x3 convolutions & fusion of successive 1x1 convolutions
+</div>
+
+- New and improved latent **upsampling module**
+    - Leverage symmetric and separable convolution kernels to reduce complexity & parameters count
+    - Learn two filters per upsampling step instead of one for all upsampling steps
+- 1% to 5% **rate reduction** for the same image quality
+- **30% complexity reduction** using a smaller Auto-Regressive Module
+    - From 2000 MAC / decoded pixel to 1300 MAC / decoded pixel
+    - **10% faster** decoding speed
 
 Check-out the [release history](https://github.com/Orange-OpenSource/Cool-Chic/releases) to see previous versions of Cool-chic.
 
@@ -97,41 +101,159 @@ You're good to go!
 The Cool-chic page provides [comprehensive rate-distortion results and compressed bitstreams](https://orange-opensource.github.io/Cool-Chic/getting_started/results.html) allowing
 to reproduce the results inside the ```results/``` directory.
 
-| Dataset          | Vs. Cool-chic 3.1                            | Vs. [_C3_, Kim et al.](https://arxiv.org/abs/2312.02753) | Vs. HEVC (HM 16.20)                          | Vs. VVC (VTM 19.1)                           | Avg decoder MAC / pixel          | Avg decoding time [ms]           |
-|------------------|----------------------------------------------|----------------------------------------------------------|----------------------------------------------|----------------------------------------------|----------------------------------|----------------------------------|
-| kodak            | <span style="color:green" > - 1.9 % </span>  | <span style="color:green"> - 3.4 %  </span>              | <span style="color:green" > - 16.4 % </span> | <span style="color:#f50" > + 4.5 %   </span> | 1880                             | 96                               |
-| clic20-pro-valid | <span style="color:green" > - 4.2 % </span>  | <span style="color:green"> - 1.0 %  </span>              | <span style="color:green" > - 24.8 % </span> | <span style="color:green"> - 1.9 %   </span> | 1907                             | 364                              |
-| jvet class B     | <span style="color:green" > - 7.2 % </span>  | <span style="color:gray"> /  </span>                     | <span style="color:green" > - 10.8 % </span> | <span style="color:#f50"> + 19.5 %   </span> | 1803                             | 260                              |
+<style type="text/css">
+.tg  {border-collapse:collapse;border-spacing:0;margin:0px auto;}
+.tg td{border-color:black;border-style:solid;border-width:1px;font-family:Arial, sans-serif;font-size:14px;
+  overflow:hidden;padding:10px 5px;word-break:normal;}
+.tg th{border-color:black;border-style:solid;border-width:1px;font-family:Arial, sans-serif;font-size:14px;
+  font-weight:normal;overflow:hidden;padding:10px 5px;word-break:normal;}
+.tg .tg-m5nv{border-color:#656565;text-align:center;vertical-align:top}
+.tg .tg-dfl2{border-color:#656565;font-family:inherit;text-align:center;vertical-align:top}
+.tg .tg-uflc{border-color:#656565;color:#009901;text-align:center;vertical-align:top}
+.tg .tg-86ol{border-color:#656565;font-family:inherit;font-weight:bold;text-align:center;vertical-align:top}
+.tg .tg-qch7{border-color:#656565;color:#009901;font-family:inherit;text-align:center;vertical-align:top}
+.tg .tg-arzi{border-color:#656565;color:#cb0000;text-align:center;vertical-align:top}
+.tg .tg-xd3r{border-color:#656565;color:#cb0000;font-family:inherit;text-align:center;vertical-align:top}
+.tg .tg-5niz{border-color:#656565;color:#9b9b9b;font-family:inherit;text-align:center;vertical-align:top}
+.tg .tg-x9uu{border-color:#656565;font-weight:bold;text-align:center;vertical-align:top}
+.tg .tg-1keu{border-color:#656565;color:#9b9b9b;text-align:center;vertical-align:top}
+</style>
+<table class="tg"><thead>
+  <tr>
+    <th class="tg-86ol" rowspan="2"></th>
+    <th class="tg-86ol" colspan="6">BD-rate of Cool-chic 3.4 vs. [%]</th>
+    <th class="tg-86ol" colspan="2">Avg. decoder complexity</th>
+  </tr>
+  <tr>
+    <th class="tg-86ol"><a href="https://arxiv.org/abs/2001.01568" target="_blank" rel="noopener noreferrer">Cheng</a></th>
+    <th class="tg-86ol"><a href="https://arxiv.org/abs/2203.10886" target="_blank" rel="noopener noreferrer">ELIC</a></th>
+    <th class="tg-dfl2"><span style="font-weight:bold">Cool-chic 3.3</span></th>
+    <th class="tg-86ol"><a href="https://arxiv.org/abs/2312.02753" target="_blank" rel="noopener noreferrer">C3</a></th>
+    <th class="tg-86ol">HEVC (HM 16)</th>
+    <th class="tg-86ol">VVC (VTM 19)</th>
+    <th class="tg-86ol">MAC / pixel</th>
+    <th class="tg-86ol">CPU Time [ms]</th>
+  </tr></thead>
+<tbody>
+  <tr>
+    <td class="tg-86ol">kodak</td>
+    <td class="tg-qch7">-4.2 %</td>
+    <td class="tg-xd3r">+7.5 %</td>
+    <td class="tg-qch7">-0.9 %</td>
+    <td class="tg-qch7">-4.3 %</td>
+    <td class="tg-qch7">-17.2 %</td>
+    <td class="tg-xd3r">+3.4 % </td>
+    <td class="tg-dfl2">1303</td>
+    <td class="tg-dfl2">74</td>
+  </tr>
+  <tr>
+    <td class="tg-86ol">clic20-pro-valid</td>
+    <td class="tg-qch7">-13.2 %</td>
+    <td class="tg-qch7">-0.2 %</td>
+    <td class="tg-qch7">-0.3 %</td>
+    <td class="tg-qch7">-1.3 %</td>
+    <td class="tg-qch7">-25.1 %</td>
+    <td class="tg-qch7">-2.3 %<br></td>
+    <td class="tg-dfl2">1357</td>
+    <td class="tg-dfl2">354</td>
+  </tr>
+  <tr>
+    <td class="tg-86ol">jvet (BCDEF)</td>
+    <td class="tg-5niz">/</td>
+    <td class="tg-5niz">/</td>
+    <td class="tg-qch7">-0.2 %</td>
+    <td class="tg-5niz">/</td>
+    <td class="tg-qch7">-18.3 %</td>
+    <td class="tg-xd3r">+18.6 %</td>
+    <td class="tg-dfl2">1249</td>
+    <td class="tg-dfl2">143</td>
+  </tr>
+  <tr>
+    <td class="tg-x9uu">jvet (class B)</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-arzi">+0.9%</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-9.9 %</td>
+    <td class="tg-arzi">+20.7 %</td>
+    <td class="tg-m5nv">1300</td>
+    <td class="tg-m5nv">282</td>
+  </tr>
+  <tr>
+    <td class="tg-x9uu">jvet (class C)</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-1.3%</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-16.1 %</td>
+    <td class="tg-arzi">+9.2 %</td>
+    <td class="tg-m5nv">1289</td>
+    <td class="tg-m5nv">69</td>
+  </tr>
+  <tr>
+    <td class="tg-x9uu">jvet (class D)</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-1.4%</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-12.4 %</td>
+    <td class="tg-arzi">+9.6 %</td>
+    <td class="tg-m5nv">948</td>
+    <td class="tg-m5nv">18</td>
+  </tr>
+  <tr>
+    <td class="tg-x9uu">jvet (class E)</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-3.8%</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-6.2 %</td>
+    <td class="tg-arzi">+27.8 %</td>
+    <td class="tg-m5nv">1347</td>
+    <td class="tg-m5nv">125</td>
+  </tr>
+  <tr>
+    <td class="tg-x9uu">jvet (class F)</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-arzi">+0.2%</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-31.8 %</td>
+    <td class="tg-arzi">+20.6 %</td>
+    <td class="tg-m5nv">1249</td>
+    <td class="tg-m5nv">182</td>
+  </tr>
+</tbody></table>
+
+<br/>
+
+_Decoding time are obtained on a single CPU core of an an AMD EPYC 7282 16-Core Processor_
+
+_PSNR is computed in the RGB domain for kodak and CLIC20, in the YUV420 domain for jvet_
+
 
 ### Kodak
 
 <div style="text-align: center;">
-    <!-- <img src="./results/image/kodak/rd.png" alt="Kodak rd results" width="800" style="centered"/> -->
-    <img src="./docs/source/assets/kodak/rd.png" alt="Kodak rd results" width="750" style="centered"/>
-    <img src="./docs/source/assets/kodak/perf_complexity.png" alt="Kodak performance complexity" width="750" style="centered"/>
-    <!-- <img src="./results/image/jvet/rd.png" alt="CLIC rd results" width="800" style="centered"/> -->
+    <img src="./docs/source/assets/kodak/concat_img.png" alt="Kodak rd results" width="90%" style="centered"/>
 </div>
 <br/>
 
 ### CLIC20 Pro Valid
 
 <div style="text-align: center;">
-    <!-- <img src="./results/image/kodak/rd.png" alt="Kodak rd results" width="800" style="centered"/> -->
-    <img src="./docs/source/assets/clic20-pro-valid/rd.png" alt="CLIC20 rd results" width="750" style="centered"/>
-    <img src="./docs/source/assets/clic20-pro-valid/perf_complexity.png" alt="CLIC20 performance complexity" width="750" style="centered"/>
-    <!-- <img src="./results/image/jvet/rd.png" alt="CLIC rd results" width="800" style="centered"/> -->
+    <img src="./docs/source/assets/clic20-pro-valid/concat_img.png" alt="CLIC20 rd results" width="90%" style="centered"/>
 </div>
 <br/>
 
 ### JVET Class B
 
 <div style="text-align: center;">
-    <!-- <img src="./results/image/kodak/rd.png" alt="Kodak rd results" width="800" style="centered"/> -->
-    <img src="./docs/source/assets/jvet/rd_classB.png" alt="JVET class B rd results" width="750" style="centered"/>
-    <img src="./docs/source/assets/jvet/perf_complexity_classB.png" alt="JVET class B performance complexity" width="750" style="centered"/>
-    <!-- <img src="./results/image/jvet/rd.png" alt="CLIC rd results" width="800" style="centered"/> -->
+    <img src="./docs/source/assets/jvet/concat_img_classB.png" alt="JVET class B rd results" width="90%" style="centered"/>
 </div>
 <br/>
+
+</br>
 
 # Thanks
 
@@ -154,7 +276,6 @@ Special thanks go to Hyunjik Kim, Matthias Bauer, Lucas Theis, Jonathan Richard 
 
 <div align="center">
 
-</br>
 
 #
 

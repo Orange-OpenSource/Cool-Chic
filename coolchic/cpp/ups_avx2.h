@@ -8,7 +8,8 @@
 */
 
 
-void ups_4x4x4_fromarm_avx2(int KS, int32_t *kw, int h_in, int w_in, int stride_in, int32_t *in, int stride_out, int32_t *out);
-void ups_4x4x4_fromups_avx2(int KS, int32_t *kw, int h_in, int w_in, int stride_in, int32_t *in, int stride_out, int32_t *out);
-void ups_4x2x2_fromarm_avx2(int KS, int32_t *kw, int h_in, int w_in, int stride_int, int32_t *in, int stride_out, int32_t *out);
-void ups_4x2x2_fromups_avx2(int KS, int32_t *kw, int h_in, int w_in, int stride_int, int32_t *in, int stride_out, int32_t *out);
+void ups_refine_ks7_avx2(int ks, int32_t *kw, frame_memory &in, frame_memory &out, int ups_src_precision, frame_memory &tmp);
+void ups_refine_ksX_avx2(int ks, int32_t *kw, frame_memory &in, frame_memory &out, int ups_src_precision, frame_memory &tmp);
+void ups_upsample_ks8_UPSPREC_avx2(int ksx2, int32_t *kw, frame_memory &in, frame_memory &out, int out_plane, int ups_src_precision, frame_memory &tmp);
+void ups_upsample_ks8_ARMPREC_avx2(int ksx2, int32_t *kw, frame_memory &in, frame_memory &out, int out_plane, int ups_src_precision, frame_memory &tmp);
+void ups_upsample_ksX_avx2(int ksx2, int32_t *kw, frame_memory &in, frame_memory &out, int out_plane, int ups_src_precision, frame_memory &tmp);

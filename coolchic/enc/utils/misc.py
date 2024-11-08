@@ -154,13 +154,13 @@ def get_q_step_from_parameter_name(
         Optional[float]: The quantization step associated to the parameter.
             Return None if nothing is found.
     """
-    if parameter_name.endswith(".weight"):
+    if ".weight" in parameter_name:
         current_q_step = q_step.get("weight")
-    elif parameter_name.endswith(".bias"):
+    elif ".bias" in parameter_name:
         current_q_step = q_step.get("bias")
     else:
         print(
-            'Parameter name should end with ".weight" or ".bias" '
+            'Parameter name should include ".weight" or ".bias" '
             f"Found: {parameter_name}"
         )
         current_q_step = None
@@ -195,13 +195,13 @@ def measure_expgolomb_rate(
         # to obtain the sent latent.
         current_sent_param = (parameter_value / current_q_step).view(-1)
 
-        if parameter_name.endswith(".weight"):
+        if ".weight" in parameter_name:
             sent_param["weight"].append(current_sent_param)
-        elif parameter_name.endswith(".bias"):
+        elif ".bias" in parameter_name:
             sent_param["bias"].append(current_sent_param)
         else:
             print(
-                'Parameter name should end with ".weight" or ".bias" '
+                'Parameter name should include ".weight" or ".bias" '
                 f"Found: {parameter_name}"
             )
             return rate_param

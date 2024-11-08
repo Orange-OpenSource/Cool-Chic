@@ -60,16 +60,16 @@ Some configuration files are proposed in ``cfg/dec/``:
      - Multiplication / decoded pixel
    * - ``vlop.cfg``
      - Very Low Operating Point
-     - 300
+     - 330
    * - ``lop.cfg``
      - Low Operating Point
-     - 550
+     - 580
    * - ``mop.cfg``
      - Medium Operating Point
-     - 1080
+     - 1110
    * - ``hop.cfg``
      - High Operating Point
-     - 2300
+     - 1430
 
 The :doc:`results section <./../getting_started/results>` illustrates the performance-complexity continuum of these configurations.
 
@@ -160,73 +160,30 @@ Using a ``512x768`` image from the Kodak dataset as an exemple:
 
 .. code-block:: none
 
-  (venv) ~/Cool-Chic$ python coolchic/encode.py --input=kodim01.png --arm=24,2
+  (venv) ~/Cool-Chic$ python coolchic/encode.py --input=kodim01.png --arm=16,2
 
-  cat ./frame_000/archi.txt
+  ARM 725 MAC/pixel ; 53.5 % of the complexity
+  ============================================
 
 
-  | module                                  | #parameters or shape   | #flops    |
-  |:----------------------------------------|:-----------------------|:----------|
-  | model                                   | 0.526M                 | 0.901G    |
-  |  arm.mlp                                |  1.25K                 |  0.629G   |
-  |   arm.mlp.0                             |   0.6K                 |   0.302G  |
-  |    arm.mlp.0.weight                     |    (24, 24)            |           |
-  |    arm.mlp.0.bias                       |    (24,)               |           |
-  |   arm.mlp.2                             |   0.6K                 |   0.302G  |
-  |    arm.mlp.2.weight                     |    (24, 24)            |           |
-  |    arm.mlp.2.bias                       |    (24,)               |           |
-  |   arm.mlp.4                             |   50                   |   25.164M |
-  |    arm.mlp.4.weight                     |    (2, 24)             |           |
-  |    arm.mlp.4.bias                       |    (2,)                |           |
-
+                     +----------------------------+                  +----------------------------+
+                     |                            |                  |                            |
+                     |                            v                  |                            v
+                     |  +-----------------+    +-----+    +------+   |  +-----------------+    +-----+    +------+      +----------------+
+  16-pixel context ---> | Linear 16 -> 16 | -> |  +  | -> | ReLU | ---> | Linear 16 -> 16 | -> |  +  | -> | ReLU | ---> | Linear 16 -> 2 | ---> mu, log scale
+                        +-----------------+    +-----+    +------+      +-----------------+    +-----+    +------+      +----------------+
 
 Upsampling
 """"""""""
 
 The upsampling network takes the set of hierarchical latent variables and
 upsample them to obtain a dense latent representation with the same resolution
-than the image to decode e.g. ``[C, H, W]`` for a ``H, W`` image. This is done
-by applying a single transposed convolution 2d :math:`N` times to achieve an
-upsample of :math:`2^N`.
+than the image to decode e.g. ``[C, H, W]`` for a ``H, W`` image. This is
+achieved through successive upsampling of the latent using 2d convolutions. The
+size of these convolutive filters are parameterized with ``--ups_k_size`` and
+``--ups_preconcat_k_size``.
 
-The transpose convolution kernel can be learned... or not. The argument
-``--static_upsampling_kernel`` indicates that the upsampling kernel is
-**not** learned. The size of the transpose convolution kernel is changeable
-through the parameter ``--upsampling_kernel_size``.
-
-
-
-.. attention::
-
-    The upsampling kernel size should be **even** and greater or equal to 4.
-
-.. code-block:: none
-
-  # Non learnable 4x4 kernel
-  (venv) ~/Cool-Chic$ python coolchic/encode.py --input=kodim01.png --upsampling_kernel_size=4 --static_upsampling_kernel
-  (venv) ~/Cool-Chic$ cat ./frame_000/archi.txt
-
-  | module                                  | #parameters or shape   | #flops    |
-  |:----------------------------------------|:-----------------------|:----------|
-  | model                                   | 0.525M                 | 0.309G    |
-  |  upsampling.upsampling_layer            |  16                    |  12.3M    |
-  |   upsampling.upsampling_layer.weight    |   (1, 1, 4, 4)         |           |
-
-  # Learnable 8x8 kernel
-  (venv) ~/Cool-Chic$ python coolchic/encode.py --input=kodim01.png --upsampling_kernel_size=8
-  (venv) ~/Cool-Chic$ cat ./frame_000/archi.txt
-
-  | module                                  | #parameters or shape   | #flops    |
-  |:----------------------------------------|:-----------------------|:----------|
-  | model                                   | 0.526M                 | 0.901G    |
-  |  upsampling.upsampling_layer            |  64                    |  50.909M  |
-  |   upsampling.upsampling_layer.weight    |   (1, 1, 8, 8)         |           |
-
-.. tip::
-
-    The initialization of the upsampling kernel changes with its size. For kernel
-    of size 4 and 6 it is initialized with a bilinear kernel (zero padded if needed).
-    For size 8 and above, it is initialized with a bicubic kernel (zero padded if needed).
+See the :doc:`upsampling doc <./../../code_documentation/encoder/component/core/upsampling>` for more details.
 
 
 Synthesis
@@ -284,23 +241,15 @@ Using a ``512x768`` image from the Kodak dataset and 7 input features as an exem
   (venv) ~/Cool-Chic$ python coolchic/encode.py \
     --input=kodim01.png \
     --n_ft_per_res=1,1,1,1,1,1,1 \
-    --layers_synthesis=40-1-linear-relu,3-1-linear-relu,X-3-residual-relu,X-3-residual-none
+    --layers_synthesis=16-1-linear-relu,3-1-linear-relu,X-3-residual-relu,X-3-residual-none
 
-  (venv) ~/Cool-Chic$ cat ./frame_000/archi.txt
+  Synthesis 322 MAC/pixel ; 28.9 % of the complexity
+  ==================================================
 
-  | module                                  | #parameters or shape   | #flops    |
-  |:----------------------------------------|:-----------------------|:----------|
-  | model                                   | 0.526M                 | 0.901G    |
-  |  synthesis.layers                       |  0.611K                |  0.221G   |
-  |   synthesis.layers.0.conv_layer         |   0.32K                |   0.11G   |
-  |    synthesis.layers.0.conv_layer.weight |    (40, 7, 1, 1)       |           |
-  |    synthesis.layers.0.conv_layer.bias   |    (40,)               |           |
-  |   synthesis.layers.1.conv_layer         |   0.123K               |   47.186M |
-  |    synthesis.layers.1.conv_layer.weight |    (3, 40, 1, 1)       |           |
-  |    synthesis.layers.1.conv_layer.bias   |    (3,)                |           |
-  |   synthesis.layers.2.conv_layer         |   84                   |   31.85M  |
-  |    synthesis.layers.2.conv_layer.weight |    (3, 3, 3, 3)        |           |
-  |    synthesis.layers.2.conv_layer.bias   |    (3,)                |           |
-  |   synthesis.layers.3.conv_layer         |   84                   |   31.85M  |
-  |    synthesis.layers.3.conv_layer.weight |    (3, 3, 3, 3)        |           |
-  |    synthesis.layers.3.conv_layer.bias   |    (3,)                |           |
+
+                                                                                               +------------------------------+                  +------------------------------+
+                                                                                               |                              |                  |                              |
+                                                                                               |                              v                  |                              v
+                  +--------------------+    +------+      +--------------------+    +------+   |  +-------------------+    +-----+    +------+   |  +-------------------+    +-----+
+  7 features ---> | 1x1 Conv2d 7 -> 16 | -> | ReLU | ---> | 1x1 Conv2d 16 -> 3 | -> | ReLU | ---> | 3x3 Conv2d 3 -> 3 | -> |  +  | -> | ReLU | ---> | 3x3 Conv2d 3 -> 3 | -> |  +  | ---> Decoded image
+                  +--------------------+    +------+      +--------------------+    +------+      +-------------------+    +-----+    +------+      +-------------------+    +-----+

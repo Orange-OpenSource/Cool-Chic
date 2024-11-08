@@ -19,13 +19,18 @@ namespace py = pybind11;
 // encode latents layer to a file.
 int cc_decode_avx2(
     std::string &in_bitstream_filename,
-    std::string &out_ppm_filename);
+    std::string &out_ppm_filename,
+    int output_bitdepth = 0,
+    int output_chroma_format = 0,
+    int verbosity = 0);
 
 PYBIND11_MODULE(ccdecapi_avx2, m) {
     m.doc() = "ccdecoding"; // optional module docstring
     m.def("cc_decode_avx2", &cc_decode_avx2, "decode a bitstream");
 }
 
+#ifndef CCDECAPI_AVX2
 #define CCDECAPI_AVX2
-#include "ccdecapi.hpp"
+#endif
+#include "ccdecapi.cpp"
 #undef CCDECAPI_AVX2

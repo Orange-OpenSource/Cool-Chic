@@ -96,6 +96,7 @@ void code_val(TEncBinCABAC &layer_BAC, MuSigGTs *coding_ctxs, int val_to_code)
 // we return the best index.
 int cc_code_wb_bac(std::string &out_name, std::vector<int> &xs, int use_count)
 {
+#if 0
     // !!! check for all zero, emit empty file.
     bool all_zero = true;
     for (int i = 0; i < (int)xs.size(); i++)
@@ -106,10 +107,11 @@ int cc_code_wb_bac(std::string &out_name, std::vector<int> &xs, int use_count)
             break;
         }
     }
-    if (all_zero)
-    {
-        printf("all weights/biases zero -- think of empty file\n");
-    }
+    //if (all_zero)
+    //{
+    //    printf("all weights/biases zero -- think of empty file\n");
+    //}
+#endif
 
     TEncBinCABAC layer_BAC;
 
@@ -120,6 +122,16 @@ int cc_code_wb_bac(std::string &out_name, std::vector<int> &xs, int use_count)
     int test_max = 12;
     if (use_count >= 0)
         test_min = test_max = use_count;
+#if 0
+    if (1) // xs.size() == 5 || xs.size() == 8)
+    {
+        printf("encoding weight/bias vector %d to %s:", xs.size(), out_name.c_str());
+        for (int i = 0; i < xs.size(); i++)
+            printf(" %d", xs[i]);
+        printf("\n");
+        fflush(stdout);
+    }
+#endif
     for (int exgolomb_count = test_min; exgolomb_count <= test_max; exgolomb_count++)
     {
         //auto layer_BAC =  CABACEncoder();
@@ -141,7 +153,7 @@ int cc_code_wb_bac(std::string &out_name, std::vector<int> &xs, int use_count)
         {
             best_exgolomb_count = exgolomb_count;
             best_exgolomb_bytes = bsBAC.getFifo();
-            printf("better exgolomb bytes %d at count=%d\n", (int)best_exgolomb_bytes.size(), best_exgolomb_count);
+            //printf("better exgolomb bytes %d at count=%d\n", (int)best_exgolomb_bytes.size(), best_exgolomb_count);
         }
     }
 
@@ -158,7 +170,7 @@ int cc_code_wb_bac(std::string &out_name, std::vector<int> &xs, int use_count)
         exit(1);
     }
     fclose(fout);
-    printf("%s created\n", out_name.c_str());
+    //printf("%s created\n", out_name.c_str());
 
     // return best sig index used for coding
     return best_exgolomb_count;
@@ -172,8 +184,6 @@ void cc_code_latent_layer_bac(
     int layer_height, int layer_width,
     int hls_sig_blksize)
 {
-    printf("called cc_code_latent_layer_bac: file=%s\n", out_name.c_str());
-
     // get significant blocks.
     bool hls_sig_update = hls_sig_blksize < 0;
     if (hls_sig_update)
@@ -245,7 +255,7 @@ void cc_code_latent_layer_bac(
 
         // want to bother?  For significant blocks, we now say no.
         // SIG
-        printf("nz %d vs %d\n", n_zero, nby*nbx);
+        // printf("nz %d vs %d\n", n_zero, nby*nbx);
         //if (n_zero <= nby*nbx/20)
         if (1) // no longer use significance blocks.
         {
@@ -259,7 +269,7 @@ void cc_code_latent_layer_bac(
         else
         {
             // signal block significance.
-            printf("sig1 %s\n", hls_sig_update ? "(update)" : "(noupdate)");
+            // printf("sig1 %s\n", hls_sig_update ? "(update)" : "(noupdate)");
             layer_BAC.encodeBinEP(1);
             auto ctx = BinProbModel_Std(PROBA_50_STATE);
             for (int by = 0; by < nby; by++)
@@ -281,7 +291,7 @@ void cc_code_latent_layer_bac(
 
 
         // FLAT?
-        printf("nflat %d vs %d\n", n_flat, nby*nbx);
+        // printf("nflat %d vs %d\n", n_flat, nby*nbx);
         if (n_flat <= nby*nbx/20)
         {
             layer_BAC.encodeBinEP(0);
@@ -292,7 +302,7 @@ void cc_code_latent_layer_bac(
             layer_BAC.encodeBinEP(1);
             // signal flat for sig blocks.
             auto ctx = BinProbModel_Std(PROBA_50_STATE);
-            printf("flat1\n");
+            // printf("flat1\n");
             for (int by = 0; by < nby; by++)
             {
                 for (int bx = 0; bx < nbx; bx++)
@@ -367,7 +377,7 @@ void cc_code_latent_layer_bac(
         exit(1);
     }
     fclose(fout);
-    printf("%s created\n", out_name.c_str());
+    // printf("%s created\n", out_name.c_str());
 
     delete[] blk_sig;
     delete[] blk_flat;

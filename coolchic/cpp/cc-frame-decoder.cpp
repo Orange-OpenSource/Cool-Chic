@@ -1,4 +1,8 @@
 
+#ifdef CCDECAPI_AVX2_OPTIONAL
+#define CCDECAPI_AVX2
+#endif
+
 #include "common.h"
 #include "TDecBinCoderCABAC.h"
 #include "cc-contexts.h"
@@ -13,11 +17,13 @@
 #endif
 
 #include "arm_cpu.h"
+#include "ups_cpu.h"
 #include "syn_cpu.h"
 
 extern float time_arm_seconds;
 extern float time_ups_seconds;
 extern float time_syn_seconds;
+extern float time_blend_seconds;
 
 int const Q_STEP_ARM_WEIGHT_SHIFT[] = {
     8, // 1.0/(1<<8),
@@ -162,6 +168,11 @@ void decode_weights_qi(int32_t *result, TDecBinCABAC *cabac, int count, int n_we
         // want val << precision >> q_step_shift
         if (precision > q_step_shift)
             tmp <<= (precision-q_step_shift);
+        else if (precision < q_step_shift)
+        {
+            printf("decoding weights: qstepshift %d > precision %d\n", q_step_shift, precision);
+            exit(1);
+        }
 
         result[i] = tmp;
     }
@@ -173,61 +184,18 @@ void decode_weights_qi(weights_biases &result, TDecBinCABAC *cabac, int count, i
     decode_weights_qi(result.data, cabac, count, n_weights, q_step_shift, precision);
 }
 
-// applying 4 small kernels, ks here is upsampling_kernel/2
-//void custom_conv_ups_zxz1_cpu(int ks, int32_t *kw, int h_in, int w_in, int stride_in, int32_t *in, int32_t *out, int h_target, int w_target, int stride_out)
-void custom_conv_ups_zxz1_cpu(int ks, int32_t *kw, int h_in, int w_in, int stride_in, int32_t *in, int stride_out, int32_t *out, int ups_mul_precision)
+// We take a kernel size ks, but only read (ks+1)/2 weights.  These weights are mirrored to produce the full kernel.
+void decode_upsweights_qi(weights_biases &result, TDecBinCABAC *cabac, int count, int ks, int q_step_shift, int precision)
 {
-    int const kstride = 1;
-    int offs0 = 0;
-
-    for (int y = 0; y < h_in-ks+1; y += kstride, offs0 += stride_in)
+    int nw = (ks+1)/2; // number of weights to read.
+    result.update_to(ks); // we allocate to allow mirroring.
+    decode_weights_qi(result.data, cabac, count, nw, q_step_shift, precision); // read the 1st half.
+    // mirror last half
+    for (int i = 0; i < nw/2*2; i++)
     {
-        for (int vf = 0; vf < 2; vf++, out += stride_out-(w_in-ks+1)*2) // vertical filter choice on this line.
-        {
-            int offs = offs0;
-            for (int x = 0; x < w_in-ks+1; x += kstride, offs += kstride)
-            {
-                for (int hf = 0; hf < 2; hf++) // horizontal filter choice at this point
-                {
-                    int32_t sum = 0;
-                    int32_t *k = kw+(vf*2+hf)*(ks*ks);
-                    int offs2 = offs;
-                    for (int yy = 0; yy < ks; yy++, offs2 += stride_in-ks)
-                        for (int xx = 0; xx < ks; xx++)
-                        {
-                            sum += in[offs2++]*(*k++);
-                        }
-                    *out++ = sum >> ups_mul_precision;
-                }
-            }
-        }
+        result.data[ks-1-i] = result.data[i];
     }
-}
-
-// upsamplingx2: applies 4 smaller kernels sized [ks/2][ks/2]
-// first_ups implies we are processing ARM output (.8) rather than upsampling output (.12).
-void custom_upsample_4(int ks, int32_t *weightsx4xpose, int h_in, int w_in, int stride_in, int32_t *in, int stride_target, int32_t *out, bool first_ups)
-{
-#ifdef CCDECAPI_AVX2
-    if (ks == 8)
-    {
-        if (first_ups)
-            ups_4x4x4_fromarm_avx2(ks/2, weightsx4xpose, h_in, w_in, stride_in, in, stride_target, out);
-        else
-            ups_4x4x4_fromups_avx2(ks/2, weightsx4xpose, h_in, w_in, stride_in, in, stride_target, out);
-    }
-    else if (ks == 4)
-    {
-        if (first_ups)
-            ups_4x2x2_fromarm_avx2(ks/2, weightsx4xpose, h_in, w_in, stride_in, in, stride_target, out);
-        else
-            ups_4x2x2_fromups_avx2(ks/2, weightsx4xpose, h_in, w_in, stride_in, in, stride_target, out);
-    }
-    else
-#endif
-    {
-        custom_conv_ups_zxz1_cpu(ks/2, weightsx4xpose, h_in, w_in, stride_in, in, stride_target, out, first_ups ? ARM_PRECISION : UPS_PRECISION);
-    }
+    fflush(stdout);
 }
 
 void cc_frame_decoder::read_arm(struct cc_bs_frame *frame_symbols)
@@ -287,149 +255,58 @@ void cc_frame_decoder::read_ups(struct cc_bs_frame *frame_symbols)
 {
     struct cc_bs_frame_header &frame_header = frame_symbols->m_frame_header;
 
-    int const ups_ks = frame_header.upsampling_kern_size;
-    int32_t bucket[ups_ks*ups_ks]; // we transpose from this.
-
-    if (frame_header.static_upsampling_kernel != 0)
+    int n_ups = frame_header.n_ups_kernel;
+    int n_ups_preconcat = frame_header.n_ups_preconcat_kernel;
+    if (n_ups != m_ups_n)
     {
-#if 0 // generate text.
-        float bilinear_kernel[4 * 4] = {
-            0.0625, 0.1875, 0.1875, 0.0625,
-            0.1875, 0.5625, 0.5625, 0.1875,
-            0.1875, 0.5625, 0.5625, 0.1875,
-            0.0625, 0.1875, 0.1875, 0.0625
-        };
-
-        float bicubic_kernel[8 * 8] = {
-             0.0012359619 , 0.0037078857 ,-0.0092010498 ,-0.0308990479 ,-0.0308990479 ,-0.0092010498 , 0.0037078857 , 0.0012359619,
-             0.0037078857 , 0.0111236572 ,-0.0276031494 ,-0.0926971436 ,-0.0926971436 ,-0.0276031494 , 0.0111236572 , 0.0037078857,
-            -0.0092010498 ,-0.0276031494 , 0.0684967041 , 0.2300262451 , 0.2300262451 , 0.0684967041 ,-0.0276031494 ,-0.0092010498,
-            -0.0308990479 ,-0.0926971436 , 0.2300262451 , 0.7724761963 , 0.7724761963 , 0.2300262451 ,-0.0926971436 ,-0.0308990479,
-            -0.0308990479 ,-0.0926971436 , 0.2300262451 , 0.7724761963 , 0.7724761963 , 0.2300262451 ,-0.0926971436 ,-0.0308990479,
-            -0.0092010498 ,-0.0276031494 , 0.0684967041 , 0.2300262451 , 0.2300262451 , 0.0684967041 ,-0.0276031494 ,-0.0092010498,
-             0.0037078857 , 0.0111236572 ,-0.0276031494 ,-0.0926971436 ,-0.0926971436 ,-0.0276031494 , 0.0111236572 , 0.0037078857,
-             0.0012359619 , 0.0037078857 ,-0.0092010498 ,-0.0308990479 ,-0.0308990479 ,-0.0092010498 , 0.0037078857 , 0.0012359619
-        };
-        // generate text.
-        printf("int32_t bilinear_kernel[4 * 4] = {\n");
-        for (int ky = 0; ky < 4; ky++)
-        {
-            printf("    ");
-            for (int kx = 0; kx < 4; kx++)
-                printf("%d%s", (int32_t)(bilinear_kernel[ky*4+kx]*(1<<UPS_PRECISION)), ky == 3 && kx == 3 ? "" : ",");
-            printf("\n");
-        }
-        printf("};\n");
-
-        printf("int32_t bicubic_kernel[8 * 8] = {\n");
-        for (int ky = 0; ky < 8; ky++)
-        {
-            printf("    ");
-            for (int kx = 0; kx < 8; kx++)
-                printf("%d%s", (int32_t)(bicubic_kernel[ky*8+kx]*(1<<UPS_PRECISION)), ky == 7 && kx == 7 ? "" : ",");
-            printf("\n");
-        }
-        printf("};\n");
-        exit(1);
-#endif
-        int32_t bilinear_kernel[4 * 4] = {
-            256,768,768,256,
-            768,2304,2304,768,
-            768,2304,2304,768,
-            256,768,768,256
-        };
-        int32_t bicubic_kernel[8 * 8] = {
-            5,15,-37,-126,-126,-37,15,5,
-            15,45,-113,-379,-379,-113,45,15,
-            -37,-113,280,942,942,280,-113,-37,
-            -126,-379,942,3164,3164,942,-379,-126,
-            -126,-379,942,3164,3164,942,-379,-126,
-            -37,-113,280,942,942,280,-113,-37,
-            15,45,-113,-379,-379,-113,45,15,
-            5,15,-37,-126,-126,-37,15,5
-        };
-
-        // Use bilinear static kernel if kernel size is smaller than 8, else bicubic
-        int static_kernel_size = ups_ks < 8 ? 4 : 8;
-        int32_t *static_kernel = ups_ks < 8 ? bilinear_kernel : bicubic_kernel;
-
-        // First: re-init everything with zeros
-        memset(&bucket[0], 0, ups_ks*ups_ks*sizeof(bucket[0]));
-
-        // Then, write the values of the static filter
-        // Top left coordinate of the first filter coefficient
-        int top_left_coord = (ups_ks - static_kernel_size) / 2;
-        for (int r = 0; r < static_kernel_size; r++)
-        {
-            for (int c = 0; c < static_kernel_size; c++)
-            {
-                bucket[(r + top_left_coord)*ups_ks + c  + top_left_coord] = static_kernel[r * static_kernel_size + c];
-            }
-        }
+        delete[] m_upsw;
+        m_upsw = new weights_biases[n_ups];
+        m_ups_n = n_ups;
     }
-    else
+    if (n_ups_preconcat != m_ups_n_preconcat)
     {
-        InputBitstream bs_weights;
-        std::vector<UChar> &bs_fifo_weights = bs_weights.getFifo();
-
-        TDecBinCABAC cabac_weights;
-
-        bs_fifo_weights = frame_symbols->m_ups_weights_hevc;
-        cabac_weights.init(&bs_weights);
-        cabac_weights.start();
-        struct cc_bs_layer_quant_info &ups_lqi = frame_header.ups_lqi;
-
-        int q_step_w_shift = Q_STEP_UPS_SHIFT[ups_lqi.q_step_index_nn_weight];
-
-        decode_weights_qi(&bucket[0], &cabac_weights, ups_lqi.scale_index_nn_weight, frame_header.upsampling_kern_size*frame_header.upsampling_kern_size, q_step_w_shift, UPS_PRECISION);
+        delete[] m_upsw_preconcat;
+        m_upsw_preconcat = new weights_biases[n_ups_preconcat];
+        m_ups_n_preconcat = n_ups_preconcat;
     }
 
-    // transpose.
-    int32_t bucket_t[ups_ks*ups_ks];
+    InputBitstream bs_weights;
+    std::vector<UChar> &bs_fifo_weights = bs_weights.getFifo();
 
-    int idx = 0;
-    for (int y = 0; y < ups_ks; y++)
+    TDecBinCABAC cabac_weights;
+
+    bs_fifo_weights = frame_symbols->m_ups_weights_hevc;
+    cabac_weights.init(&bs_weights);
+    cabac_weights.start();
+    struct cc_bs_layer_quant_info &ups_lqi = frame_header.ups_lqi;
+
+    int q_step_w_shift = Q_STEP_UPS_SHIFT[ups_lqi.q_step_index_nn_weight];
+
+    // read ups layers
+    for (int lidx = 0; lidx < m_ups_n; lidx++)
     {
-        for (int x = 0; x < ups_ks; x++, idx++)
-        {
-            bucket_t[idx] = bucket[(ups_ks-1-y)*ups_ks+(ups_ks-1-x)];
-        }
+        decode_upsweights_qi(m_upsw[lidx], &cabac_weights, ups_lqi.scale_index_nn_weight, frame_header.ups_k_size, q_step_w_shift, UPS_PRECISION);
     }
-
-    // extract 4 smaller filters. 8x8 -> 4x 4x4
-    // f0 operates at origin, y=0, x=0
-    // f1 operates at y=0, x=1
-    // f2 operates at y=1, x=0
-    // f3 operates at y=1, x=1
-    m_upsw_t_4x4.update_to(ups_ks*ups_ks);
-    int ups_ks2 = ups_ks/2;
-
-    for (int f = 0; f < 4; f++)
+    // read ups_preconcat layers.
+    for (int lidx = 0; lidx < m_ups_n_preconcat; lidx++)
     {
-        int fbase_y = 1-f/2;
-        int fbase_x = 1-f%2;
-        for (int y = 0; y < ups_ks/2; y++)
-        {
-            for (int x = 0; x < ups_ks/2; x++)
-            {
-                m_upsw_t_4x4.data[f*ups_ks2*ups_ks2 + y*ups_ks2 + x] = bucket_t[(fbase_y+2*y)*ups_ks+fbase_x+2*x];
-            }
-        }
+        decode_upsweights_qi(m_upsw_preconcat[lidx], &cabac_weights, ups_lqi.scale_index_nn_weight, frame_header.ups_preconcat_k_size, q_step_w_shift, UPS_PRECISION);
     }
-
 }
 
 void cc_frame_decoder::read_syn(struct cc_bs_frame *frame_symbols)
 {
     struct cc_bs_frame_header &frame_header = frame_symbols->m_frame_header;
 
-    if (frame_header.n_syn_layers != m_syn_n_layers)
+    if (frame_header.n_syn_layers != m_syn_n_layers || frame_header.n_syn_branches != m_syn_n_branches)
     {
-        m_syn_n_layers = frame_header.n_syn_layers;
         delete [] m_synw;
         delete [] m_synb;
-        m_synw = new weights_biases[m_syn_n_layers];
-        m_synb = new weights_biases[m_syn_n_layers];
+        m_syn_n_branches = frame_header.n_syn_branches;
+        m_syn_n_layers = frame_header.n_syn_layers;
+        m_syn_blends.update_to(m_syn_n_layers);
+        m_synw = new weights_biases[m_syn_n_branches*m_syn_n_layers];
+        m_synb = new weights_biases[m_syn_n_branches*m_syn_n_layers];
     }
 
     InputBitstream bs_weights;
@@ -451,38 +328,39 @@ void cc_frame_decoder::read_syn(struct cc_bs_frame *frame_symbols)
     int q_step_w_shift = Q_STEP_SYN_WEIGHT_SHIFT[syn_lqi.q_step_index_nn_weight];
     int q_step_b_shift = Q_STEP_SYN_BIAS_SHIFT[syn_lqi.q_step_index_nn_bias];
 
-    int n_in_ft = frame_header.n_latent_n_resolutions; // !!! features per layer
-    for (int idx = 0; idx < frame_header.n_syn_layers; idx++)
+    // blend values.
+    if (m_syn_n_branches > 1)
     {
-        struct cc_bs_syn_layer &syn = frame_header.layers_synthesis[idx];
-        int n_weights = n_in_ft * syn.ks*syn.ks * syn.n_out_ft;
-        int n_biases = syn.n_out_ft;
+        decode_weights_qi(m_syn_blends, &cabac_weights, syn_lqi.scale_index_nn_weight, m_syn_n_branches, q_step_w_shift, SYN_WEIGHT_PRECISION);
+    }
 
-        decode_weights_qi(m_synw[idx], &cabac_weights, syn_lqi.scale_index_nn_weight, n_weights, q_step_w_shift, SYN_WEIGHT_PRECISION);
-        decode_weights_qi(m_synb[idx], &cabac_biases,  syn_lqi.scale_index_nn_bias, n_biases,  q_step_b_shift, SYN_WEIGHT_PRECISION*2);
+    // layer weights.
+    for (int bidx = 0; bidx < frame_header.n_syn_branches; bidx++)
+    {
+        int n_in_ft = frame_header.n_latent_n_resolutions; // !!! features per layer
+        for (int lidx = 0; lidx < frame_header.n_syn_layers; lidx++)
+        {
+            struct cc_bs_syn_layer &syn = frame_header.layers_synthesis[lidx];
+            int n_weights = n_in_ft * syn.ks*syn.ks * syn.n_out_ft;
+            int n_biases = syn.n_out_ft;
 
-        n_in_ft = syn.n_out_ft;
+            decode_weights_qi(m_synw[get_syn_idx(bidx, lidx)], &cabac_weights, syn_lqi.scale_index_nn_weight, n_weights, q_step_w_shift, SYN_WEIGHT_PRECISION);
+            decode_weights_qi(m_synb[get_syn_idx(bidx, lidx)], &cabac_biases,  syn_lqi.scale_index_nn_bias, n_biases,  q_step_b_shift, SYN_WEIGHT_PRECISION*2);
+
+            n_in_ft = syn.n_out_ft;
+        }
     }
 }
 
 // check to see if the leading couple of syns are compatible with being fused
 // together.
-// 8, 16, 40 are checked.  8 is marginal (base mem allocation is 7, 8 is not much more).
+// Memory increase avoidance is so important we use cpu-mode in avx2 if it's
+// not otherwise optimized.
 bool cc_frame_decoder::can_fuse(struct cc_bs_frame *frame_symbols)
 {
     auto &synthesis = frame_symbols->m_frame_header.layers_synthesis;
 
     bool fused = synthesis[0].ks == 1 && synthesis[1].ks == 1;
-    if (!fused)
-        return false;
-
-    // Check for compatible numbers.
-    int n_syn_in = frame_symbols->m_frame_header.n_latent_n_resolutions;
-    int n_hidden = synthesis[0].n_out_ft;
-    int n_syn_out = synthesis[1].n_out_ft;
-    fused = (n_syn_in == 7)
-                && (n_hidden == 8 || n_hidden == 16 || n_hidden == 40)
-                && (n_syn_out == 3 || n_syn_out == 6 || n_syn_out == 9);
     return fused;
 }
 
@@ -490,16 +368,13 @@ void cc_frame_decoder::check_allocations(struct cc_bs_frame *frame_symbols)
 {
     struct cc_bs_frame_header &frame_header = frame_symbols->m_frame_header;
 
-    // we allocate a max-sized (ignoring padding) buffer, suitable for holding
-    // upsample final output and synthesis outputs during syn processing.
     int const latent_n_resolutions = frame_header.n_latent_n_resolutions;
 
     int n_max_planes = latent_n_resolutions;
     m_arm_pad = 4; // by how much the arm frame is padded.
-    m_ups_pad = 8/2+1; // kernel size 8 upsampling.
-    m_max_pad = std::max(m_arm_pad, m_ups_pad); // during arm, ups and syn. // !!! we use 5 for max ups (5) (ks=8)/2+1, and arm (4) (cxt_row_col)
+    m_ups_pad = (std::max(frame_header.ups_k_size, frame_header.ups_preconcat_k_size)+1)/2;
 
-    bool need_ups_2 = false; // we only need this if we cannot do in-place convolution.  Ie, ks 1 or 3 are in-place, otherwise not.
+    int syn_max_ks = 1;
     for (int syn_idx = 0; syn_idx < frame_header.n_syn_layers; syn_idx++)
     {
         if (syn_idx == 0 && can_fuse(frame_symbols))
@@ -510,24 +385,27 @@ void cc_frame_decoder::check_allocations(struct cc_bs_frame *frame_symbols)
         int n_pad = frame_header.layers_synthesis[syn_idx].ks/2;
         if (n_pad > m_max_pad)
             m_max_pad = n_pad;
-        if (frame_header.layers_synthesis[syn_idx].ks != 1 && frame_header.layers_synthesis[syn_idx].ks != 3)
-            need_ups_2 = true;
+        syn_max_ks = std::max(syn_max_ks, frame_header.layers_synthesis[syn_idx].ks);
     }
-    printf("MAX PLANES SET TO %d; MAX PAD SET TO %d\n", n_max_planes, m_max_pad);
 
-    m_ups_1.update_to(m_gop_header.img_h, m_gop_header.img_w, n_max_planes, m_max_pad);
-    // we do not (normally!) need m_ups_2.
-    if (need_ups_2)
-    {
-        printf("ups_2 for syn allocated\n");
-        m_ups_2.update_to(m_gop_header.img_h, m_gop_header.img_w, n_max_planes, m_max_pad);
-    }
+    int syn_pad = (syn_max_ks+1)/2;
+    m_max_pad = std::max(std::max(m_arm_pad, m_ups_pad), syn_pad); // during arm, ups and syn.
+
+    if (m_verbosity >= 3)
+        printf("MAX PLANES SET TO %d; MAX PAD SET TO %d\n", n_max_planes, m_max_pad);
+
+    // !!! allocate all for the moment for bisyn.
+    m_syn_1.update_to(m_gop_header.img_h, m_gop_header.img_w, m_max_pad, n_max_planes);
+    m_syn_2.update_to(m_gop_header.img_h, m_gop_header.img_w, m_max_pad, n_max_planes);
+    m_syn_3.update_to(m_gop_header.img_h, m_gop_header.img_w, m_max_pad, n_max_planes);
+    m_syn_tmp.update_to(m_gop_header.img_h, m_gop_header.img_w, m_max_pad, n_max_planes);
 
     // pyramid sizes.
     m_zero_layer.resize(frame_header.n_latent_n_resolutions);
     m_h_pyramid.resize(frame_header.n_latent_n_resolutions);
     m_w_pyramid.resize(frame_header.n_latent_n_resolutions);
-    // pyramid storage -- enough pad for arm and ups.  no highest res layer.
+
+    // pyramid storage -- enough pad for arm and ups.  includes highest res layer.
     m_plane_pyramid.resize(frame_header.n_latent_n_resolutions);
 
     for (int layer_number = 0, h_grid = m_gop_header.img_h, w_grid = m_gop_header.img_w;
@@ -536,14 +414,51 @@ void cc_frame_decoder::check_allocations(struct cc_bs_frame *frame_symbols)
     {
         m_h_pyramid[layer_number] = h_grid;
         m_w_pyramid[layer_number] = w_grid;
-
-        // we do not allocate the full-size.
-        if (layer_number == 0)
-            m_plane_pyramid[layer_number].update_to(0, 0, 0, 0); // not used.
-        else
-            m_plane_pyramid[layer_number].update_to(h_grid, w_grid, 1, m_max_pad);
+        m_plane_pyramid[layer_number].update_to(h_grid, w_grid, m_max_pad, 1);
     }
+
+    // We need a couple of extra buffers for pyramid upsampling and refinement.  It's not in-place.
+    // 1/4 sized for internal refinement target.  (Full-sized goes directly to syn-land.)
+    m_ups_h2w2.update_to(m_h_pyramid[1], m_w_pyramid[1], m_ups_pad, 1);
+    // full-height, full-width for actual upsample.
+    m_ups_hw.update_to(m_h_pyramid[0], m_w_pyramid[0], m_ups_pad, 1);
 }
+
+void ups_refine_cpu(int ks_param, int32_t *kw, frame_memory &in, frame_memory &out, int ups_src_precision, frame_memory &tmp)
+{
+    if (ks_param == 7)
+        ups_refine_ks7_cpu(ks_param, kw, in, out, ups_src_precision, tmp);
+    else
+        ups_refine_ksX_cpu(ks_param, kw, in, out, ups_src_precision, tmp);
+}
+
+void ups_upsample_cpu(int ksx2, int32_t *kw, frame_memory &in, frame_memory &out, int out_plane, int ups_src_precision, frame_memory &tmp)
+{
+    if (ksx2 == 8)
+        ups_upsample_ks8_cpu(ksx2, kw, in, out, out_plane, ups_src_precision, tmp);
+    else
+        ups_upsample_ksX_cpu(ksx2, kw, in, out, out_plane, ups_src_precision, tmp);
+}
+
+#ifdef CCDECAPI_AVX2
+void ups_refine_avx2(int ks_param, int32_t *kw, frame_memory &in, frame_memory &out, int ups_src_precision, frame_memory &tmp)
+{
+    if (ks_param == 7)
+        ups_refine_ks7_avx2(ks_param, kw, in, out, ups_src_precision, tmp);
+    else
+        ups_refine_ksX_avx2(ks_param, kw, in, out, ups_src_precision, tmp);
+}
+
+void ups_upsample_avx2(int ksx2, int32_t *kw, frame_memory &in, frame_memory &out, int out_plane, int ups_src_precision, frame_memory &tmp)
+{
+    if (ksx2 == 8 && ups_src_precision == ARM_PRECISION)
+        ups_upsample_ks8_ARMPREC_avx2(ksx2, kw, in, out, out_plane, ups_src_precision, tmp);
+    else if (ksx2 == 8 && ups_src_precision == UPS_PRECISION)
+        ups_upsample_ks8_UPSPREC_avx2(ksx2, kw, in, out, out_plane, ups_src_precision, tmp);
+    else
+        ups_upsample_ksX_avx2(ksx2, kw, in, out, out_plane, ups_src_precision, tmp);
+}
+#endif
 
 void cc_frame_decoder::run_arm(struct cc_bs_frame *frame_symbols)
 {
@@ -556,7 +471,8 @@ void cc_frame_decoder::run_arm(struct cc_bs_frame *frame_symbols)
         int const h_grid = m_h_pyramid[layer_number];
         int const w_grid = m_w_pyramid[layer_number];
 
-        printf("starting layer %d\n", layer_number);
+        if (m_verbosity >= 3)
+            printf("arm:starting layer %d\n", layer_number);
         fflush(stdout);
 
         auto &bytes = frame_symbols->m_latents_hevc[layer_number];
@@ -568,9 +484,9 @@ void cc_frame_decoder::run_arm(struct cc_bs_frame *frame_symbols)
         }
         m_zero_layer[layer_number] = false;
 
-        frame_memory *dest = layer_number == 0 ? &m_ups_1 : &m_plane_pyramid[layer_number];
+        //frame_memory *dest = layer_number == 0 ? &m_syn_1 : &m_plane_pyramid[layer_number];
+        frame_memory *dest = &m_plane_pyramid[layer_number];
         dest->zero_pad(0, m_arm_pad);
-        //dest->print_ranges("armin", 1, ARM_PRECISION);
 
         // BAC decoding:
         InputBitstream bsBAC;
@@ -587,7 +503,7 @@ void cc_frame_decoder::run_arm(struct cc_bs_frame *frame_symbols)
         const auto time_arm_start = std::chrono::steady_clock::now();
 
 #ifdef CCDECAPI_AVX2
-        if (frame_header.dim_arm == 8)
+        if (m_use_avx2 && frame_header.dim_arm == 8)
             custom_conv_11_int32_avx2_8_X_X(
                                       m_mlpw_t, m_mlpb,
                                       &m_mlpwOUT, &m_mlpbOUT,
@@ -596,7 +512,7 @@ void cc_frame_decoder::run_arm(struct cc_bs_frame *frame_symbols)
                                       h_grid, w_grid, (dest->stride-w_grid)/2,
                                       bac_context
                                       );
-        else if (frame_header.dim_arm == 16)
+        else if (m_use_avx2 && frame_header.dim_arm == 16)
             custom_conv_11_int32_avx2_16_X_X(
                                       m_mlpw_t, m_mlpb,
                                       &m_mlpwOUT, &m_mlpbOUT,
@@ -605,7 +521,7 @@ void cc_frame_decoder::run_arm(struct cc_bs_frame *frame_symbols)
                                       h_grid, w_grid, (dest->stride-w_grid)/2,
                                       bac_context
                                       );
-        else if (frame_header.dim_arm == 24)
+        else if (m_use_avx2 && frame_header.dim_arm == 24)
             custom_conv_11_int32_avx2_24_X_X(
                                       m_mlpw_t, m_mlpb,
                                       &m_mlpwOUT, &m_mlpbOUT,
@@ -614,7 +530,7 @@ void cc_frame_decoder::run_arm(struct cc_bs_frame *frame_symbols)
                                       h_grid, w_grid, (dest->stride-w_grid)/2,
                                       bac_context
                                       );
-        else if (frame_header.dim_arm == 32)
+        else if (m_use_avx2 && frame_header.dim_arm == 32)
             custom_conv_11_int32_avx2_32_X_X(
                                       m_mlpw_t, m_mlpb,
                                       &m_mlpwOUT, &m_mlpbOUT,
@@ -636,46 +552,30 @@ void cc_frame_decoder::run_arm(struct cc_bs_frame *frame_symbols)
                                       bac_context
                                       );
 
-        //dest->print_ranges("armout", 1, ARM_PRECISION);
-
-#if UPS_PRECISION > ARM_PRECISION
-        if (layer_number == 0)
-        {
-            // in-place precision change for high-resolution layer.
-            // upsampling is not used here, which normally changes the .8 to .12.
-            // we do it by hand.
-            int32_t *src = dest->plane_origin(0);
-            int const lshift = UPS_PRECISION-ARM_PRECISION;
-            for (int y = 0; y < h_grid; y++, src += dest->stride-w_grid)
-            {
-                for (int x = 0; x < w_grid; x++)
-                {
-                    *src++ <<= lshift;
-                }
-            }
-#else
-            what system is this
-#endif
-        }
-
         const auto time_arm_done = std::chrono::steady_clock::now();
         const std::chrono::duration<double> arm_elapsed = (time_arm_done-time_arm_start);
         time_arm_seconds += (float)arm_elapsed.count();
 
     } // layer.
 
-    printf("arm done!\n");
+    if (m_verbosity >= 100)
+    {
+        printf("ARM OUTPUTS\n");
+        for (int p = 0; p < frame_header.n_latent_n_resolutions; p++)
+        {
+            printf("ARMPYRAMID %d ", p);
+            m_plane_pyramid[p].print_start(0, "ARM", -1, ARM_PRECISION);
+        }
+    }
 }
 
 void cc_frame_decoder::run_ups(struct cc_bs_frame *frame_symbols)
 {
     struct cc_bs_frame_header &frame_header = frame_symbols->m_frame_header;
 
-    // NEW UPSAMPLE
     const auto time_ups_start = std::chrono::steady_clock::now();
 
-    int ups_ks = frame_header.upsampling_kern_size;
-
+    // full-res down to lowest-res.  refine & upsample each as necessary to full res.
     for (int layer_number = 0, h_grid = m_gop_header.img_h, w_grid = m_gop_header.img_w;
          layer_number < frame_header.n_latent_n_resolutions;
          layer_number++, h_grid = (h_grid+1)/2, w_grid = (w_grid+1)/2)
@@ -683,38 +583,93 @@ void cc_frame_decoder::run_ups(struct cc_bs_frame *frame_symbols)
         if (m_zero_layer[layer_number])
         {
             // no need to upsample.  just zero the final content.
-            m_ups_1.zero_plane_content(layer_number);
+            m_syn_1.zero_plane_content(layer_number);
             continue;
         }
+        // layer_number 0: hb_layer is (nlatents-1)%nhblayers.
+        // n_resolution-2 is number of hb layers max.
+        int preconcat_layer = (frame_header.n_latent_n_resolutions-2-layer_number)%m_ups_n_preconcat;
         if (layer_number == 0)
         {
-            // full res. if non-null, already present in m_ups_layers[0].
+            // full res. just a refinement directly to m_syn_1, no upsampling.
+#ifdef CCDECAPI_AVX2
+            if (m_use_avx2)
+            {
+                ups_refine_avx2(frame_header.ups_preconcat_k_size, m_upsw_preconcat[preconcat_layer].data, m_plane_pyramid[0], m_syn_1, ARM_PRECISION, m_ups_hw);
+            }
+#endif
+#if defined(CCDECAPI_AVX2_OPTIONAL)
+            else
+#endif
+#if defined(CCDECAPI_AVX2_OPTIONAL) || defined(CCDECAPI_CPU)
+            {
+                ups_refine_cpu(frame_header.ups_preconcat_k_size, m_upsw_preconcat[preconcat_layer].data, m_plane_pyramid[0], m_syn_1, ARM_PRECISION, m_ups_hw);
+            }
+#endif
             continue;
         }
 
-        // continually scale up to the final resolution.  We upsample through lower layer numbers,
-        // which have already been done until the final full res destination in m_ups_1.
-        for (int target_layer = layer_number-1; target_layer >= 0; target_layer--)
+        frame_memory *ups_src = NULL;
+        int ups_prec = 0;
+
+        if (layer_number == frame_header.n_latent_n_resolutions-1)
         {
-            frame_memory *dest;
-            int dest_plane;
+            // just upsample, no refinement.
+            ups_src = &m_plane_pyramid[layer_number];
+            ups_prec = ARM_PRECISION;
+        }
+        else
+        {
+            // refine, then upsample.
+#ifdef CCDECAPI_AVX2
+            if (m_use_avx2)
+            {
+                ups_refine_avx2(frame_header.ups_preconcat_k_size, m_upsw_preconcat[preconcat_layer].data, m_plane_pyramid[layer_number], m_ups_h2w2, ARM_PRECISION, m_ups_hw);
+            }
+#endif
+#if defined(CCDECAPI_AVX2_OPTIONAL)
+            else
+#endif
+#if defined(CCDECAPI_AVX2_OPTIONAL) || defined(CCDECAPI_CPU)
+            {
+                ups_refine_cpu(frame_header.ups_preconcat_k_size, m_upsw_preconcat[preconcat_layer].data, m_plane_pyramid[layer_number], m_ups_h2w2, ARM_PRECISION, m_ups_hw);
+            }
+#endif
+            ups_src = &m_ups_h2w2;
+            ups_prec = UPS_PRECISION;
+        }
+
+        for (int target_layer = layer_number-1; target_layer >= 0; ups_src = &m_plane_pyramid[target_layer], target_layer--, ups_prec = UPS_PRECISION)
+        {
+            // upsample layer index to use.
+            int ups_layer = (frame_header.n_latent_n_resolutions-2-target_layer)%m_ups_n;
+            // upsample, either to next pyramid level up or, instead of to [0], to m_syn_1[layer_number].
+            frame_memory *ups_dst = NULL;
+            int dst_plane;
             if (target_layer == 0)
             {
-                dest = &m_ups_1;
-                dest_plane = layer_number;
+                ups_dst = &m_syn_1;
+                dst_plane = layer_number;
             }
             else
             {
-                dest = &m_plane_pyramid[target_layer];
-                dest_plane = 0;
+                ups_dst = &m_plane_pyramid[target_layer];
+                dst_plane = 0;
             }
-            frame_memory *lo_res = &m_plane_pyramid[target_layer+1];
-            int pad = ups_ks/2/2;
-            lo_res->custom_pad_replicate_plane_in_place_i(0, pad);
-            //printf("upslayer%dtarget%d ", layer_number, target_layer); lo_res->print_ranges("ups_in", 1, target_layer == layer_number-1 ? ARM_PRECISION : UPS_PRECISION);
-            // our output is not the direct origin -- we need an extra crop to point at pad start.
-            custom_upsample_4(ups_ks, m_upsw_t_4x4.data, m_h_pyramid[target_layer+1]+2*pad, m_w_pyramid[target_layer+1]+2*pad, lo_res->stride,
-                              lo_res->pad_origin(pad), dest->stride, dest->pad_origin(dest_plane, 1), target_layer == layer_number-1);
+#ifdef CCDECAPI_AVX2
+            if (m_use_avx2)
+            {
+                ups_upsample_avx2(frame_header.ups_k_size, m_upsw[ups_layer].data, *ups_src, *ups_dst, dst_plane, ups_prec, m_ups_hw);
+            }
+#endif
+#if defined(CCDECAPI_AVX2_OPTIONAL)
+            else
+#endif
+#if defined(CCDECAPI_AVX2_OPTIONAL) || defined(CCDECAPI_CPU)
+            {
+                ups_upsample_cpu(frame_header.ups_k_size, m_upsw[ups_layer].data, *ups_src, *ups_dst, dst_plane, ups_prec, m_ups_hw);
+            }
+#endif
         }
     }
 
@@ -723,24 +678,162 @@ void cc_frame_decoder::run_ups(struct cc_bs_frame *frame_symbols)
     time_ups_seconds += hand_ups_elapsed_seconds.count();
 }
 
-// result points to either m_ups_1 or m_ups_2
-frame_memory *cc_frame_decoder::run_syn(struct cc_bs_frame *frame_symbols)
+// blend an output into an accumulator.
+// syn_out = syn_out + syn_in*blend[branch_no]
+frame_memory *cc_frame_decoder::run_syn_blend1(struct cc_bs_frame *frame_symbols, int n_planes, int branch_no, frame_memory *syn_in, frame_memory *syn_out)
+{
+    const auto time_blend_start = std::chrono::steady_clock::now();
+#if 0
+#ifdef CCDECAPI_AVX2
+    if (m_use_avx2)
+    {
+        syn_blend1_avx2(syn_in->h, syn_in->w, syn_in->stride, syn_in->plane_stride, n_planes, syn_in->origin(), m_syn_blends.data[branch_no], syn_out->origin());
+    }
+#endif
+#if defined(CCDECAPI_AVX2_OPTIONAL)
+    else
+#endif
+#if defined(CCDECAPI_AVX2_OPTIONAL) || defined(CCDECAPI_CPU)
+    {
+        syn_blend1(syn_in->h, syn_in->w, syn_in->stride, syn_in->plane_stride, n_planes, syn_in->origin(), m_syn_blends.data[branch_no], syn_out->origin());
+    }
+#endif
+#endif
+
+    if (m_verbosity >= 100)
+    {
+        printf("BLEND1 INPUT\n");
+        for (int p = 0; p < n_planes; p++)
+        {
+            printf("BLENDINPLANE %d ", p);
+            syn_in->print_start(p, "BLENDIN", -1, UPS_PRECISION);
+        }
+    }
+
+    syn_blend1(syn_in->h, syn_in->w, syn_in->stride, syn_in->plane_stride, n_planes, syn_in->origin(), m_syn_blends.data[branch_no], syn_out->origin());
+    const auto time_blend_end = std::chrono::steady_clock::now();
+    const std::chrono::duration<double> hand_blend_elapsed_seconds = time_blend_end - time_blend_start;
+    time_blend_seconds += hand_blend_elapsed_seconds.count();
+    return syn_out;
+}
+
+// blend two outputs to initialilze an accumulator.
+// the 'in' is the 2nd syn output, the 'out' is the first syn output.
+// we keep updating 'out'
+// syn_out = syn_out*blend[branch_no-1] + syn_in*blend[branch_no]
+frame_memory *cc_frame_decoder::run_syn_blend2(struct cc_bs_frame *frame_symbols, int n_planes, int branch_no, frame_memory *syn_in, frame_memory *syn_out)
+{
+    const auto time_blend_start = std::chrono::steady_clock::now();
+#if 0
+#ifdef CCDECAPI_AVX2
+    if (m_use_avx2)
+    {
+        syn_blend2_avx2(syn_in->h, syn_in->w, syn_in->stride, syn_in->plane_stride, n_planes, syn_in->origin(), m_syn_blends.data[branch_no], syn_out->origin(), m_syn_blends.data[branch_no-1]);
+    }
+#endif
+#if defined(CCDECAPI_AVX2_OPTIONAL)
+    else
+#endif
+#if defined(CCDECAPI_AVX2_OPTIONAL) || defined(CCDECAPI_CPU)
+    {
+        syn_blend2(syn_in->h, syn_in->w, syn_in->stride, syn_in->plane_stride, n_planes, syn_in->origin(), m_syn_blends.data[branch_no], syn_out->origin(), m_syn_blends.data[branch_no-1]);
+    }
+#endif
+#endif
+
+    if (m_verbosity >= 100)
+    {
+        printf("BLEND2 INPUTS\n");
+        printf("1: w=%d(%f)\n", m_syn_blends.data[branch_no], (m_syn_blends.data[branch_no]/((1<<UPS_PRECISION)+0.0)));
+        for (int p = 0; p < n_planes; p++)
+        {
+            printf("BLENDINPLANE %d ", p);
+            syn_in->print_start(p, "BLENDIN1", -1, UPS_PRECISION);
+        }
+        printf("2: w=%d(%f)\n", m_syn_blends.data[branch_no-1], (m_syn_blends.data[branch_no]/((1<<UPS_PRECISION)+0.0)));
+        for (int p = 0; p < n_planes; p++)
+        {
+            printf("BLENDINPLANE %d ", p);
+            syn_out->print_start(p, "BLENDIN2", -1, UPS_PRECISION);
+        }
+    }
+
+    syn_blend2(syn_in->h, syn_in->w, syn_in->stride, syn_in->plane_stride, n_planes, syn_in->origin(), m_syn_blends.data[branch_no], syn_out->origin(), m_syn_blends.data[branch_no-1]);
+    const auto time_blend_end = std::chrono::steady_clock::now();
+    const std::chrono::duration<double> hand_blend_elapsed_seconds = time_blend_end - time_blend_start;
+    time_blend_seconds += hand_blend_elapsed_seconds.count();
+    return syn_out;
+}
+
+// operate synth layers starting from syn_in as input.
+// syn_out non-NULL implies the first syn layer will EXPLICITLY target syn_out, thereafter remaining in syn_out if possible (alternating syn_out, syn_tmp if necessary)
+//     return value is either syn_out or syn_tmp.
+// syn_out NULL implies syn processing will remain in syn_in as much as possible (alternating syn_in, syn_tmp if necessary)
+//     return value is either syn_in or syn_tmp.
+frame_memory *cc_frame_decoder::run_syn_branch(struct cc_bs_frame *frame_symbols, int branch_no, frame_memory *syn_in, frame_memory *syn_out, frame_memory *syn_tmp)
 {
     struct cc_bs_frame_header &frame_header = frame_symbols->m_frame_header;
-    // NEW SYNTHESIS: IN-PLACE CONV
 
     int    n_syn_in = frame_header.n_latent_n_resolutions;
-    frame_memory *syn_in_i = &m_ups_1;
-    frame_memory *syn_out_i = &m_ups_2; // if cannot do syn in-place.
+    frame_memory *syn_in_i = NULL; // internal in/out
+    frame_memory *syn_out_i = NULL; // internal in/out
+    if (syn_out == syn_in)
+        syn_out = NULL;
+
     const auto time_syn_start = std::chrono::steady_clock::now();
 
     for (int syn_idx = 0; syn_idx < frame_header.n_syn_layers; syn_idx++)
     {
-        int n_syn_out = frame_header.layers_synthesis[syn_idx].n_out_ft;
-        printf("SYN%d: k=%d #in=%d #out=%d", syn_idx, frame_header.layers_synthesis[syn_idx].ks, n_syn_in, n_syn_out);
         auto time_this_syn_start = std::chrono::steady_clock::now();
+        int n_syn_out = frame_header.layers_synthesis[syn_idx].n_out_ft;
+        int syn_wb_idx = get_syn_idx(branch_no, syn_idx);
+        if (m_verbosity >= 3)
+            printf("SYN%d: k=%d #in=%d #out=%d", syn_idx, frame_header.layers_synthesis[syn_idx].ks, n_syn_in, n_syn_out);
 
-        //syn_in_i->print_ranges("syn_in", n_syn_in, SYN_MUL_PRECISION);
+        bool possible_in_place;
+#ifdef CCDECAPI_AVX2
+        if (m_use_avx2)
+        {
+            possible_in_place = frame_header.layers_synthesis[syn_idx].ks == 3
+                                || (syn_idx == 0 && can_fuse(frame_symbols))
+                                || (frame_header.layers_synthesis[syn_idx].ks == 1 && n_syn_out <= 4);
+        }
+#endif
+#if defined(CCDECAPI_AVX2_OPTIONAL)
+        else
+#endif
+#if defined(CCDECAPI_AVX2_OPTIONAL) || defined(CCDECAPI_CPU)
+        {
+            possible_in_place = true;
+        }
+#endif
+
+        // forcing output to not in-place for first layer?
+        bool in_place = possible_in_place;
+        if (syn_idx == 0 && syn_out != NULL)
+        {
+            in_place = false; // explit targeting of non-input for output.  We will switch between syn_out, syn_tmp after as necessary.
+        }
+
+        if (syn_idx == 0)
+        {
+            syn_in_i = syn_in;
+            syn_out_i = syn_out != NULL ? syn_out : (in_place ? syn_in_i : syn_tmp);
+        }
+        else
+        {
+            if (syn_out != NULL)
+            {
+                // syn_in_i is out or tmp.  determine syn_out_i
+                syn_out_i = in_place ? syn_in_i : (syn_in_i == syn_out ? syn_tmp : syn_out);
+            }
+            else
+            {
+                // syn_in_i is in or tmp. determine syn_out_i
+                syn_out_i = in_place ? syn_in_i : (syn_in_i == syn_in ? syn_tmp : syn_in);
+            }
+        }
+
         if (frame_header.layers_synthesis[syn_idx].ks > 1)
         {
             // pad syn_in, and direct output to syn_out.
@@ -751,81 +844,88 @@ frame_memory *cc_frame_decoder::run_syn(struct cc_bs_frame *frame_symbols)
             int pad_origin_idx = origin_idx-pad*syn_in_i->stride-pad;
             for (int l = 0; l < n_syn_in; l++)
                 syn_in_i->custom_pad_replicate_plane_in_place_i(l, pad);
-            printf(" padded ");
+            if (m_verbosity >= 3)
+                printf(" padded ");
 
 #ifdef CCDECAPI_AVX2
-            bool in_place = false;
-            if (frame_header.layers_synthesis[syn_idx].ks == 3)
+            if (m_use_avx2)
             {
-                // optimized 3x3 with line buffer.
-                in_place = true;
-                m_syn3x3_linebuffer.update_to(2*n_syn_out*m_gop_header.img_w); // two lines for now, could eventually be 1 line plus a few pixels.
-                if (n_syn_in == 3 && n_syn_out == 3)
-                    custom_conv_ks3_in3_out3_lb_avx2(frame_header.layers_synthesis[syn_idx].ks, m_synw[syn_idx].data, m_synb[syn_idx].data,
-                                                    h_padded, w_padded, syn_in_i->stride, syn_in_i->plane_stride, origin_idx-pad_origin_idx, n_syn_in, syn_in_i->raw()+pad_origin_idx, n_syn_out, NULL,
-                                                    m_syn3x3_linebuffer.data,
-                                                    !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
-                else if (n_syn_in == 6 && n_syn_out == 6)
-                    custom_conv_ks3_in6_out6_lb_avx2(frame_header.layers_synthesis[syn_idx].ks, m_synw[syn_idx].data, m_synb[syn_idx].data,
-                                                    h_padded, w_padded, syn_in_i->stride, syn_in_i->plane_stride, origin_idx-pad_origin_idx, n_syn_in, syn_in_i->raw()+pad_origin_idx, n_syn_out, NULL,
-                                                    m_syn3x3_linebuffer.data,
-                                                    !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
-                else if (n_syn_in == 9 && n_syn_out == 6)
-                    custom_conv_ks3_in9_out6_lb_avx2(frame_header.layers_synthesis[syn_idx].ks, m_synw[syn_idx].data, m_synb[syn_idx].data,
-                                                    h_padded, w_padded, syn_in_i->stride, syn_in_i->plane_stride, origin_idx-pad_origin_idx, n_syn_in, syn_in_i->raw()+pad_origin_idx, n_syn_out, NULL,
-                                                    m_syn3x3_linebuffer.data,
-                                                    !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
-                else if (n_syn_in == 9 && n_syn_out == 9)
-                    custom_conv_ks3_in9_out9_lb_avx2(frame_header.layers_synthesis[syn_idx].ks, m_synw[syn_idx].data, m_synb[syn_idx].data,
-                                                    h_padded, w_padded, syn_in_i->stride, syn_in_i->plane_stride, origin_idx-pad_origin_idx, n_syn_in, syn_in_i->raw()+pad_origin_idx, n_syn_out, NULL,
-                                                    m_syn3x3_linebuffer.data,
-                                                    !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                if (frame_header.layers_synthesis[syn_idx].ks == 3)
+                {
+                    // optimized 3x3 with line buffer.
+                    // in_place = true;
+                    m_syn3x3_linebuffer.update_to(2*n_syn_out*m_gop_header.img_w); // two lines for now, could eventually be 1 line plus a few pixels.
+                    if (n_syn_in == 3 && n_syn_out == 3)
+                        custom_conv_ks3_in3_out3_lb_avx2(frame_header.layers_synthesis[syn_idx].ks, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data,
+                                                        h_padded, w_padded, syn_in_i->stride, syn_in_i->plane_stride, origin_idx-pad_origin_idx, n_syn_in, syn_in_i->raw()+pad_origin_idx, n_syn_out, syn_out_i->origin(),
+                                                        m_syn3x3_linebuffer.data,
+                                                        !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                    else if (n_syn_in == 6 && n_syn_out == 6)
+                        custom_conv_ks3_in6_out6_lb_avx2(frame_header.layers_synthesis[syn_idx].ks, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data,
+                                                        h_padded, w_padded, syn_in_i->stride, syn_in_i->plane_stride, origin_idx-pad_origin_idx, n_syn_in, syn_in_i->raw()+pad_origin_idx, n_syn_out, syn_out_i->origin(),
+                                                        m_syn3x3_linebuffer.data,
+                                                        !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                    else if (n_syn_in == 9 && n_syn_out == 6)
+                        custom_conv_ks3_in9_out6_lb_avx2(frame_header.layers_synthesis[syn_idx].ks, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data,
+                                                        h_padded, w_padded, syn_in_i->stride, syn_in_i->plane_stride, origin_idx-pad_origin_idx, n_syn_in, syn_in_i->raw()+pad_origin_idx, n_syn_out, syn_out_i->origin(),
+                                                        m_syn3x3_linebuffer.data,
+                                                        !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                    else if (n_syn_in == 9 && n_syn_out == 9)
+                        custom_conv_ks3_in9_out9_lb_avx2(frame_header.layers_synthesis[syn_idx].ks, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data,
+                                                        h_padded, w_padded, syn_in_i->stride, syn_in_i->plane_stride, origin_idx-pad_origin_idx, n_syn_in, syn_in_i->raw()+pad_origin_idx, n_syn_out, syn_out_i->origin(),
+                                                        m_syn3x3_linebuffer.data,
+                                                        !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                    else
+                        custom_conv_ks3_inX_outX_lb_avx2(frame_header.layers_synthesis[syn_idx].ks, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data,
+                                                        h_padded, w_padded, syn_in_i->stride, syn_in_i->plane_stride, origin_idx-pad_origin_idx, n_syn_in, syn_in_i->raw()+pad_origin_idx, n_syn_out, syn_out_i->origin(),
+                                                        m_syn3x3_linebuffer.data,
+                                                        !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                }
                 else
-                    custom_conv_ks3_inX_outX_lb_avx2(frame_header.layers_synthesis[syn_idx].ks, m_synw[syn_idx].data, m_synb[syn_idx].data,
-                                                    h_padded, w_padded, syn_in_i->stride, syn_in_i->plane_stride, origin_idx-pad_origin_idx, n_syn_in, syn_in_i->raw()+pad_origin_idx, n_syn_out, NULL,
+                {
+                    custom_conv_ksX_inX_outX_avx2(frame_header.layers_synthesis[syn_idx].ks, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data,
+                                                    h_padded, w_padded, syn_in_i->stride, syn_in_i->plane_stride, origin_idx-pad_origin_idx, n_syn_in, syn_in_i->raw()+pad_origin_idx, n_syn_out, syn_out_i->origin(),
+                                                    !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                }
+            }
+#endif
+#if defined(CCDECAPI_AVX2_OPTIONAL)
+            else
+#endif
+#if defined(CCDECAPI_AVX2_OPTIONAL) || defined(CCDECAPI_CPU)
+            {
+                if (frame_header.layers_synthesis[syn_idx].ks == 3)
+                {
+                    m_syn3x3_linebuffer.update_to(2*n_syn_out*m_gop_header.img_w); // two lines for now, could eventually be 1 line plus a few pixels.
+                    custom_conv_ks3_inX_outX_lb(frame_header.layers_synthesis[syn_idx].ks, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data,
+                                                    h_padded, w_padded, syn_in_i->stride, syn_in_i->plane_stride, origin_idx-pad_origin_idx, n_syn_in, syn_in_i->raw()+pad_origin_idx, n_syn_out, syn_out_i->origin(),
                                                     m_syn3x3_linebuffer.data,
                                                     !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                }
+                else
+                {
+                    custom_conv_ksX_inX_outX(frame_header.layers_synthesis[syn_idx].ks, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data,
+                                                    h_padded, w_padded, syn_in_i->stride, syn_in_i->plane_stride, origin_idx-pad_origin_idx, n_syn_in, syn_in_i->raw()+pad_origin_idx, n_syn_out, syn_out_i->origin(),
+                                                    !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                }
             }
-            else
-                custom_conv_ksX_inX_outX_avx2(frame_header.layers_synthesis[syn_idx].ks, m_synw[syn_idx].data, m_synb[syn_idx].data,
-                                                h_padded, w_padded, syn_in_i->stride, syn_in_i->plane_stride, origin_idx-pad_origin_idx, n_syn_in, syn_in_i->raw()+pad_origin_idx, n_syn_out, syn_out_i->origin(),
-                                                !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
-#else
-            bool in_place = false;
-            if (frame_header.layers_synthesis[syn_idx].ks == 3)
-            {
-                in_place = true;
-                m_syn3x3_linebuffer.update_to(2*n_syn_out*m_gop_header.img_w); // two lines for now, could eventually be 1 line plus a few pixels.
-                custom_conv_ks3_inX_outX_lb(frame_header.layers_synthesis[syn_idx].ks, m_synw[syn_idx].data, m_synb[syn_idx].data,
-                                                h_padded, w_padded, syn_in_i->stride, syn_in_i->plane_stride, origin_idx-pad_origin_idx, n_syn_in, syn_in_i->raw()+pad_origin_idx, n_syn_out, NULL,
-                                                m_syn3x3_linebuffer.data,
-                                                !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
-            }
-            else
-                custom_conv_ksX_inX_outX(frame_header.layers_synthesis[syn_idx].ks, m_synw[syn_idx].data, m_synb[syn_idx].data,
-                                                h_padded, w_padded, syn_in_i->stride, syn_in_i->plane_stride, origin_idx-pad_origin_idx, n_syn_in, syn_in_i->raw()+pad_origin_idx, n_syn_out, syn_out_i->origin(),
-                                                !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
 #endif
 
             if (!in_place)
             {
-            // swap our in & out.
-            frame_memory *tmp = syn_in_i;
-            syn_in_i = syn_out_i;
-            syn_out_i = tmp;
+                // swap our in & out.  accounting for any forced-first-time non-in-place.
+                // we just update syn_in_i here, syn_out_i is calculated every loop.
+                syn_in_i = syn_out_i;
             }
         }
         else
         {
             // possible in-place if ATATIME is big enough to buffer all outputs for single spatial pixel.
             // assuming max 4 here (avx2) and infinite (cpu)
-            bool in_place =  n_syn_out <= 4; // !!! hardwired, not too many outputs.
-            // possible fusion.
             bool fused = syn_idx == 0 && can_fuse(frame_symbols);
             if (fused)
             {
                 // compatible!
-                in_place = true;
                 int n_hidden = n_syn_out;
                 n_syn_out = frame_header.layers_synthesis[syn_idx+1].n_out_ft;
 
@@ -833,55 +933,82 @@ frame_memory *cc_frame_decoder::run_syn(struct cc_bs_frame *frame_symbols)
                 int32_t synw_fused[n_syn_in*n_hidden];
                 int kidx = 0;
                 for (int kx = 0; kx < n_syn_in; kx++)
+                {
                     for (int ky = 0; ky < n_hidden; ky++)
                     {
-                        synw_fused[kidx++] = m_synw[syn_idx].data[ky*n_syn_in+kx];
+                        synw_fused[kidx++] = m_synw[syn_wb_idx].data[ky*n_syn_in+kx];
                     }
-#ifdef CCDECAPI_AVX2
-                if (n_hidden == 40)
-                {
-                    if (n_syn_out == 3)
-                        custom_conv_ks1_in7_hidden40_out3_avx2(1, synw_fused, m_synb[syn_idx].data, m_synw[syn_idx+1].data, m_synb[syn_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_in_i->origin());
-                    else if (n_syn_out == 6)
-                        custom_conv_ks1_in7_hidden40_out6_avx2(1, synw_fused, m_synb[syn_idx].data, m_synw[syn_idx+1].data, m_synb[syn_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_in_i->origin());
-                    else
-                        custom_conv_ks1_in7_hidden40_out9_avx2(1, synw_fused, m_synb[syn_idx].data, m_synw[syn_idx+1].data, m_synb[syn_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_in_i->origin());
                 }
-                else if (n_hidden == 16)
-                    custom_conv_ks1_in7_hidden16_out3_avx2(1, synw_fused, m_synb[syn_idx].data, m_synw[syn_idx+1].data, m_synb[syn_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_in_i->origin());
+#if defined(CCDECAPI_AVX2)
+                if (m_use_avx2 && n_syn_in == 7)
+                {
+                    if (n_hidden == 48 && n_syn_out == 3)
+                        custom_conv_ks1_in7_hidden48_out3_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                    else if (n_hidden == 40)
+                    {
+                        if (n_syn_out == 3)
+                            custom_conv_ks1_in7_hidden40_out3_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                        else if (n_syn_out == 6)
+                            custom_conv_ks1_in7_hidden40_out6_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                        else if (n_syn_out == 9)
+                            custom_conv_ks1_in7_hidden40_out9_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                        else
+                            custom_conv_ks1_inX_hiddenX_outX(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                    }
+                    else if (n_hidden == 32 && n_syn_out == 3)
+                        custom_conv_ks1_in7_hidden32_out3_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                    else if (n_hidden == 16 && n_syn_out == 3)
+                        custom_conv_ks1_in7_hidden16_out3_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                    else if (n_hidden == 8 && n_syn_out == 3)
+                        custom_conv_ks1_in7_hidden8_out3_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                    else
+                        custom_conv_ks1_inX_hiddenX_outX(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                }
+#endif
+#if defined(CCDECAPI_AVX2_OPTIONAL)
                 else
-                    custom_conv_ks1_in7_hidden8_out3_avx2(1, synw_fused, m_synb[syn_idx].data, m_synw[syn_idx+1].data, m_synb[syn_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_in_i->origin());
-#else
-                custom_conv_ks1_inX_hiddenX_outX(1, synw_fused, m_synb[syn_idx].data, m_synw[syn_idx+1].data, m_synb[syn_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_in_i->origin());
+#endif
+#if defined(CCDECAPI_AVX2_OPTIONAL) || defined(CCDECAPI_CPU)
+                    custom_conv_ks1_inX_hiddenX_outX(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
 #endif
             }
             else
             {
                 // 1x1 kernel but not fused.
 #ifdef CCDECAPI_AVX2
-            if (n_syn_in == 7 && n_syn_out == 9)
-                custom_conv_ks1_in7_out9_avx2(1, m_synw[syn_idx].data, m_synb[syn_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, in_place ? syn_in_i->origin() : syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
-            else if (n_syn_in == 9 && n_syn_out == 3)
-                custom_conv_ks1_in9_out3_avx2(1, m_synw[syn_idx].data, m_synb[syn_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, in_place ? syn_in_i->origin() : syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
-            else if (n_syn_in == 9 && n_syn_out == 6)
-                custom_conv_ks1_in9_out6_avx2(1, m_synw[syn_idx].data, m_synb[syn_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, in_place ? syn_in_i->origin() : syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
-            else if (n_syn_in == 9 && n_syn_out == 9)
-                custom_conv_ks1_in9_out9_avx2(1, m_synw[syn_idx].data, m_synb[syn_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, in_place ? syn_in_i->origin() : syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
-            else if (n_syn_in == 7 && n_syn_out == 40)
-                custom_conv_ks1_in7_out40_avx2(1, m_synw[syn_idx].data, m_synb[syn_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, in_place ? syn_in_i->origin() : syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
-            else if (n_syn_in == 7 && n_syn_out == 16)
-                custom_conv_ks1_in7_out16_avx2(1, m_synw[syn_idx].data, m_synb[syn_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, in_place ? syn_in_i->origin() : syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
-            else if (                 n_syn_out == 3)
-                custom_conv_ks1_inX_out3_avx2(1, m_synw[syn_idx].data, m_synb[syn_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, in_place ? syn_in_i->origin() : syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
-            else if (                 n_syn_out == 6)
-                custom_conv_ks1_inX_out6_avx2(1, m_synw[syn_idx].data, m_synb[syn_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, in_place ? syn_in_i->origin() : syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
-            else if (                 n_syn_out == 9)
-                custom_conv_ks1_inX_out9_avx2(1, m_synw[syn_idx].data, m_synb[syn_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, in_place ? syn_in_i->origin() : syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
-            else
-                custom_conv_ks1_inX_outX_avx2(1, m_synw[syn_idx].data, m_synb[syn_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, in_place ? syn_in_i->origin() : syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
-#else
-            in_place = true;
-            custom_conv_ks1_inX_outX(1, m_synw[syn_idx].data, m_synb[syn_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, in_place ? syn_in_i->origin() : syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                if (m_use_avx2)
+                {
+                    if (n_syn_in == 7 && n_syn_out == 9)
+                        custom_conv_ks1_in7_out9_avx2(1, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                    else if (n_syn_in == 9 && n_syn_out == 3)
+                        custom_conv_ks1_in9_out3_avx2(1, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                    else if (n_syn_in == 9 && n_syn_out == 6)
+                        custom_conv_ks1_in9_out6_avx2(1, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                    else if (n_syn_in == 9 && n_syn_out == 9)
+                        custom_conv_ks1_in9_out9_avx2(1, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                    else if (n_syn_in == 7 && n_syn_out == 40)
+                        custom_conv_ks1_in7_out40_avx2(1, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                    else if (n_syn_in == 7 && n_syn_out == 16)
+                        custom_conv_ks1_in7_out16_avx2(1, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                    else if (                 n_syn_out == 3)
+                        custom_conv_ks1_inX_out3_avx2(1, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                    else if (                 n_syn_out == 6)
+                        custom_conv_ks1_inX_out6_avx2(1, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                    else if (                 n_syn_out == 9)
+                        custom_conv_ks1_inX_out9_avx2(1, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                    else
+                        custom_conv_ks1_inX_outX_avx2(1, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                }
+#endif
+#if defined(CCDECAPI_AVX2_OPTIONAL)
+                else
+#endif
+#if defined(CCDECAPI_AVX2_OPTIONAL) || defined(CCDECAPI_CPU)
+                {
+                    // can buffer everything in cpu-mode.
+                    // in_place = true;
+                    custom_conv_ks1_inX_outX(1, m_synw[syn_wb_idx].data, m_synb[syn_wb_idx].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, 0, n_syn_in, syn_in_i->origin(), n_syn_out, syn_out_i->origin(), !!frame_header.layers_synthesis[syn_idx].residual, !!frame_header.layers_synthesis[syn_idx].relu);
+                }
 #endif
             }
             if (fused)
@@ -891,10 +1018,9 @@ frame_memory *cc_frame_decoder::run_syn(struct cc_bs_frame *frame_symbols)
             }
             if (!in_place)
             {
-                // swap our in & out.
-                frame_memory *tmp = syn_in_i;
+                // swap our in & out.  accounting for any forced-first-time non-in-place.
+                // we just update syn_in_i here, syn_out_i is calculated every loop.
                 syn_in_i = syn_out_i;
-                syn_out_i = tmp;
             }
         }
 
@@ -904,15 +1030,122 @@ frame_memory *cc_frame_decoder::run_syn(struct cc_bs_frame *frame_symbols)
 
         const auto time_this_syn_end = std::chrono::steady_clock::now();
         const std::chrono::duration<double> this_syn_elapsed_seconds = time_this_syn_end - time_this_syn_start;
-        printf(" %g\n", (double)this_syn_elapsed_seconds.count());
+        if (m_verbosity >= 3)
+            printf(" %g\n", (double)this_syn_elapsed_seconds.count());
     }
-    //syn_in_i->print_ranges("final", n_syn_in, SYN_MUL_PRECISION);
 
     const auto time_syn_end = std::chrono::steady_clock::now();
     const std::chrono::duration<double> syn_elapsed_seconds = time_syn_end - time_syn_start;
     time_syn_seconds += syn_elapsed_seconds.count();
 
     return syn_in_i;
+}
+
+frame_memory *cc_frame_decoder::run_syn(struct cc_bs_frame *frame_symbols)
+{
+    // multiple synthesiser runs.
+    // we have m_syn_1 containing upsampled output, ready to send to synthesisers.
+    //
+    // ASSUMING ALL SYNTHS POSSIBLE IN-PLACE.  IE, ALL KS ARE 1 or 3.
+    // with n branches 1..n:
+    // for branch1:
+    //     synth m_syn_1 -> m_syn_2. (ie, 1st syn layer takes 1->2, remaining layers in 2)
+    // for branch 2..n-1:
+    //     synth m_syn_1 -> m_syn_3. (ie, 1st syn layer takes 1->3, remaining layers in 3)
+    //     blend result m_syn_3 into m_syn_2.
+    // for branch n:
+    //     synth m_syn_1 in place. (ie, all layers in 1)
+    //     blend result m_syn_1 into m_syn_2.
+    //
+    // result is m_syn_2.
+
+    // IF NOT IN-PLACE (KS > 3)
+    // with n branches 1..n:
+    // for branch1:
+    //     synth m_syn_1 -> m_syn_2 or m_syn_x. (ie, 1st syn layer 1->2, remaining layers in 2/x)
+    // for branch 2..n-1:
+    //     synth m_syn_1 -> m_syn_3 or m_syn_x. (ie, 1st syn layer 1->3, remaining layers in 3/x)
+    //     blend result m_syn_3/x into m_syn_2.
+    // for branch n:
+    //     synth m_syn_1 in place or m_syn_x . (ie, all layers in 1)
+    //     blend result m_syn_1 into m_syn_2.
+
+    frame_memory *p_syn_1 = &m_syn_1; // initial upsample output -- preserved until last branch.
+    frame_memory *p_syn_2 = &m_syn_2; // initial branch output, blended into by subsequent branches.
+    frame_memory *p_syn_3 = &m_syn_3; // subsequence branch outputs
+    frame_memory *p_syn_tmp = &m_syn_tmp;
+
+    if (m_verbosity >= 100)
+    {
+        struct cc_bs_frame_header &frame_header = frame_symbols->m_frame_header;
+        printf("SYNTHESIS INPUTS\n");
+        for (int p = 0; p < frame_header.n_latent_n_resolutions; p++)
+        {
+            printf("SYNPLANE %d ", p);
+            m_syn_1.print_start(p, "SYNIN", -1, UPS_PRECISION);
+        }
+    }
+
+    frame_memory *result = NULL;
+    for (int b = 0; b < m_syn_n_branches; b++)
+    {
+        if (b == 0 && m_syn_n_branches > 1)
+        {
+            result = run_syn_branch(frame_symbols, b, p_syn_1, p_syn_2, p_syn_tmp);
+            // result is either m_syn_2 or m_syn_tmp.
+            if (result != p_syn_2)
+            {
+                // switch our notion of m_syn_2 and m_syn_tmp.
+                p_syn_tmp = p_syn_2;
+                p_syn_2 = result;
+            }
+        }
+        else if (b < m_syn_n_branches-1)
+        {
+            result = run_syn_branch(frame_symbols, b, p_syn_1, p_syn_3, p_syn_tmp);
+            // result is either m_syn_3 or m_syn_tmp.
+            if (result != p_syn_3)
+            {
+                // switch our notion of m_syn_3 and m_syn_tmp.
+                p_syn_tmp = p_syn_3;
+                p_syn_3 = result;
+            }
+            if (b == 1)
+                run_syn_blend2(frame_symbols, 3, b, p_syn_3, p_syn_2);
+            else
+                run_syn_blend1(frame_symbols, 3, b, p_syn_3, p_syn_2);
+        }
+        else
+        {
+            // NULL for out implies we can run in-place as much as we like, destroying p_syn_1.
+            result = run_syn_branch(frame_symbols, b, p_syn_1, NULL, p_syn_tmp);
+            // result is either m_syn_1 or m_syn_tmp.
+            if (result != p_syn_1)
+            {
+                // switch our notion of m_syn_1 and m_syn_tmp.
+                p_syn_tmp = p_syn_1;
+                p_syn_1 = result;
+            }
+            if (b == 0)
+            {
+                ; // we don't have any blending, single branch.
+            }
+            else if (b == 1)
+            {
+                // 2 branches being blended to create result.
+                run_syn_blend2(frame_symbols, 3, b, p_syn_1, p_syn_2);
+                result = p_syn_2;
+            }
+            else
+            {
+                // subsequent branch being blended into result.
+                run_syn_blend1(frame_symbols, 3, b, p_syn_1, p_syn_2);
+                result = p_syn_2;
+            }
+        }
+    }
+
+    return result;
 }
 
 // returned value should be transformed or otherwise copied before calling decode_frame again.
@@ -922,8 +1155,11 @@ struct frame_memory *cc_frame_decoder::decode_frame(struct cc_bs_frame *frame_sy
     read_ups(frame_symbols);
     read_syn(frame_symbols);
 
-    printf("loaded weights\n");
-    fflush(stdout);
+    if (m_verbosity >= 3)
+    {
+        printf("loaded weights\n");
+        fflush(stdout);
+    }
 
     check_allocations(frame_symbols);
 

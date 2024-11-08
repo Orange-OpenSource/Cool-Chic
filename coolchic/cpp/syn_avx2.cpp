@@ -99,6 +99,13 @@
 #define SYN_NAME   custom_conv_ksX_inX_outX_avx2
 #include "syn_avx2.hpp"
 
+#define SYN_NAME   custom_conv_ks1_in7_hidden48_out3_avx2
+#define SYN_KS     1
+#define SYN_N_IN   7
+#define SYN_N_HIDDEN 48
+#define SYN_N_OUT  3
+#include "synfused_avx2.hpp"
+
 #define SYN_NAME   custom_conv_ks1_in7_hidden40_out3_avx2
 #define SYN_KS     1
 #define SYN_N_IN   7
@@ -118,6 +125,13 @@
 #define SYN_N_IN   7
 #define SYN_N_HIDDEN 40
 #define SYN_N_OUT  9
+#include "synfused_avx2.hpp"
+
+#define SYN_NAME   custom_conv_ks1_in7_hidden32_out3_avx2
+#define SYN_KS     1
+#define SYN_N_IN   7
+#define SYN_N_HIDDEN 32
+#define SYN_N_OUT  3
 #include "synfused_avx2.hpp"
 
 #define SYN_NAME   custom_conv_ks1_in7_hidden16_out3_avx2
@@ -161,3 +175,5 @@
 #define SYN_NAME   custom_conv_ks3_inX_outX_lb_avx2
 #define SYN_KS     3
 #include "synlb_avx2.hpp"
+
+#include "synblend_avx2.hpp"

@@ -50,9 +50,14 @@ struct cc_bs_frame_header
     std::vector<int> n_ft_per_latent;
     int n_hidden_layers_arm;
     int dim_arm;
-    int upsampling_kern_size;
-    int static_upsampling_kernel;
+
+    int  n_ups_kernel;
+    int  ups_k_size;
+    int  n_ups_preconcat_kernel;
+    int  ups_preconcat_k_size;
+
     int flow_gain;
+    int n_syn_branches;
     int n_syn_layers;
     std::vector<struct cc_bs_syn_layer> layers_synthesis;
     struct cc_bs_layer_quant_info arm_lqi;
@@ -66,16 +71,14 @@ struct cc_bs_frame_header
     int hls_sig_blksize;
 };
 
-//bool read_gop_header(FILE *bitstream, struct bitstream_gop_header &gop_header);
-//bool read_frame_header(FILE *bitstream, struct bitstream_frame_header &frame_header);
-
 struct cc_bs_frame {
     struct cc_bs_frame_header m_frame_header;
     std::vector<unsigned char> m_arm_weights_hevc;
     std::vector<unsigned char> m_arm_biases_hevc;
-    std::vector<unsigned char> m_ups_weights_hevc;
-    std::vector<unsigned char> m_syn_weights_hevc;
-    std::vector<unsigned char> m_syn_biases_hevc;
+    std::vector<unsigned char> m_ups_weights_hevc; // both lb and hb
+    std::vector<unsigned char> m_ups_biases_hevc; // both lb and hb
+    std::vector<unsigned char> m_syn_weights_hevc; // all branches
+    std::vector<unsigned char> m_syn_biases_hevc; // all branches
     std::vector<std::vector<unsigned char>> m_latents_hevc;
 };
 
@@ -83,10 +86,10 @@ class cc_bs {
 public:
     cc_bs() { m_f = NULL; }
     ~cc_bs() { if (m_f != NULL) fclose(m_f); }
-    bool open(std::string filename);
-    struct cc_bs_frame *decode_frame();
+    bool open(std::string filename, int verbosity = 0);
+    struct cc_bs_frame *decode_frame(int verbosity = 0);
 private:
-    bool read_gop_header();
+    bool read_gop_header(int verbosity = 0);
 
 public:
     std::string m_filename;

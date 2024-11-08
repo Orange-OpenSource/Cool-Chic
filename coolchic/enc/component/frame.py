@@ -7,7 +7,7 @@
 # Authors: see CONTRIBUTORS.md
 
 
-"""A frame encoder is composed of a CoolChicEncoder and a InterCodingModule."""
+"""A frame encoder is composed of a CoolChicEncoder and an InterCodingModule."""
 
 import typing
 from dataclasses import dataclass, field
@@ -24,16 +24,11 @@ from enc.component.core.quantizer import (
     POSSIBLE_QUANTIZER_TYPE,
 )
 from enc.component.intercoding import InterCodingModule
-from torch import Tensor, nn
-from enc.utils.codingstructure import (
-    FRAME_DATA_TYPE,
-    FRAME_TYPE,
-    POSSIBLE_BITDEPTH,
-    DictTensorYUV,
-    convert_444_to_420,
-)
+from enc.io.format.data_type import FRAME_DATA_TYPE, POSSIBLE_BITDEPTH
+from enc.io.format.yuv import DictTensorYUV, convert_444_to_420, yuv_dict_clamp
+from enc.utils.codingstructure import FRAME_TYPE
 from enc.utils.misc import POSSIBLE_DEVICE
-from enc.utils.yuv import yuv_dict_clamp
+from torch import Tensor, nn
 
 
 @dataclass
@@ -274,14 +269,14 @@ class FrameEncoder(nn.Module):
         }
 
         if self.coolchic_encoder.full_precision_param is not None:
-            data_to_save["coolchic_full_precision_param"] = self.coolchic_encoder.full_precision_param
+            data_to_save["coolchic_full_precision_param"] = (
+                self.coolchic_encoder.full_precision_param
+            )
 
         torch.save(data_to_save, buffer)
 
-        # for k, v in self.coolchic_encoder.get_param().items():
-        #     print(f"{k:>30}: {v.abs().sum().item()}")
-
         return buffer
+
 
 def load_frame_encoder(raw_bytes: BytesIO) -> FrameEncoder:
     """From already loaded raw bytes, load & return a CoolChicEncoder
@@ -295,7 +290,7 @@ def load_frame_encoder(raw_bytes: BytesIO) -> FrameEncoder:
     """
     # Reset the stream position to the beginning of the BytesIO object & load it
     raw_bytes.seek(0)
-    loaded_data = torch.load(raw_bytes, map_location="cpu")
+    loaded_data = torch.load(raw_bytes, map_location="cpu", weights_only=False)
 
     # Create a frame encoder from the stored parameters
     frame_encoder = FrameEncoder(
@@ -311,9 +306,13 @@ def load_frame_encoder(raw_bytes: BytesIO) -> FrameEncoder:
     # Check if coolchic_nn_expgol_cnt is present in loaded data for backward
     # compatibility. Not meant to stay very long.
     if "coolchic_nn_expgol_cnt" in loaded_data:
-        frame_encoder.coolchic_encoder.nn_expgol_cnt = loaded_data["coolchic_nn_expgol_cnt"]
+        frame_encoder.coolchic_encoder.nn_expgol_cnt = loaded_data[
+            "coolchic_nn_expgol_cnt"
+        ]
 
     if "coolchic_full_precision_param" in loaded_data:
-        frame_encoder.coolchic_encoder.full_precision_param = loaded_data["coolchic_full_precision_param"]
+        frame_encoder.coolchic_encoder.full_precision_param = loaded_data[
+            "coolchic_full_precision_param"
+        ]
 
     return frame_encoder
