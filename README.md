@@ -53,7 +53,7 @@ a low-complexity neural image codec based on overfitting.
 
 <div align="center">
 
-### Happy new year release: 🎄 __Cool-chic 3.4.1: Faster encoder!__ 🎄
+### Happy new year release: 🎉 __Cool-chic 3.4.1: Faster encoder!__ 🎉
 
 </div>
 
