@@ -4,7 +4,7 @@ Cool-chic experimental results
 We provide comprehensive experimental results demonstrating the compression
 performance of Cool-chic, its low decoding complexity and the associated
 encoding complexity. We also provide already encoded bitstreams so that
-everybody can decoded them to measure their own quality metrics and decoding
+everybody can decode them to measure their own quality metrics and decoding
 time.
 
 .. toctree::
