@@ -5,7 +5,7 @@ What's new in Cool-chic 3.4.1?
 Cool-chic 3.4.1 significantly speeds-up the encoding process
 
 * Speed-up GPU Encoding **up to 3 times**! See :ref:`the detailed encoding time
-  results :encoding_timing:.
+  results :encoding_timing:`.
 
 * Change encoder configuration files with better medium and slow recipes
 
