@@ -1,5 +1,5 @@
 # Software Name: Cool-Chic
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024 Orange
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025 Orange
 # SPDX-License-Identifier: BSD 3-Clause "New"
 #
 # This software is distributed under the BSD-3-Clause license.
@@ -197,9 +197,13 @@ def train(
         0,
         max_iterations,
     )
+    device = frame.data.data.device if frame.data.frame_data_type != "yuv420" else frame.data.data.get("y").device
+    cur_softround_temperature = torch.tensor(cur_softround_temperature, device=device)
+
     cur_noise_parameter = _linear_schedule(
         noise_parameter[0], noise_parameter[1], 0, max_iterations
     )
+    cur_noise_parameter = torch.tensor(cur_noise_parameter, device=device)
 
     cnt_record = 0
     show_col_name = True  # Only for a pretty display of the logs
@@ -327,12 +331,15 @@ def train(
                 cnt,
                 max_iterations,
             )
+            cur_softround_temperature = torch.tensor(cur_softround_temperature, device=device)
+
             cur_noise_parameter = _linear_schedule(
                 noise_parameter[0],
                 noise_parameter[1],
                 cnt,
                 max_iterations,
             )
+            cur_noise_parameter = torch.tensor(cur_noise_parameter, device=device)
 
             if cosine_scheduling_lr:
                 learning_rate_scheduler.step()

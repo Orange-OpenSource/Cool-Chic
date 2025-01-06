@@ -27,48 +27,38 @@
     <a href="https://orange-opensource.github.io/Cool-Chic/"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/new_stuff.html">What's new in 3.4?</a>
+    <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/new_stuff.html">What's new in 3.4.1?</a>
     ·
-    <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/results.html">Decode some bitstreams</a>
+    <a href="https://orange-opensource.github.io/Cool-Chic/results/image/reproduce_results.html">Decode some bitstreams</a>
     ·
-    <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/results.html#clic20-pro-valid">Coding performance</a>
+    <a href="https://orange-opensource.github.io/Cool-Chic/results/image/compression_performance.html">Coding performance</a>
   </p>
 </div>
 
 <!-- # What's Cool-chic? -->
 
 Cool-chic (pronounced <span class="ipa">/kul ʃik/</span> as in French 🥖🧀🍷) is
-a low-complexity neural image codec based on overfitting. It offers image coding
-performance competitive with **H.266/VVC for 1000 multiplications** per decoded
-pixel.
+a low-complexity neural image codec based on overfitting.
 
+* 🏆 **Coding performance**: Cool-chic compresses images as well as H.266/VVC
 
+* 🪶 **Lightweight decoder**: Cool-chic decoder performs only 1000 multiplications per decoded pixel
 
-<div align="center">
+* 🚀 **Fast CPU-only decoder**: Decode a 1280x720 image in 100 ms on CPU with our decoder written in C
 
-#### 🏆 **Coding performance**: Cool-chic compresses images as well as H.266/VVC 🏆
-#### 🚀 **Fast CPU-only decoder**: Decode a 1280x720 image in 100 ms on CPU with our decoder written in C 🚀
-#### 🔥 **Fixed-point decoder**: Fixed-point arithmetic at the decoder for bit-exact results on different hardwares 🔥
-#### 🖼️ **I/O format**: Encode PNG, PPM and YUV 420 & 444 files with a bitdepth of 8 to 16 bits 🖼️
-
-</div>
+* 🖼️ **I/O format**: Encode PNG, PPM and YUV 420 & 444 files with a bitdepth of 8 to 16 bits
 
 #
 
 
 <div align="center">
 
-### Latest release: 🎉 __Cool-chic 3.4: 30% less complex!__ 🎉
+### Happy new year release: 🎄 __Cool-chic 3.4.1: Faster encoder!__ 🎄
 
 </div>
 
-- New and improved latent **upsampling module**
-    - Leverage symmetric and separable convolution kernels to reduce complexity & parameters count
-    - Learn two filters per upsampling step instead of one for all upsampling steps
-- 1% to 5% **rate reduction** for the same image quality
-- **30% complexity reduction** using a smaller Auto-Regressive Module
-    - From 2000 MAC / decoded pixel to 1300 MAC / decoded pixel
-    - **10% faster** decoding speed
+- Speed-up GPU Encoding **up to 3 times**! Check-out the detailed [encoding speed-up measurements](https://orange-opensource.github.io/Cool-Chic/results/image/encoding_complexity.html#encoding-time)
+- Change encoder configuration files with better medium and slow [encoding presets](https://orange-opensource.github.io/Cool-Chic/encoding/preset.html#some-existing-configuration-files)
 
 Check-out the [release history](https://github.com/Orange-OpenSource/Cool-Chic/releases) to see previous versions of Cool-chic.
 
@@ -96,11 +86,28 @@ python -m test.sanity_check
 You're good to go!
 
 
-## Performance
+## Compression performance
 
-The Cool-chic page provides [comprehensive rate-distortion results and compressed bitstreams](https://orange-opensource.github.io/Cool-Chic/getting_started/results.html) allowing
+The Cool-chic page provides [comprehensive rate-distortion results](https://orange-opensource.github.io/Cool-Chic/results/image/compression_performance.html) and compressed bitstreams](https://orange-opensource.github.io/Cool-Chic/results/image/reproduce_results.html) allowing
 to reproduce the results inside the ```results/``` directory.
 
+<style type="text/css">
+.tg  {border-collapse:collapse;border-spacing:0;margin:0px auto;}
+.tg td{border-color:black;border-style:solid;border-width:1px;font-family:Arial, sans-serif;font-size:14px;
+  overflow:hidden;padding:10px 5px;word-break:normal;}
+.tg th{border-color:black;border-style:solid;border-width:1px;font-family:Arial, sans-serif;font-size:14px;
+  font-weight:normal;overflow:hidden;padding:10px 5px;word-break:normal;}
+.tg .tg-m5nv{border-color:#656565;text-align:center;vertical-align:top}
+.tg .tg-dfl2{border-color:#656565;font-family:inherit;text-align:center;vertical-align:top}
+.tg .tg-uflc{border-color:#656565;color:#009901;text-align:center;vertical-align:top}
+.tg .tg-86ol{border-color:#656565;font-family:inherit;font-weight:bold;text-align:center;vertical-align:top}
+.tg .tg-qch7{border-color:#656565;color:#009901;font-family:inherit;text-align:center;vertical-align:top}
+.tg .tg-arzi{border-color:#656565;color:#cb0000;text-align:center;vertical-align:top}
+.tg .tg-xd3r{border-color:#656565;color:#cb0000;font-family:inherit;text-align:center;vertical-align:top}
+.tg .tg-5niz{border-color:#656565;color:#9b9b9b;font-family:inherit;text-align:center;vertical-align:top}
+.tg .tg-x9uu{border-color:#656565;font-weight:bold;text-align:center;vertical-align:top}
+.tg .tg-1keu{border-color:#656565;color:#9b9b9b;text-align:center;vertical-align:top}
+</style>
 <table class="tg"><thead>
   <tr>
     <th class="tg-86ol" rowspan="2"></th>
@@ -120,40 +127,97 @@ to reproduce the results inside the ```results/``` directory.
 <tbody>
   <tr>
     <td class="tg-86ol">kodak</td>
-    <td class="tg-qch7"><span style="color:green" > -4.2 % </span></td>
-    <td class="tg-xd3r"><span style="color:red"   > +7.5 % </span></td>
-    <td class="tg-qch7"><span style="color:green" > -0.9 % </span></td>
-    <td class="tg-qch7"><span style="color:green" > -4.3 % </span></td>
-    <td class="tg-qch7"><span style="color:green" > -17.2 % </span></td>
-    <td class="tg-xd3r"><span style="color:red"   > +3.4 %  </span></td>
+    <td class="tg-qch7">-4.2 %</td>
+    <td class="tg-xd3r">+7.5 %</td>
+    <td class="tg-qch7">-0.9 %</td>
+    <td class="tg-qch7">-4.3 %</td>
+    <td class="tg-qch7">-17.2 %</td>
+    <td class="tg-xd3r">+3.4 % </td>
     <td class="tg-dfl2">1303</td>
     <td class="tg-dfl2">74</td>
   </tr>
   <tr>
     <td class="tg-86ol">clic20-pro-valid</td>
-    <td class="tg-qch7"><span style="color:green" > -13.2 % </span></td>
-    <td class="tg-qch7"><span style="color:green" > -0.2 % </span></td>
-    <td class="tg-qch7"><span style="color:green" > -0.3 % </span></td>
-    <td class="tg-qch7"><span style="color:green" > -1.3 % </span></td>
-    <td class="tg-qch7"><span style="color:green" > -25.1 % </span></td>
-    <td class="tg-qch7"><span style="color:green" > -2.3 %<br> </span></td>
+    <td class="tg-qch7">-13.2 %</td>
+    <td class="tg-qch7">-0.2 %</td>
+    <td class="tg-qch7">-0.3 %</td>
+    <td class="tg-qch7">-1.3 %</td>
+    <td class="tg-qch7">-25.1 %</td>
+    <td class="tg-qch7">-2.3 %<br></td>
     <td class="tg-dfl2">1357</td>
     <td class="tg-dfl2">354</td>
   </tr>
   <tr>
-    <td class="tg-86ol">jvet </td>
-    <td class="tg-5niz"><span style="color:gray" >/</span></td>
-    <td class="tg-5niz"><span style="color:gray" >/</span></td>
-    <td class="tg-qch7"><span style="color:green" >-0.2 %</span></td>
-    <td class="tg-5niz"><span style="color:gray" >/</span></td>
-    <td class="tg-qch7"><span style="color:green" >-18.3 %</span></td>
-    <td class="tg-xd3r"><span style="color:red" >+18.6 %</span></td>
+    <td class="tg-86ol">jvet (BCDEF)</td>
+    <td class="tg-5niz">/</td>
+    <td class="tg-5niz">/</td>
+    <td class="tg-qch7">-0.2 %</td>
+    <td class="tg-5niz">/</td>
+    <td class="tg-qch7">-18.3 %</td>
+    <td class="tg-xd3r">+18.6 %</td>
     <td class="tg-dfl2">1249</td>
     <td class="tg-dfl2">143</td>
+  </tr>
+  <tr>
+    <td class="tg-x9uu">jvet (class B)</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-arzi">+0.9%</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-9.9 %</td>
+    <td class="tg-arzi">+20.7 %</td>
+    <td class="tg-m5nv">1300</td>
+    <td class="tg-m5nv">282</td>
+  </tr>
+  <tr>
+    <td class="tg-x9uu">jvet (class C)</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-1.3%</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-16.1 %</td>
+    <td class="tg-arzi">+9.2 %</td>
+    <td class="tg-m5nv">1289</td>
+    <td class="tg-m5nv">69</td>
+  </tr>
+  <tr>
+    <td class="tg-x9uu">jvet (class D)</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-1.4%</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-12.4 %</td>
+    <td class="tg-arzi">+9.6 %</td>
+    <td class="tg-m5nv">948</td>
+    <td class="tg-m5nv">18</td>
+  </tr>
+  <tr>
+    <td class="tg-x9uu">jvet (class E)</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-3.8%</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-6.2 %</td>
+    <td class="tg-arzi">+27.8 %</td>
+    <td class="tg-m5nv">1347</td>
+    <td class="tg-m5nv">125</td>
+  </tr>
+  <tr>
+    <td class="tg-x9uu">jvet (class F)</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-arzi">+0.2%</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-31.8 %</td>
+    <td class="tg-arzi">+20.6 %</td>
+    <td class="tg-m5nv">1249</td>
+    <td class="tg-m5nv">182</td>
   </tr>
 </tbody></table>
 
 <br/>
+
+## Compression performance and decoding time
 
 _Decoding time are obtained on a single CPU core of an an AMD EPYC 7282 16-Core Processor_
 
@@ -182,6 +246,36 @@ _PSNR is computed in the RGB domain for kodak and CLIC20, in the YUV420 domain f
 <br/>
 
 </br>
+
+## Encoding time
+
+The graphs below present the time required to encode several images resolutions
+on different hardwares. These figures are obtained using the
+``cfg/enc/medium_30k.cfg`` encoding configuration.
+
+### Kodak image 512x768
+
+<div style="text-align: center;">
+    <img src="./docs/source/assets/encoding-time/encoding-time-kodak.png" alt="Kodak encoding time" width="80%" style="centered"/>
+</div>
+<br/>
+
+### CLIC20 Pro Valid image 1363x2048
+
+<div style="text-align: center;">
+    <img src="./docs/source/assets/encoding-time/encoding-time-clic.png" alt="CLIC20 encoding time" width="80%" style="centered"/>
+</div>
+<br/>
+
+### JVET Class E image 720x1280
+
+<div style="text-align: center;">
+    <img src="./docs/source/assets/encoding-time/encoding-time-jvet-e.png" alt="JVET class E encoding time" width="80%" style="centered"/>
+</div>
+<br/>
+
+</br>
+
 
 # Thanks
 

@@ -1,5 +1,5 @@
 # Software Name: Cool-Chic
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024 Orange
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025 Orange
 # SPDX-License-Identifier: BSD 3-Clause "New"
 #
 # This software is distributed under the BSD-3-Clause license.
@@ -10,6 +10,7 @@
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Literal, Tuple
+import typing
 
 from enc.component.core.quantizer import (
     POSSIBLE_QUANTIZATION_NOISE_TYPE,
@@ -92,6 +93,37 @@ class TrainerPhase:
         # it overrides everything, leaving the list of modules to be optimized to just ['all'].
         if "all" in self.optimized_module:
             self.optimized_module == ["all"]
+
+        # Some checks about quantization options mismatch. They are done here
+        # to avoid doing it each time we do a forward pass inside the quantize
+        # function. Additionally, torch.compile messes up the assertion in the
+        # quantize function anyway.
+        assert self.quantizer_noise_type in typing.get_args(POSSIBLE_QUANTIZATION_NOISE_TYPE), (
+            f"quantizer_noise_type must be in {POSSIBLE_QUANTIZATION_NOISE_TYPE}"
+            f" found {self.quantizer_noise_type}"
+        )
+
+        assert self.quantizer_type in typing.get_args(POSSIBLE_QUANTIZER_TYPE), (
+            f"quantizer_type must be in {POSSIBLE_QUANTIZER_TYPE}"
+            f" found {self.quantizer_type}"
+        )
+
+        # If we use only the softround **alone**, or hardround we do not need
+        # any noise addition. Otherwise, we need a type of noise, i.e. either
+        # kumaraswamy or gaussian noise.
+        if self.quantizer_type in ["softround_alone", "hardround", "ste", "none"]:
+            assert self.quantizer_noise_type == "none", (
+                f"Using quantizer type {self.quantizer_type} does not require"
+                "to have any random noise.\n Switching the "
+                f"quantizer_noise_type from {self.quantizer_noise_type} to none."
+            )
+        else:
+            assert self.quantizer_noise_type != "none", (
+                "Using quantizer_noise_type = 'none' is only possible with "
+                "quantizer_type = 'softround_alone', 'ste' or 'hardround'.\n"
+                f"Trying to use {self.quantizer_type} quantizer which do require "
+                "some kind of random noise such as 'gaussian' or 'kumaraswamy'."
+            )
 
     def pretty_string(self) -> str:
         """Return a pretty string describing a warm-up phase"""
@@ -264,7 +296,7 @@ class PresetC3x(Preset):
         self.all_phases: List[TrainerPhase] = [
             TrainerPhase(
                 lr=start_lr,
-                max_itr=n_itr_per_phase + 600,
+                max_itr=n_itr_per_phase,
                 patience=5000,
                 optimized_module=["all"],
                 schedule_lr=True,
@@ -394,8 +426,53 @@ class PresetDebug(Preset):
         )
 
 
+class PresetMeasureSpeed(Preset):
+    def __init__(self, start_lr: float = 1e-2, n_itr_per_phase: int = 100000):
+        super().__init__(preset_name="c3x")
+
+        # Single stage model with the shortest warm-up ever!
+        self.all_phases: List[TrainerPhase] = [
+            TrainerPhase(
+                lr=start_lr,
+                max_itr=n_itr_per_phase,
+                patience=5000,
+                optimized_module=["all"],
+                schedule_lr=True,
+                quantizer_type="softround",
+                quantizer_noise_type="gaussian",
+                softround_temperature=(0.3, 0.1),
+                noise_parameter=(0.25, 0.1),
+                quantize_model=True,  # ! This is an important parameter
+            ),
+        ]
+
+        self.warmup = Warmup(
+            [
+                WarmupPhase(
+                    candidates=1,
+                    training_phase=TrainerPhase(
+                        lr=start_lr,
+                        max_itr=1,
+                        freq_valid=1,
+                        patience=100000,
+                        quantize_model=False,
+                        schedule_lr=False,
+                        softround_temperature=(0.3, 0.3),
+                        noise_parameter=(2.0, 2.0),
+                        quantizer_noise_type="kumaraswamy",
+                        quantizer_type="softround",
+                        optimized_module=["all"],
+                    )
+                )
+            ]
+        )
+
+
+
+
 AVAILABLE_PRESETS: Dict[str, Preset] = {
     "c3x": PresetC3x,
     "debug": PresetDebug,
+    "measure_speed": PresetMeasureSpeed,
 }
 

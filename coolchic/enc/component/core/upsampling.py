@@ -1,5 +1,5 @@
 # Software Name: Cool-Chic
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024 Orange
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025 Orange
 # SPDX-License-Identifier: BSD 3-Clause "New"
 #
 # This software is distributed under the BSD-3-Clause license.
@@ -133,16 +133,6 @@ class UpsamplingSeparableSymmetricConv2d(nn.Module):
         self.initialize_parameters()
         # -------- Instantiate empty parameters, set by the initialize function
 
-        # Each time we call .weight, we'll call the forward of
-        # _Parameterization_Symmetric_1d to get a symmetric kernel.
-        parametrize.register_parametrization(
-            self,
-            "weight",
-            _Parameterization_Symmetric_1d(target_k_size=self.target_k_size),
-            # Unsafe because we change the data dimension, from N to 2N + 1
-            unsafe=True,
-        )
-
     def initialize_parameters(self) -> None:
         """
         Initialize the weights and the biases of the transposed convolution
@@ -154,12 +144,29 @@ class UpsamplingSeparableSymmetricConv2d(nn.Module):
               symmetric reparameterization is applied a Dirac kernel is obtained e.g.
               :math:`(0,\ 0,\ 0,\ \ldots, 1, \ldots, 0,\ 0,\ 0,)`.
         """
+        if parametrize.is_parametrized(self, "weight"):
+            parametrize.remove_parametrizations(
+                self,
+                "weight",
+                leave_parametrized=False
+            )
+
         # Zero everywhere except for the last coef
         w = torch.zeros_like(self.weight)
         w[-1] = 1
         self.weight = nn.Parameter(w, requires_grad=True)
 
         self.bias = nn.Parameter(torch.zeros_like(self.bias), requires_grad=True)
+
+        # Each time we call .weight, we'll call the forward of
+        # _Parameterization_Symmetric_1d to get a symmetric kernel.
+        parametrize.register_parametrization(
+            self,
+            "weight",
+            _Parameterization_Symmetric_1d(target_k_size=self.target_k_size),
+            # Unsafe because we change the data dimension, from N to 2N + 1
+            unsafe=True,
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         """Perform a "normal" 2D convolution, except that the underlying kernel
@@ -250,15 +257,6 @@ class UpsamplingSeparableSymmetricConvTranspose2d(nn.Module):
         self.initialize_parameters()
         # -------- Instantiate empty parameters, set by the initialize function
 
-        # Each time we call .weight, we'll call the forward of
-        # _Parameterization_Symmetric_1d to get a symmetric kernel.
-        parametrize.register_parametrization(
-            self,
-            "weight",
-            _Parameterization_Symmetric_1d(target_k_size=self.target_k_size),
-            # Unsafe because we change the data dimension, from N to 2N + 1
-            unsafe=True,
-        )
 
     def initialize_parameters(self) -> None:
         """Initialize the parameters of a
@@ -269,6 +267,13 @@ class UpsamplingSeparableSymmetricConvTranspose2d(nn.Module):
             * Weights are initialize as a (possibly padded) bilinear filter when
               ``target_k_size`` is 4 or 6, otherwise a bicubic filter is used.
         """
+        if parametrize.is_parametrized(self, "weight"):
+            parametrize.remove_parametrizations(
+                self,
+                "weight",
+                leave_parametrized=False
+            )
+
         # For a target kernel size of 4 or 6, we use a bilinear kernel as the
         # initialization. For bigger kernels, a bicubic kernel is used. In both
         # case we just initialize the left half of the kernel since these
@@ -286,6 +291,17 @@ class UpsamplingSeparableSymmetricConvTranspose2d(nn.Module):
         self.weight = nn.Parameter(w, requires_grad=True)
 
         self.bias = nn.Parameter(torch.zeros_like(self.bias), requires_grad=True)
+
+        # Each time we call .weight, we'll call the forward of
+        # _Parameterization_Symmetric_1d to get a symmetric kernel.
+        parametrize.register_parametrization(
+            self,
+            "weight",
+            _Parameterization_Symmetric_1d(target_k_size=self.target_k_size),
+            # Unsafe because we change the data dimension, from N to 2N + 1
+            unsafe=True,
+        )
+
 
     def forward(self, x: Tensor) -> Tensor:
         """Perform the spatial upsampling (with scale 2) of an input with a
@@ -517,6 +533,6 @@ class Upsampling(nn.Module):
     def reinitialize_parameters(self) -> None:
         """Re-initialize **in place** the parameters of the upsampling."""
         for i in range(len(self.conv_transpose2ds)):
-            self.conv_transpose2d[i].initialize_parameters()
+            self.conv_transpose2ds[i].initialize_parameters()
         for i in range(len(self.conv2ds)):
             self.conv2ds[i].initialize_parameters()

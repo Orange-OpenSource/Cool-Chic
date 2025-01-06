@@ -15,9 +15,9 @@ sys.path.insert(0, basedir)
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'Cool-chic'
-copyright = '2023 - 2024 Orange'
+copyright = '2023 - 2025 Orange'
 author = 'Théo Ladune, Pierrick Philippe'
-release = '3.4'
+release = '3.4.1'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -33,7 +33,7 @@ extensions = [
     'sphinx.ext.todo',
     "sphinx_copybutton",
     "sphinx.ext.autodoc.typehints",
-    "sphinx_design"
+    "sphinx_design",
 ]
 
 # Napoleon settings
@@ -113,10 +113,30 @@ html_theme_options = {
     "globaltoc_expand_depth": 1,
     "accent_color": "red",
     "announcement": (
-        "<center> 🎉 Cool-chic 3.4: 30% less complex! "
+        "<center> 🎉 Happy new year release: Cool-chic 3.4.1 with a faster encoder! "
         "<a href=https://github.com/Orange-OpenSource/Cool-Chic>"
         "Check out the git repository</a> 🎉 </center>"
     ),
+
+    "nav_links": [
+        {
+            "title": "Back to homepage!",
+            "url": "getting_started/quickstart",
+            # "children": [
+            #     {
+            #         "title": "Setup",
+            #         "url": "getting_started/quickstart",
+            #         # "summary": "Setup",
+            #     },
+            #     {
+            #         "title": "Example",
+            #         "url": "getting_started/example",
+            #         "summary": "The quickest way to use Cool-chic!",
+            #     },
+            # ]
+        },
+
+    ]
 }
 
 html_context = {

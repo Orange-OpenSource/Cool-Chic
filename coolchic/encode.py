@@ -1,5 +1,5 @@
 # Software Name: Cool-Chic
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024 Orange
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025 Orange
 # SPDX-License-Identifier: BSD 3-Clause "New"
 #
 # This software is distributed under the BSD-3-Clause license.
@@ -12,7 +12,6 @@ import subprocess
 import sys
 
 import configargparse
-import torch
 from enc.component.coolchic import CoolChicEncoderParameter
 from enc.component.video import (
     FrameEncoderManager,
@@ -185,7 +184,7 @@ if __name__ == "__main__":
         video_encoder = load_video_encoder(path_video_encoder)
 
     else:
-        start_print = (
+        print(
             "\n\n"
             "*----------------------------------------------------------------------------------------------------------*\n"
             "|                                                                                                          |\n"
@@ -202,11 +201,9 @@ if __name__ == "__main__":
             '|    `"Y8888888 P"Y8888P"    P"Y8888P"    8P\'"Y88                  P""Y8888PP88P     `Y88P""Y8P""Y8888PP   |\n'
             "|                                                                                                          |\n"
             "|                                                                                                          |\n"
-            "| version 3.4, Nov. 2024                                                                © 2023-2024 Orange |\n"
+            "| version 3.4.1, Jan. 2025                                                              © 2023-2025 Orange |\n"
             "*----------------------------------------------------------------------------------------------------------*\n"
         )
-
-        print(start_print)
 
         subprocess.call(f"mkdir -p {workdir}", shell=True)
 
@@ -236,12 +233,7 @@ if __name__ == "__main__":
     device = get_best_device()
     print(f'{"Device":<20}: {device}')
 
-    # This makes the training faster
-    if device == "cuda:0":
-        torch.backends.cudnn.benchmark = True
-
     print(f"\n{video_encoder.coding_structure.pretty_string()}\n")
-
     exit_code = video_encoder.encode(
         path_original_sequence=args.input,
         device=device,
@@ -255,8 +247,6 @@ if __name__ == "__main__":
     # Bitstream
     if args.output != "" and exit_code == TrainingExitCode.END:
         from enc.bitstream.encode import encode_video
-
-        # video_encoder = load_video_encoder(video_encoder_savepath)
         encode_video(video_encoder, args.output, hls_sig_blksize=16)
 
     sys.exit(exit_code.value)

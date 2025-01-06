@@ -5,21 +5,21 @@ Encoding your own image or video is achieved by using the script ``coolchic/enco
 
 .. code:: bash
 
-    (venv) ~/Cool-Chic$ python coolchic/encode.py             \
+    (venv) ~/Cool-Chic$ python coolchic/encode.py       \
         --input=path_to_my_example                      \
         --output=bitstream.bin                          \
         --workdir=./my_temporary_workdir/               \
-        --enc_cfg=cfg/enc/fast.cfg                      \
+        --enc_cfg=cfg/enc/fast_10k.cfg                  \
         --dec_cfg=cfg/dec/mop.cfg
 
 Unlike the decoding script which only takes input and output arguments, the
 encoder has many arguments allowing to tune Cool-chic for your need.
 
-* :doc:`Encoder configuration  <./preset>` affects the encoding duration by
+* :ref:`Encoder configuration <encoder_cfg_files>` affects the encoding duration by
   changing the training parameters. This is set through the argument
   ``--enc_cfg``. Several encoder configuration files are available in ``cfg/enc/``.
 
-* :doc:`Decoder configuration <./architecture>` parametrizes the decoder
+* :ref:`Decoder configuration <decoder_cfg_files>` parametrizes the decoder
   architecture and complexity. This is set through the argument ``--dec_cfg``.
   Several encoder configuration files are available in ``cfg/dec/``.
 
