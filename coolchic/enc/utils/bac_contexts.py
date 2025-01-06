@@ -1,5 +1,5 @@
 # Software Name: Cool-Chic
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024 Orange
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025 Orange
 # SPDX-License-Identifier: BSD 3-Clause "New"
 #
 # This software is distributed under the BSD-3-Clause license.
@@ -176,7 +176,7 @@ def get_contexts(contexts_cpp: str = ""):
                 f"""
 /*
     Software Name: Cool-Chic
-    SPDX-FileCopyrightText: Copyright (c) 2023-2024 Orange
+    SPDX-FileCopyrightText: Copyright (c) 2023-2025 Orange
     SPDX-License-Identifier: BSD 3-Clause "New"
 
     This software is distributed under the BSD-3-Clause license.
@@ -255,7 +255,7 @@ extern MuSigGTs g_contexts[N_MUQ+1][N_SIGQ];""",
                 f"""
 /*
     Software Name: Cool-Chic
-    SPDX-FileCopyrightText: Copyright (c) 2023-2024 Orange
+    SPDX-FileCopyrightText: Copyright (c) 2023-2025 Orange
     SPDX-License-Identifier: BSD 3-Clause "New"
 
     This software is distributed under the BSD-3-Clause license.

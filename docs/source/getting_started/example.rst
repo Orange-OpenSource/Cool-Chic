@@ -18,7 +18,7 @@ Encoding an image with CoolChic requires to specify
 
     (venv) ~/Cool-Chic$ python coolchic/encode.py \
         -i=image.png -o=./bitstream.cool --workdir=./dummy_workdir \
-        --enc_cfg=cfg/enc/fast.cfg --dec_cfg=cfg/dec/lop.cfg
+        --enc_cfg=cfg/enc/fast_10k.cfg --dec_cfg=cfg/dec/lop.cfg
 
 More details on encoding images with Cool-chic is available in the :doc:`encoder documentation <./../encoding/overview>`.
 

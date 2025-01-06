@@ -1,25 +1,13 @@
-What's new in Cool-chic 3.4?
-============================
+What's new in Cool-chic 3.4.1?
+==============================
 
 
-Cool-chic 3.4 introduces an enhanced upsampling with more expressive convolutive
-filters. More information are available in the :doc:`upsampling documentation <./../../code_documentation/encoder/component/core/upsampling>`
+Cool-chic 3.4.1 significantly speeds-up the encoding process
 
-New 3.4 version offers the following improvements:
+* Speed-up GPU Encoding **up to 3 times**! See :ref:`the detailed encoding time
+  results :encoding_timing:.
 
-* New and improved latent **upsampling module**
-
-  * Leverage symmetric and separable convolution kernels to reduce complexity & parameters count
-
-  * Learn two filters per upsampling step instead of one for all upsampling steps
-
-* 1% to 5% **rate reduction** for the same image quality
-
-* **30% complexity reduction** using a smaller Auto-Regressive Module
-
-  * From 2000 MAC / decoded pixel to 1300 MAC / decoded pixel
-
-  * **10% faster** decoding speed
+* Change encoder configuration files with better medium and slow recipes
 
 Check-out the `release history
 <https://github.com/Orange-OpenSource/Cool-Chic/releases>`_ to see previous

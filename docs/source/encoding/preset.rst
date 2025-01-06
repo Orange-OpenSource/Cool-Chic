@@ -34,13 +34,16 @@ They include the following parameters:
     .. code:: bash
 
         (venv) ~/Cool-Chic python coolchic/encode.py \
-          --enc_cfg=example.cfg   # example.cfg has start_lr=1e-2
-          --start_lr=1e-3         # This override the value present in example.cfg
+          --enc_cfg=enc/cfg/fast_10k.cfg   # fast_10k.cfg has start_lr=1e-2
+          --start_lr=1e-3                  # This override the value present in fast_10k.cfg
 
+.. _encoder_cfg_files:
 Some existing configuration files
 """""""""""""""""""""""""""""""""
 
-Some configuration files are proposed in ``cfg/enc/``:
+Some configuration files are proposed in ``cfg/enc/``. Longer encoding gives
+slightly better compression results. We provide comprehensive results for all
+encoding configurations on :doc:`the encoding complexity page <../results/image/encoding_complexity>`.
 
 .. list-table:: Existing encoder configuration files.
    :widths: 25 75
@@ -48,11 +51,11 @@ Some configuration files are proposed in ``cfg/enc/``:
 
    * - Name
      - Description
-   * - ``fast.cfg``
+   * - ``fast_10k.cfg``
      - Reasonable compression performance & fast training
-   * - ``medium.cfg``
+   * - ``medium_30k.cfg``
      - Balance compression performance & training duration
-   * - ``slow.cfg``
+   * - ``slow_100k.cfg``
      - Best performance at the cost of a longer training
 
 Recipes

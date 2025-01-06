@@ -42,10 +42,10 @@ parameters:
     .. code:: bash
 
         (venv) ~/Cool-Chic$ python coolchic/encode.py \
-          --dec_cfg=example.cfg   # example.cfg has dim_arm=8,2
-          --arm=16,2              # This override the value present in example.cfg
+          --dec_cfg=cfg/dec/lop.cfg       # lop.cfg has dim_arm=8,2
+          --arm=16,2                      # This override the value present in lop.cfg
 
-
+.. _decoder_cfg_files:
 Some existing configuration files
 """""""""""""""""""""""""""""""""
 
@@ -71,7 +71,7 @@ Some configuration files are proposed in ``cfg/dec/``:
      - High Operating Point
      - 1430
 
-The :doc:`results section <./../getting_started/results>` illustrates the performance-complexity continuum of these configurations.
+The :doc:`results section <./../results/image/decoding_complexity>` illustrates the performance-complexity continuum of these configurations.
 
 .. tip::
 

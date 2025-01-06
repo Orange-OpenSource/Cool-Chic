@@ -13,12 +13,18 @@ This repository is based on several papers successively enhancing Cool-chic. Che
 2024
 ****
 
+* November: `Upsampling Improvement for Overfitted Neural Coding, Philippe et al <https://arxiv.org/abs/2411.19249>`_
+
+  * Replace the upsampling with separable and symmetrical filters for adaptive, lighter and more efficient latent upsampling. Corresponds to Cool-chic 3.4
+
+  * ``git clone https://github.com/Orange-OpenSource/Cool-Chic.git``
+
 
 * May: `Overfitted image coding at reduced complexity, Blard et al <https://arxiv.org/abs/2403.11651>`_
 
   * Study the complexity-performance trade-off of Cool-chic & introduce a near real-time CPU only decoder. Corresponds to Cool-chic 3.2 & Cool-chic 3.3
 
-  * ``git clone https://github.com/Orange-OpenSource/Cool-Chic.git``
+  * ``git clone --branch v3.3 https://github.com/Orange-OpenSource/Cool-Chic.git``
 
 * February: `Cool-chic video: Learned video coding with 800 parameters, Leguay et al <https://arxiv.org/abs/2402.03179>`_
 
@@ -60,6 +66,10 @@ have not (yet?) been integrated  in this repository.
 
 2024
 ****
+
+* December: `Good, Cheap, and Fast: Overfitted Image Compression with Wasserstein Distortion, Ballé et al. <https://arxiv.org/abs/2412.00505>`_
+
+  * Train Cool-chic with a Wasserstein Distance-based distortion function for better subjective results.
 
 * October: `Redefining Visual Quality: The Impact of Loss Functions on INR-Based Image Compression, Catania et al. <https://ieeexplore.ieee.org/abstract/document/10647328>`_
 

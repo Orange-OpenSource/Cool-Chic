@@ -1,5 +1,5 @@
 # Software Name: Cool-Chic
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024 Orange
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025 Orange
 # SPDX-License-Identifier: BSD 3-Clause "New"
 #
 # This software is distributed under the BSD-3-Clause license.
@@ -157,22 +157,19 @@ class FrameEncoder(nn.Module):
             flag_additional_outputs=flag_additional_outputs,
         )
 
-        # Combine CoolChic output and reference frames through the inter coding modules
-        inter_coding_output = self.inter_coding_module.forward(
-            coolchic_output=coolchic_encoder_output,
-            references=[] if reference_frames is None else reference_frames,
-            flag_additional_outputs=flag_additional_outputs,
-        )
+        # # Combine CoolChic output and reference frames through the inter coding modules
+        # inter_coding_output = self.inter_coding_module.forward(
+        #     coolchic_output=coolchic_encoder_output,
+        #     references=[] if reference_frames is None else reference_frames,
+        #     flag_additional_outputs=flag_additional_outputs,
+        # )
+
+        decoded_image = coolchic_encoder_output.get("raw_out")
 
         # Clamp decoded image & down sample YUV channel if needed
-        if self.training:
-            decoded_image = inter_coding_output.decoded_image
-        else:
+        if not self.training:
             max_dynamic = 2 ** (self.bitdepth) - 1
-            decoded_image = (
-                torch.round(inter_coding_output.decoded_image * max_dynamic)
-                / max_dynamic
-            )
+            decoded_image = torch.round(decoded_image * max_dynamic) / max_dynamic
 
         if self.frame_data_type == "yuv420":
             decoded_image = convert_444_to_420(decoded_image)
@@ -183,7 +180,7 @@ class FrameEncoder(nn.Module):
         additional_data = {}
         if flag_additional_outputs:
             additional_data.update(coolchic_encoder_output.get("additional_data"))
-            additional_data.update(inter_coding_output.additional_data)
+            # additional_data.update(inter_coding_output.additional_data)
 
         results = FrameEncoderOutput(
             decoded_image=decoded_image,

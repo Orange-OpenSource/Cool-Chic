@@ -31,8 +31,8 @@
 
    `Docs <https://orange-opensource.github.io/Cool-Chic/getting_started/quickstart.html>`_
    `What's new in 3.4? <https://orange-opensource.github.io/Cool-Chic/getting_started/new_stuff.html>`_
-   `Decode some bitstreams <https://orange-opensource.github.io/Cool-Chic/getting_started/results.html>`_
-   `Coding performance <https://orange-opensource.github.io/Cool-Chic/getting_started/results.html#clic20-pro-valid>`_
+   `Decode some bitstreams <https://orange-opensource.github.io/Cool-Chic/results/image/reproduce_results.html>`_
+   `Coding performance <https://orange-opensource.github.io/Cool-Chic/results/image/compression_performance.html>`_
 
 
 .. grid:: 1 1 1 2
@@ -40,19 +40,19 @@
     :class-row: surface
 
     .. grid-item-card:: :octicon:`trophy` Great coding performance
-      :link: https://orange-opensource.github.io/Cool-Chic/getting_started/results.html
+      :link: https://orange-opensource.github.io/Cool-Chic/results/image/compression_performance.html
 
       Cool-chic compresses images as well as H.266/VVC
 
+    .. grid-item-card:: :octicon:`squirrel` Lightweight decoder
+      :link: https://orange-opensource.github.io/Cool-Chic/results/image/decoding_complexity.html
+
+      Cool-chic decoder only computes 1000 multiplications per decoded pixel
+
     .. grid-item-card:: :octicon:`rocket` Fast CPU-only decoder
-      :link: https://orange-opensource.github.io/Cool-Chic/getting_started/results.html
+      :link: https://orange-opensource.github.io/Cool-Chic/results/image/decoding_complexity.html
 
       Decode a 1280x720 image in 100 ms on CPU with our decoder written in C
-
-    .. grid-item-card:: :octicon:`flame` Fixed-point decoder
-
-        Fixed-point arithmetic at the decoder for bit-exact results on different
-        hardwares.
 
     .. grid-item-card:: :octicon:`file-media` I/O format
         :link: https://orange-opensource.github.io/Cool-Chic/encoding/overview.html#i-o-format
@@ -89,36 +89,28 @@ video, Kim et al. <https://arxiv.org/abs/2312.02753>`_
    :hidden:
 
    Quickstart <getting_started/quickstart>
-   What's new in 3.4? <getting_started/new_stuff>
    Example <getting_started/example>
+   What's new in 3.4? <getting_started/new_stuff>
+   Literature <getting_started/literature>
 
 .. toctree::
    :maxdepth: 1
-   :caption: Decoding
-   :hidden:
-
-   Decoding a bitstream <decoding/decoding_images>
-
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Encoding your own files
+   :caption: How to use Cool-chic?
    :hidden:
 
    Overview <encoding/overview>
    Decoder configuration <encoding/architecture>
    Encoder configuration <encoding/preset>
+   Decoding a bitstream <decoding/decoding_images>
 
 .. Video <encoding/video>
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    :caption: Compression performance
    :hidden:
 
-   Results <getting_started/results>
-   Literature <getting_started/literature>
-
+   Image <results/index>
 
 .. toctree::
    :caption: Code Documentation
