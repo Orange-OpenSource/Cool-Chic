@@ -63,6 +63,6 @@ Indeed, Cool-chic parameters are optimized through gradient descent according to
     \begin{cases}
         \mathbf{x} & \text{the original image}\\ \hat{\mathbf{x}} &
         \text{the coded image}\\ \mathrm{R}(\hat{\mathbf{x}}) &
-        \text{A measure of the rate of } \hat{\mathbf{x}}\\
+        \text{a measure of the rate of } \hat{\mathbf{x}}\\
         \lambda & \text{the rate constraint }\texttt{--lmbda} 
     \end{cases}
