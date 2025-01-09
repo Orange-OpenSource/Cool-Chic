@@ -10,7 +10,8 @@ Encoding your own image or video is achieved by using the script ``coolchic/enco
         --output=bitstream.bin                          \
         --workdir=./my_temporary_workdir/               \
         --enc_cfg=cfg/enc/fast_10k.cfg                  \
-        --dec_cfg=cfg/dec/mop.cfg
+        --dec_cfg=cfg/dec/mop.cfg                       \
+        --lmbda=0.001 # Typical range is 1e-2 (low rate) to 1e-4 (high rate)
 
 Unlike the decoding script which only takes input and output arguments, the
 encoder has many arguments allowing to tune Cool-chic for your need.
@@ -49,4 +50,19 @@ Note that Cool-Chic outputs either `PPM
 <https://en.wikipedia.org/wiki/Portable_pixmap>`_ (and not PNG!) or `YUV
 <https://en.wikipedia.org/wiki/Y%E2%80%B2UV>`_ files.
 
+Rate constraint
+"""""""""""""""
 
+The rate constraint ``--lmbda`` is used to balance the rate and the distortion when encoding an image.
+Indeed, Cool-chic parameters are optimized through gradient descent according to the following rate-distortion objective:
+
+.. math::
+
+    \mathcal{L} = ||\mathbf{x} - \hat{\mathbf{x}}||^2 + \lambda
+    (\mathrm{R}(\hat{\mathbf{x}})), \text{ with }
+    \\begin{cases}
+        \mathbf{x} & \text{the original image}\\ \hat{\mathbf{x}} &
+        \text{the coded image}\\ \mathrm{R}(\hat{\mathbf{x}}) &
+        \text{A measure of the rate of } \hat{\mathbf{x}}\\
+        \lmbda & \text{the rate constraint }\texttt{--lmbda} 
+    \\end{cases}
