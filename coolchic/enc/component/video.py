@@ -69,6 +69,7 @@ class VideoEncoder():
         device: POSSIBLE_DEVICE,
         workdir: str,
         job_duration_min: int = -1,
+        print_detailed_archi: bool = False,
     ) -> TrainingExitCode:
         """Main training function of a ``VideoEncoder``. Encode all required
         frames (*i.e.* as stated in ``self.coding_structure``) of the video
@@ -102,6 +103,7 @@ class VideoEncoder():
             job_duration_min: Exit and save the job after
                 this duration is passed. Use -1 to only exit at the end of the
                 entire encoding. Default to -1.
+            print_detailed_archi: True to print the detailed decoder architecture
 
         Returns:
             Either ``TrainingExitCode.REQUEUE`` if job has run for
@@ -230,7 +232,12 @@ class VideoEncoder():
                     f_out.write(str(list_candidates[0].coolchic_encoder) + "\n\n")
                     f_out.write(list_candidates[0].coolchic_encoder.str_complexity() + "\n")
 
-                print(list_candidates[0].coolchic_encoder.pretty_string() + "\n\n")
+                print(
+                    list_candidates[0].coolchic_encoder.pretty_string(
+                        print_detailed_archi=print_detailed_archi
+                    )
+                    + "\n\n"
+                )
 
                 # Use warm-up to find the best initialization among the list
                 # of candidates parameters.
@@ -243,9 +250,20 @@ class VideoEncoder():
                 frame_encoder.to_device(device)
 
                 # Compile only after the warm-up to compile only once.
+                # No compilation for torch version anterior to 2.5.0
+                major, minor = [int(x) for x in torch.__version__.split(".")[:2]]
+                use_compile = False
+                if major > 2:
+                    use_compile = True
+                elif major == 2:
+                    use_compile = minor >= 5
+
                 if frame_encoder_manager.preset.preset_name == "debug":
-                    print("Skip compilation when debugging")
+                    print("Skip compilation when debugging\n")
+                elif not use_compile:
+                    print("No compilation for torch version anterior to 2.5.0\n")
                 else:
+                    print("Compiling frame encoder!\n")
                     frame_encoder = torch.compile(
                         frame_encoder,
                         dynamic=False,
@@ -542,3 +560,4 @@ def load_video_encoder(load_path: str) -> VideoEncoder:
         )
 
     return video_encoder
+
