@@ -428,7 +428,7 @@ class PresetDebug(Preset):
 
 class PresetMeasureSpeed(Preset):
     def __init__(self, start_lr: float = 1e-2, n_itr_per_phase: int = 100000):
-        super().__init__(preset_name="c3x")
+        super().__init__(preset_name="measure_speed")
 
         # Single stage model with the shortest warm-up ever!
         self.all_phases: List[TrainerPhase] = [
