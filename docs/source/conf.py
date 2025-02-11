@@ -17,7 +17,7 @@ sys.path.insert(0, basedir)
 project = 'Cool-chic'
 copyright = '2023 - 2025 Orange'
 author = 'Théo Ladune, Pierrick Philippe'
-release = '3.4.1'
+release = '3.4.2'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
