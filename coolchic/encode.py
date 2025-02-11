@@ -10,6 +10,7 @@
 import os
 import subprocess
 import sys
+import typing
 
 import configargparse
 from enc.component.coolchic import CoolChicEncoderParameter
@@ -25,6 +26,8 @@ from enc.utils.parsecli import (
     get_coolchic_param_from_args,
     get_manager_from_args,
 )
+
+from enc.training.loss import TUNING_MODES
 
 """
 Use this file to train i.e. encode a GOP i.e. something which starts with one
@@ -71,6 +74,8 @@ if __name__ == "__main__":
         help="Exit and save the encoding after this duration. Use -1 to only exit at the end.",
     )
 
+    parser.add_argument("--print_detailed_archi", action="store_true", help="Print detailed NN architecture")
+
     # -------- Configuration files
     parser.add("--enc_cfg", is_config_file=True, help="Encoder configuration file")
 
@@ -107,11 +112,19 @@ if __name__ == "__main__":
         default="c3x",
     )
 
+    parser.add(
+        "--tune",
+        help="Preset used to perform subjective tuning. Available: "
+        f"{typing.get_args(TUNING_MODES)}",
+        type=str,
+        default="mse"
+    )
+
     # ==== Encoder-side arguments
     parser.add(
         "--layers_synthesis",
         type=str,
-        default="40-1-linear-relu,X-1-linear-none,X-3-residual-relu,X-3-residual-none",
+        default="48-1-linear-relu,X-1-linear-none,X-3-residual-relu,X-3-residual-none",
         help="Syntax example: "
         " "
         "    12-1-linear-relu,12-1-residual-relu,X-1-linear-relu,X-3-residual-none "
@@ -136,7 +149,7 @@ if __name__ == "__main__":
     parser.add(
         "--arm",
         type=str,
-        default="24,2",
+        default="16,2",
         help="<arm_context_and_layer_dimension>,<number_of_hidden_layers>"
         "First number indicates both the context size **AND** the hidden layer dimension."
         "Second number indicates the number of hidden layer(s). 0 gives a linear ARM module.",
@@ -239,6 +252,7 @@ if __name__ == "__main__":
         device=device,
         workdir=workdir,
         job_duration_min=args.job_duration_min,
+        print_detailed_archi=args.print_detailed_archi
     )
 
     video_encoder_savepath = f"{workdir}video_encoder.pt"

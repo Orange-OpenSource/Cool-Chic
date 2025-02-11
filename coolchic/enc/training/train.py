@@ -20,7 +20,7 @@ from enc.component.core.quantizer import (
     POSSIBLE_QUANTIZER_TYPE,
 )
 from enc.component.frame import FrameEncoder
-from enc.training.loss import loss_function
+from enc.training.loss import loss_function, TUNING_MODES
 from enc.training.test import test
 from enc.utils.codingstructure import Frame
 from enc.training.presets import MODULE_TO_OPTIMIZE
@@ -65,6 +65,7 @@ def train(
     quantizer_noise_type: POSSIBLE_QUANTIZATION_NOISE_TYPE = "kumaraswamy",
     softround_temperature: Tuple[float, float] = (0.3, 0.2),
     noise_parameter: Tuple[float, float] = (2.0, 1.0),
+    tune: TUNING_MODES = "mse",
 ) -> FrameEncoder:
     """Train a ``FrameEncoder`` and return the updated module. This function is
     supposed to be called any time we want to optimize the parameters of a
@@ -75,11 +76,13 @@ def train(
 
     .. math::
 
-        \\mathcal{L} = ||\\mathbf{x} - \hat{\\mathbf{x}}||^2 + \\lambda
+        \\mathcal{L} = \\mathrm{D}(\hat{\\mathbf{x}}, \\mathbf{x}) + \\lambda
         \\mathrm{R}(\hat{\\mathbf{x}}), \\text{ with } \\begin{cases}
             \\mathbf{x} & \\text{the original image}\\\\ \\hat{\\mathbf{x}} &
             \\text{the coded image}\\\\ \\mathrm{R}(\\hat{\\mathbf{x}}) &
-            \\text{A measure of the rate of } \\hat{\\mathbf{x}}
+            \\text{A measure of the rate of } \\hat{\\mathbf{x}}\\\\
+            \\mathrm{D}(\hat{\\mathbf{x}}, \\mathbf{x})  & \\text{A distortion
+            metric specified by \\texttt{--tune}}
         \\end{cases}
 
     .. warning::
@@ -135,6 +138,9 @@ def train(
             to ``noise_parameter[1]``. Note that the patience might interrupt
             the training before it reaches this last value. Defaults to (2.0,
             1.0).
+        tune: Specify the distortion metrics used to compute the loss.
+            Available: "mse", "mse_msssim".
+            Defaults to "mse".
 
     Returns:
         The trained frame encoder.
@@ -251,6 +257,7 @@ def train(
             lmbda=frame_encoder_manager.lmbda,
             rate_mlp_bit=0.0,
             compute_logs=False,
+            tune=tune
         )
         loss_function_output.loss.backward()
         clip_grad_norm_(all_parameters, 1e-1, norm_type=2.0, error_if_nonfinite=False)

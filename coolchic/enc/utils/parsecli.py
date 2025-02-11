@@ -10,6 +10,9 @@
 import argparse
 import os
 from typing import Any, Dict, List
+import typing
+
+from enc.training.loss import TUNING_MODES
 
 
 # ----- Arguments related to Cool-chic parameters
@@ -164,11 +167,16 @@ def get_manager_from_args(args: argparse.Namespace) -> Dict[str, Any]:
         Dict[str, Any]: Dictionary ready to be plugged into the
             ``FrameEncoderManager`` constructor.
     """
+    assert args.tune in list(typing.get_args(TUNING_MODES)), (
+        f"--tune must be in {list(typing.get_args(TUNING_MODES))}. Found {args.tune}"
+    )
+
     frame_encoder_manager = {
         "preset_name": args.recipe,
         "start_lr": args.start_lr,
         "lmbda": args.lmbda,
         "n_loops": args.n_train_loops,
         "n_itr": args.n_itr,
+        "tune": args.tune
     }
     return frame_encoder_manager

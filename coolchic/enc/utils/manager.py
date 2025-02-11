@@ -7,6 +7,8 @@
 # Authors: see CONTRIBUTORS.md
 
 from dataclasses import dataclass, field, fields
+
+from enc.training.loss import TUNING_MODES
 from enc.training.presets import AVAILABLE_PRESETS, Preset
 
 
@@ -23,6 +25,7 @@ class FrameEncoderManager():
     lmbda: float = 1e-3                                         # Rate constraint. Loss = D + lmbda R
     n_itr: int = int(1e5)                                       # Maximum number of training iterations for a **single** phase
     n_loops: int = 1                                            # Number of training loop
+    tune: TUNING_MODES = "mse"                                  # Specify the distortion metrics used to compute the loss. "mse" or "mse_msssim"
 
     # ==================== Not set by the init function ===================== #
     # ----- Actual preset, instantiated from its name

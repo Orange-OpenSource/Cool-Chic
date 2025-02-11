@@ -268,6 +268,7 @@ class FrameEncoderLogs(LossFunctionOutput):
             # ----- This is printed in every modes
             "loss": ["short", "all"],
             "psnr_db": ["short", "all"],
+            "ms_ssim_db": ["short", "all"],
             "total_rate_bpp": ["short", "all"],
             "rate_latent_bpp": ["short", "all"],
             "rate_nn_bpp": ["short", "all"],
@@ -284,8 +285,6 @@ class FrameEncoderLogs(LossFunctionOutput):
             "seq_name": ["all"],
             "feature_rate_bpp": ["all"],
             "detailed_rate_nn_bpp": ["all"],
-            "ms_ssim_db": ["all"],
-            "lpips_db": ["all"],
             "n_pixels": ["all"],
             "img_size": ["all"],
             "mac_decoded_pixel": ["all"],

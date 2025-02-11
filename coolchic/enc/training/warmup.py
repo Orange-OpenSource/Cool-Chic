@@ -31,6 +31,9 @@ def warmup(
     them for 400 iterations. Then we keep the best 4 of them for 400 additional
     iterations, while finally keeping the final best one.
 
+    Note that the warm-up always use the MSE as distortion metrics, regardless
+    of the parameters provided by ``--tune``.
+
     .. warning::
 
         The parameter ``frame_encoder_manager`` tracking the encoding time of
@@ -115,7 +118,9 @@ def warmup(
                 quantizer_type=warmup_phase.training_phase.quantizer_type,
                 quantizer_noise_type=warmup_phase.training_phase.quantizer_noise_type,
                 softround_temperature=warmup_phase.training_phase.softround_temperature,
-                noise_parameter=warmup_phase.training_phase.noise_parameter
+                noise_parameter=warmup_phase.training_phase.noise_parameter,
+                # Always do the warm-up in MSE regardless on the tuning mode chosen
+                tune="mse"
             )
 
             metrics = test(frame_encoder, frame, frame_encoder_manager)

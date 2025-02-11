@@ -291,6 +291,7 @@ class VideoEncoder():
                         quantizer_noise_type=training_phase.quantizer_noise_type,
                         softround_temperature=training_phase.softround_temperature,
                         noise_parameter=training_phase.noise_parameter,
+                        tune=frame_encoder_manager.tune,
                     )
 
                     if training_phase.quantize_model:
@@ -560,4 +561,3 @@ def load_video_encoder(load_path: str) -> VideoEncoder:
         )
 
     return video_encoder
-
