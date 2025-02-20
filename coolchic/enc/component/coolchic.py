@@ -728,10 +728,18 @@ class CoolChicEncoder(nn.Module):
                 if layer.qb is not None:
                     self.arm.mlp[idx_layer].qb = layer.qb.to(device)
 
-    def pretty_string(self) -> str:
-        """Get a pretty string representing the layer of a ``CoolChicEncoder``"""
+    def pretty_string(self, print_detailed_archi: bool = False) -> str:
+        """Get a pretty string representing the layer of a ``CoolChicEncoder``
 
-        s = ""
+        Args:
+            print_detailed_archi: True to print the detailed decoder architecture
+
+        Returns:
+            str: a pretty string ready to be printed out
+        """
+
+        long_description = ""
+        short_description = ""
 
         if not self.flops_str:
             self.get_flops()
@@ -739,51 +747,46 @@ class CoolChicEncoder(nn.Module):
         n_pixels = self.param.img_size[-2] * self.param.img_size[-1]
         total_mac_per_pix = self.get_total_mac_per_pixel()
 
-
         title = f"Cool-chic architecture {total_mac_per_pix:.0f} MAC / pixel"
-        s += (
-            f"\n{title}\n"
-            f"{'-' * len(title)}\n\n"
-        )
+        long_description += f"\n{title}\n" f"{'-' * len(title)}\n\n"
 
-        complexity = self.flops_per_module['upsampling'] / n_pixels
-        share_complexity = 100 * complexity / total_mac_per_pix
-        title = f"Upsampling {complexity:.0f} MAC/pixel ; {share_complexity:.1f} % of the complexity"
-        s += (
+        ups_complexity = self.flops_per_module["upsampling"] / n_pixels
+        ups_share_complexity = 100 * ups_complexity / total_mac_per_pix
+        title = f"Upsampling {ups_complexity:.0f} MAC/pixel ; {ups_share_complexity:.1f} % of the complexity"
+        long_description += (
             f"{title}\n"
             f"{'=' * len(title)}\n"
             "Note: all upsampling layers are separable and symmetric "
             "(transposed) convolutions.\n\n"
-
         )
-        s += pretty_string_ups(self.upsampling, "")
+        long_description += pretty_string_ups(self.upsampling, "")
 
-        complexity = self.flops_per_module['arm'] / n_pixels
-        share_complexity = 100 * complexity / total_mac_per_pix
-        title = f"ARM {complexity:.0f} MAC/pixel ; {share_complexity:.1f} % of the complexity"
-        s += (
-            f"\n\n\n{title}\n"
-            f"{'=' * len(title)}\n\n\n"
-
-        )
+        arm_complexity = self.flops_per_module["arm"] / n_pixels
+        arm_share_complexity = 100 * arm_complexity / total_mac_per_pix
+        title = f"ARM {arm_complexity:.0f} MAC/pixel ; {arm_share_complexity:.1f} % of the complexity"
+        long_description += f"\n\n\n{title}\n" f"{'=' * len(title)}\n\n\n"
         input_arm = f"{self.arm.dim_arm}-pixel context"
         output_arm = "mu, log scale"
-        s += pretty_string_nn(
-            self.arm.mlp, "", input_arm, output_arm
-        )
+        long_description += pretty_string_nn(self.arm.mlp, "", input_arm, output_arm)
 
-        complexity = self.flops_per_module['synthesis'] / n_pixels
-        share_complexity = 100 * complexity / total_mac_per_pix
-        title = f"Synthesis {complexity:.0f} MAC/pixel ; {share_complexity:.1f} % of the complexity"
-        s += (
-            f"\n\n\n{title}\n"
-            f"{'=' * len(title)}\n\n\n"
-
-        )
+        syn_complexity = self.flops_per_module["synthesis"] / n_pixels
+        syn_share_complexity = 100 * syn_complexity / total_mac_per_pix
+        title = f"Synthesis {syn_complexity:.0f} MAC/pixel ; {syn_share_complexity:.1f} % of the complexity"
+        long_description += f"\n\n\n{title}\n" f"{'=' * len(title)}\n\n\n"
         input_syn = f"{self.synthesis.input_ft} features"
         output_syn = "Decoded image"
-        s += pretty_string_nn(
+        long_description += pretty_string_nn(
             self.synthesis.layers, "", input_syn, output_syn
         )
 
-        return s
+        if print_detailed_archi:
+            return long_description
+        else:
+            short_description = (
+                f"\nCool-chic decoding complexity: {total_mac_per_pix:.0f} MAC / pixel\n"
+                f"   - {'ARM':<10} {arm_complexity:5.0f} MAC / pixel ; {arm_share_complexity:4.1f} % of the complexity\n"
+                f"   - {'Upsampling':<10} {ups_complexity:5.0f} MAC / pixel ; {ups_share_complexity:4.1f} % of the complexity\n"
+                f"   - {'Synthesis':<10} {syn_complexity:5.0f} MAC / pixel ; {syn_share_complexity:4.1f} % of the complexity\n"
+            )
+
+            return short_description
