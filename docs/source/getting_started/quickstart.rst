@@ -39,8 +39,8 @@ package (torch etc.) and compiles the Cool-chic C API.
 Sanity check
 ~~~~~~~~~~~~
 
-A simple sanity check script is provided. It performs a very fast encoding of an
-image, write a bitstream and decode it.
+A simple sanity check script is provided. It performs a very fast encoding of
+different image and video formats, write a bitstream and decode it.
 
 .. code:: bash
 

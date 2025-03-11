@@ -24,12 +24,11 @@
   <p align="center">
     <!-- Low-complexity neural image codec based on overfitting. -->
     <br />
-    <a href="https://orange-opensource.github.io/Cool-Chic/"><strong>Explore the docs »</strong></a>
-    <br />
-    <br />
-    <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/new_stuff.html">What's new in 3.4.1?</a>
-    ·
-    <a href="https://orange-opensource.github.io/Cool-Chic/results/image/reproduce_results.html">Decode some bitstreams</a>
+    <a href="https://orange-opensource.github.io/Cool-Chic/"><strong>Explore the docs </strong></a>
+    <!-- <br />
+    <br /> -->
+    .
+    <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/new_stuff.html">What's new in 4.0.0?</a>
     ·
     <a href="https://orange-opensource.github.io/Cool-Chic/results/image/compression_performance.html">Coding performance</a>
   </p>
@@ -48,17 +47,15 @@ a low-complexity neural image codec based on overfitting.
 
 * 🖼️ **I/O format**: Encode PNG, PPM and YUV 420 & 444 files with a bitdepth of 8 to 16 bits
 
-#
-
 
 <div align="center">
 
-### Happy new year release: 🎉 __Cool-chic 3.4.1: Faster encoder!__ 🎉
+### 🎥 __Cool-chic 4.0.0: Video is back!__ 🎥
 
 </div>
 
-- Speed-up GPU Encoding **up to 3 times**! Check-out the detailed [encoding speed-up measurements](https://orange-opensource.github.io/Cool-Chic/results/image/encoding_complexity.html#encoding-time)
-- Change encoder configuration files with better medium and slow [encoding presets](https://orange-opensource.github.io/Cool-Chic/encoding/preset.html#some-existing-configuration-files)
+- Cool-chic now compresses inter frames with two cool-chic modules: one for the motion and one for the residue
+- The motion module training is guided through a RAFT optical flow estimator for more accurate motion.
 
 Check-out the [release history](https://github.com/Orange-OpenSource/Cool-Chic/releases) to see previous versions of Cool-chic.
 
@@ -91,18 +88,15 @@ You're good to go!
 The Cool-chic page provides [comprehensive rate-distortion results](https://orange-opensource.github.io/Cool-Chic/results/image/compression_performance.html) and compressed bitstreams](https://orange-opensource.github.io/Cool-Chic/results/image/reproduce_results.html) allowing
 to reproduce the results inside the ```results/``` directory.
 
-</br>
-
 <table class="tg"><thead>
   <tr>
     <th class="tg-86ol" rowspan="2"></th>
-    <th class="tg-86ol" colspan="6">BD-rate of Cool-chic 3.4 vs. [%]</th>
+    <th class="tg-86ol" colspan="5">BD-rate of Cool-chic 4.0 vs. [%]</th>
     <th class="tg-86ol" colspan="2">Avg. decoder complexity</th>
   </tr>
   <tr>
     <th class="tg-86ol"><a href="https://arxiv.org/abs/2001.01568" target="_blank" rel="noopener noreferrer">Cheng</a></th>
     <th class="tg-86ol"><a href="https://arxiv.org/abs/2203.10886" target="_blank" rel="noopener noreferrer">ELIC</a></th>
-    <th class="tg-dfl2"><span style="font-weight:bold">Cool-chic 3.3</span></th>
     <th class="tg-86ol"><a href="https://arxiv.org/abs/2312.02753" target="_blank" rel="noopener noreferrer">C3</a></th>
     <th class="tg-86ol">HEVC (HM 16)</th>
     <th class="tg-86ol">VVC (VTM 19)</th>
@@ -114,7 +108,6 @@ to reproduce the results inside the ```results/``` directory.
     <td class="tg-86ol">kodak</td>
     <td class="tg-qch7">-4.2 %</td>
     <td class="tg-xd3r">+7.5 %</td>
-    <td class="tg-qch7">-0.9 %</td>
     <td class="tg-qch7">-4.3 %</td>
     <td class="tg-qch7">-17.2 %</td>
     <td class="tg-xd3r">+3.4 % </td>
@@ -125,7 +118,6 @@ to reproduce the results inside the ```results/``` directory.
     <td class="tg-86ol">clic20-pro-valid</td>
     <td class="tg-qch7">-13.2 %</td>
     <td class="tg-qch7">-0.2 %</td>
-    <td class="tg-qch7">-0.3 %</td>
     <td class="tg-qch7">-1.3 %</td>
     <td class="tg-qch7">-25.1 %</td>
     <td class="tg-qch7">-2.3 %<br></td>
@@ -136,7 +128,6 @@ to reproduce the results inside the ```results/``` directory.
     <td class="tg-86ol">jvet (BCDEF)</td>
     <td class="tg-5niz">/</td>
     <td class="tg-5niz">/</td>
-    <td class="tg-qch7">-0.2 %</td>
     <td class="tg-5niz">/</td>
     <td class="tg-qch7">-18.3 %</td>
     <td class="tg-xd3r">+18.6 %</td>
@@ -147,7 +138,6 @@ to reproduce the results inside the ```results/``` directory.
     <td class="tg-x9uu">jvet (class B)</td>
     <td class="tg-1keu">/</td>
     <td class="tg-1keu">/</td>
-    <td class="tg-arzi">+0.9%</td>
     <td class="tg-1keu">/</td>
     <td class="tg-uflc">-9.9 %</td>
     <td class="tg-arzi">+20.7 %</td>
@@ -158,7 +148,6 @@ to reproduce the results inside the ```results/``` directory.
     <td class="tg-x9uu">jvet (class C)</td>
     <td class="tg-1keu">/</td>
     <td class="tg-1keu">/</td>
-    <td class="tg-uflc">-1.3%</td>
     <td class="tg-1keu">/</td>
     <td class="tg-uflc">-16.1 %</td>
     <td class="tg-arzi">+9.2 %</td>
@@ -169,7 +158,6 @@ to reproduce the results inside the ```results/``` directory.
     <td class="tg-x9uu">jvet (class D)</td>
     <td class="tg-1keu">/</td>
     <td class="tg-1keu">/</td>
-    <td class="tg-uflc">-1.4%</td>
     <td class="tg-1keu">/</td>
     <td class="tg-uflc">-12.4 %</td>
     <td class="tg-arzi">+9.6 %</td>
@@ -180,7 +168,6 @@ to reproduce the results inside the ```results/``` directory.
     <td class="tg-x9uu">jvet (class E)</td>
     <td class="tg-1keu">/</td>
     <td class="tg-1keu">/</td>
-    <td class="tg-uflc">-3.8%</td>
     <td class="tg-1keu">/</td>
     <td class="tg-uflc">-6.2 %</td>
     <td class="tg-arzi">+27.8 %</td>
@@ -191,7 +178,6 @@ to reproduce the results inside the ```results/``` directory.
     <td class="tg-x9uu">jvet (class F)</td>
     <td class="tg-1keu">/</td>
     <td class="tg-1keu">/</td>
-    <td class="tg-arzi">+0.2%</td>
     <td class="tg-1keu">/</td>
     <td class="tg-uflc">-31.8 %</td>
     <td class="tg-arzi">+20.6 %</td>
@@ -227,35 +213,6 @@ _PSNR is computed in the RGB domain for kodak and CLIC20, in the YUV420 domain f
 
 <div style="text-align: center;">
     <img src="./docs/source/assets/jvet/concat_img_classB.png" alt="JVET class B rd results" width="90%" style="centered"/>
-</div>
-<br/>
-
-</br>
-
-## Encoding time
-
-The graphs below present the time required to encode several images resolutions
-on different hardwares. These figures are obtained using the
-``cfg/enc/medium_30k.cfg`` encoding configuration.
-
-### Kodak image 512x768
-
-<div style="text-align: center;">
-    <img src="./docs/source/assets/encoding-time/encoding-time-kodak.png" alt="Kodak encoding time" width="80%" style="centered"/>
-</div>
-<br/>
-
-### CLIC20 Pro Valid image 1363x2048
-
-<div style="text-align: center;">
-    <img src="./docs/source/assets/encoding-time/encoding-time-clic.png" alt="CLIC20 encoding time" width="80%" style="centered"/>
-</div>
-<br/>
-
-### JVET Class E image 720x1280
-
-<div style="text-align: center;">
-    <img src="./docs/source/assets/encoding-time/encoding-time-jvet-e.png" alt="JVET class E encoding time" width="80%" style="centered"/>
 </div>
 <br/>
 

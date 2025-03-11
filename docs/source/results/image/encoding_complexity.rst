@@ -1,5 +1,5 @@
-Encoding complexity
-===================
+Image encoding complexity
+=========================
 
 
 Number of iterations
@@ -63,37 +63,37 @@ JVET All Classes
 .. image:: ../../assets/jvet/perf_complexity_enc_classBCDEF.png
   :alt: JVET class BCDEF rd results
 
-.. _encoding_timing:
-Encoding time
-"""""""""""""
+.. .. _encoding_timing:
+.. Encoding time
+.. """""""""""""
 
-The actual time required to perform one encoding iteration depends on the
-hardware, the image resolution and... the Cool-chic version since more recent versions
-are usually more optimized.
+.. The actual time required to perform one encoding iteration depends on the
+.. hardware, the image resolution and... the Cool-chic version since more recent versions
+.. are usually more optimized.
 
-.. important::
-    Starting from Cool-chic 3.4.1, ``torch.compile`` is used to significantly reduce the encoding time
+.. .. important::
+..     Starting from Cool-chic 3.4.1, ``torch.compile`` is used to significantly reduce the encoding time
 
-Here are a comparison of the encoding time required for 3 different resolutions
-on different hardwares and Cool-chic versions. This is obtained with the
-``medium_30k`` encoding configuration.
-
-
-512x768 image
-*************
-
-.. image:: ../../assets/encoding-time/encoding-time-kodak.png
-  :alt: Encoding time on kodak
+.. Here are a comparison of the encoding time required for 3 different resolutions
+.. on different hardwares and Cool-chic versions. This is obtained with the
+.. ``medium_30k`` encoding configuration.
 
 
-720x1280 image
-**************
+.. 512x768 image
+.. *************
 
-.. image:: ../../assets/encoding-time/encoding-time-jvet-e.png
-  :alt: Encoding time on JVET E
+.. .. image:: ../../assets/encoding-time/encoding-time-kodak.png
+..   :alt: Encoding time on kodak
 
-1363x2048 image
-***************
 
-.. image:: ../../assets/encoding-time/encoding-time-clic.png
-  :alt: Encoding time on CLIC
+.. 720x1280 image
+.. **************
+
+.. .. image:: ../../assets/encoding-time/encoding-time-jvet-e.png
+..   :alt: Encoding time on JVET E
+
+.. 1363x2048 image
+.. ***************
+
+.. .. image:: ../../assets/encoding-time/encoding-time-clic.png
+..   :alt: Encoding time on CLIC

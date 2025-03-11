@@ -1,8 +1,0 @@
-                                  BD-rate vs. vtm [%]   BD-rate vs. hm [%]   BD-rate vs. coolchic-3-3 [%]   Complexity [MAC/pix]   Decoding time [ms]  
-
-      release-3-4-0-jvet_classB   20.684                -9.925               0.962                          1300                   282                 
-      release-3-4-0-jvet_classC   9.175                 -16.089              -1.293                         1289                   69                  
-      release-3-4-0-jvet_classD   9.566                 -12.405              -1.436                         948                    18                  
-      release-3-4-0-jvet_classE   27.752                -6.16                -3.756                         1347                   125                 
-      release-3-4-0-jvet_classF   20.625                -31.76               0.197                          1374                   182                 
-  release-3-4-0-jvet_classBCDEF   18.683                -18.258              -0.231                         1249                   143                 

@@ -17,6 +17,9 @@
 #include <vector>
 #include <chrono>
 
+#define UPS_INT_FLOAT float // float or int32_t, if float, SYN_INT_FLOAT must be float
+#define SYN_INT_FLOAT float // float or int32_t
+
 int const ARM_MAX_N_FEATURES = 32;
 
 // 64-alignment for possible avx512 use
@@ -34,16 +37,18 @@ int const ARM_MAX_N_FEATURES = 32;
 #define SYN_MUL_PRECISION SYN_LAYER_PRECISION
 
 // minimal cache around allocations for weights, biases and buffers.
+// normally int32_t, but can be float for syn.
+template <typename P>
 struct buffer
 {
     buffer(): data(NULL), n(0) {}
     ~buffer() { unuse(); }
-    int32_t *data;
+    P *data;
     int      n;
-    int32_t *update_to(int new_n) { if (new_n <= n) return data;
+    P *update_to(int new_n) { if (new_n <= n) return data;
                                     unuse();
                                     n = new_n;
-                                    data = (int32_t *)aligned_alloc(ALIGNTO, ALIGN(n*sizeof(data[0])));
+                                    data = (P *)aligned_alloc(ALIGNTO, ALIGN(n*sizeof(data[0])));
                                     if (data == NULL)
                                     {
                                         printf("Cannot allocate weight/bias data: %d elements", new_n);
@@ -54,6 +59,8 @@ struct buffer
 private:
     void unuse() { if (data != NULL) {free(data); data = NULL;} }
 };
-using weights_biases = buffer;
+using weights_biases = buffer<int32_t>;
+using weights_biases_ups = buffer<UPS_INT_FLOAT>; // !!! temporary -- synthesis.
+using weights_biases_syn = buffer<SYN_INT_FLOAT>; // !!! temporary -- synthesis.
 
 #endif

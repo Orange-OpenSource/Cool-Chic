@@ -7,10 +7,10 @@
 # Authors: see CONTRIBUTORS.md
 
 
+from enc.component.types import DescriptorNN
 import torch
 import torch.nn as nn
 
-from enc.utils.misc import DescriptorNN
 from CCLIB.ccencapi import cc_decode_wb
 
 

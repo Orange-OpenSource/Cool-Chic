@@ -1,5 +1,5 @@
 from enc.utils.codingstructure import FrameData
-from enc.io.format.data_type import FRAME_DATA_TYPE, POSSIBLE_BITDEPTH
+from enc.io.types import FRAME_DATA_TYPE, POSSIBLE_BITDEPTH
 from enc.io.format.ppm import read_ppm
 from enc.io.format.yuv import read_yuv
 from enc.io.format.png import read_png

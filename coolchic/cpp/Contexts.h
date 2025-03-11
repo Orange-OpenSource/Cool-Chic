@@ -41,6 +41,7 @@
 #include "CommonDef.h"
 
 #include <vector>
+#include <stdint.h>
 
 static constexpr int     PROB_BITS   = 15;   // Nominal number of bits to represent probabilities
 static constexpr int     PROB_BITS_0 = 10;   // Number of bits to represent 1st estimate

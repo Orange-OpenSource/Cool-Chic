@@ -253,11 +253,13 @@ void cc_code_latent_layer_bac(
             }
         }
 
-        // want to bother?  For significant blocks, we now say no.
+        // Want to bother?
+        // For video, we now say yes!
         // SIG
         // printf("nz %d vs %d\n", n_zero, nby*nbx);
-        //if (n_zero <= nby*nbx/20)
-        if (1) // no longer use significance blocks.
+        // !!! parameterize
+        // if (1) // no longer use significance blocks.
+        if (n_zero <= nby*nbx/20) // 5% or less blocks zero, don´t indicate sig, just use flat.
         {
             //not-enough zero-blocks, don't signal significance, assume everything is significant.
             layer_BAC.encodeBinEP(0);
