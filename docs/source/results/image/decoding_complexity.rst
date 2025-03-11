@@ -1,7 +1,7 @@
 :layout: simple
 
-Decoding complexity
-===================
+Image decoding complexity
+=========================
 
 As described in the :doc:`decoder configuration <../../encoding/architecture>`
 section, Cool-chic decoder can be made as simple (or complex) as desired. We

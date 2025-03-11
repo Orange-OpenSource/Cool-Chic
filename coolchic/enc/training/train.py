@@ -12,18 +12,18 @@ import time
 from typing import List, Tuple
 
 import torch
-from torch.nn.utils import clip_grad_norm_
-
-from enc.utils.manager import FrameEncoderManager
 from enc.component.core.quantizer import (
     POSSIBLE_QUANTIZATION_NOISE_TYPE,
     POSSIBLE_QUANTIZER_TYPE,
 )
 from enc.component.frame import FrameEncoder
+from enc.io.format.yuv import convert_420_to_444
 from enc.training.loss import loss_function
+from enc.training.presets import MODULE_TO_OPTIMIZE
 from enc.training.test import test
 from enc.utils.codingstructure import Frame
-from enc.training.presets import MODULE_TO_OPTIMIZE
+from enc.training.manager import FrameEncoderManager
+from torch.nn.utils import clip_grad_norm_
 
 
 # Custom scheduling function for the soft rounding temperature and the noise parameter
@@ -55,6 +55,7 @@ def train(
     frame_encoder: FrameEncoder,
     frame: Frame,
     frame_encoder_manager: FrameEncoderManager,
+    lmbda: float = 1e-3,
     start_lr: float = 1e-2,
     cosine_scheduling_lr: bool = True,
     max_iterations: int = 10000,
@@ -139,11 +140,15 @@ def train(
     Returns:
         The trained frame encoder.
     """
-
     start_time = time.time()
 
-    frame.upsample_reference_to_444()
-    raw_references = [ref_i.data for ref_i in frame.refs_data]
+    # We train with dense reference!
+    for idx_ref, ref_i in enumerate(frame.refs_data):
+        if ref_i.frame_data_type == "yuv420":
+            frame.refs_data[idx_ref].data = convert_420_to_444(ref_i.data)
+            frame.refs_data[idx_ref].frame_data_type = "yuv444"
+
+    raw_references_444 = [ref_i.data for ref_i in frame.refs_data]
 
     # ------ Keep track of the best loss and model
     # Perform a first test to get the current best logs (it includes the loss)
@@ -154,27 +159,51 @@ def train(
     frame_encoder.set_to_train()
 
     # ------ Build the list of parameters to optimize
-    # Iteratively construct the list of required parameters... This is kind of a
-    # strange syntax, which has been found quite empirically
+    # Iteratively construct the list of required parameters.
 
     parameters_to_optimize = []
+    for cur_module_to_optimize in optimized_module:
+        # No need to go further, we'll want to optimize everything!
+        if cur_module_to_optimize == "all":
+            parameters_to_optimize = frame_encoder.parameters()
+            break
 
-    if "arm" in optimized_module:
-        parameters_to_optimize += [*frame_encoder.coolchic_encoder.arm.parameters()]
-    if "upsampling" in optimized_module:
-        parameters_to_optimize += [
-            *frame_encoder.coolchic_encoder.upsampling.parameters()
-        ]
-    if "synthesis" in optimized_module:
-        parameters_to_optimize += [
-            *frame_encoder.coolchic_encoder.synthesis.parameters()
-        ]
-    if "latent" in optimized_module:
-        parameters_to_optimize += [
-            *frame_encoder.coolchic_encoder.latent_grids.parameters()
-        ]
-    if "all" in optimized_module:
-        parameters_to_optimize = frame_encoder.parameters()
+        else:
+            raw_cc_name, mod_name = cur_module_to_optimize.split(".")
+
+            if raw_cc_name == "all":
+                raw_cc_name = list(frame_encoder.coolchic_enc.keys())
+            else:
+                raw_cc_name = [raw_cc_name]
+
+            for cc_name in raw_cc_name:
+                assert cc_name in frame_encoder.coolchic_enc, (
+                    f"Trying to optimize the parameters {cur_module_to_optimize}."
+                    f" However, there is no {cc_name} Cool-chic encoder. Found "
+                    f"{list(frame_encoder.coolchic_enc.keys())}"
+                )
+
+                match mod_name:
+                    case "all":
+                        parameters_to_optimize+= [
+                            *frame_encoder.coolchic_enc[cc_name].parameters()
+                        ]
+                    case "arm":
+                        parameters_to_optimize+= [
+                            *frame_encoder.coolchic_enc[cc_name].arm.parameters()
+                        ]
+                    case "upsampling":
+                        parameters_to_optimize+= [
+                            *frame_encoder.coolchic_enc[cc_name].upsampling.parameters()
+                        ]
+                    case "synthesis":
+                        parameters_to_optimize+= [
+                            *frame_encoder.coolchic_enc[cc_name].synthesis.parameters()
+                        ]
+                    case "latent":
+                        parameters_to_optimize+= [
+                            *frame_encoder.coolchic_enc[cc_name].latent_grids.parameters()
+                        ]
 
     optimizer = torch.optim.Adam(parameters_to_optimize, lr=start_lr)
     best_optimizer_state = copy.deepcopy(optimizer.state_dict())
@@ -237,19 +266,22 @@ def train(
 
         # forward / backward
         out_forward = frame_encoder.forward(
-            reference_frames=raw_references,
+            reference_frames=raw_references_444,
             quantizer_noise_type=quantizer_noise_type,
             quantizer_type=quantizer_type,
             soft_round_temperature=cur_softround_temperature,
             noise_parameter=cur_noise_parameter,
         )
 
+        decoded_image = out_forward.decoded_image
+        target_image = frame.data.data
+
         loss_function_output = loss_function(
-            out_forward.decoded_image,
-            out_forward.rate,
-            frame.data.data,
-            lmbda=frame_encoder_manager.lmbda,
-            rate_mlp_bit=0.0,
+            decoded_image=decoded_image,
+            rate_latent_bit=out_forward.rate,
+            target_image=target_image,
+            lmbda=lmbda,
+            total_rate_nn_bit=0.0,
             compute_logs=False,
         )
         loss_function_output.loss.backward()
@@ -275,7 +307,8 @@ def train(
                 # does not matter.
                 delta_psnr = encoder_logs.psnr_db - encoder_logs_best.psnr_db
                 delta_bpp = (
-                    encoder_logs.rate_latent_bpp - encoder_logs_best.rate_latent_bpp
+                    encoder_logs.total_rate_latent_bpp
+                    - encoder_logs_best.total_rate_latent_bpp
                 )
                 flag_new_record = delta_bpp < 0.001 or delta_psnr > 0.001
 
@@ -289,7 +322,8 @@ def train(
                     encoder_logs.psnr_db - initial_encoder_logs.psnr_db
                 )
                 this_phase_bpp_gain = (
-                    encoder_logs.rate_latent_bpp - initial_encoder_logs.rate_latent_bpp
+                    encoder_logs.total_rate_latent_bpp
+                    - initial_encoder_logs.total_rate_latent_bpp
                 )
 
                 log_new_record = ""
@@ -305,11 +339,11 @@ def train(
 
             # Show column name a single time
             additional_data = {
-                "lr": f"{start_lr if not cosine_scheduling_lr else learning_rate_scheduler.get_last_lr()[0]:.8f}",
+                "lr": f"{start_lr if not cosine_scheduling_lr else learning_rate_scheduler.get_last_lr()[0]:.4f}",
                 "optim": ",".join(optimized_module),
                 "patience": (patience - cnt + cnt_record) // frequency_validation,
-                "q_type": f"{quantizer_type:12s}",
-                "sr_temp": f"{cur_softround_temperature:.5f}",
+                "q_type": f"{quantizer_type:10s}",
+                "sr_temp": f"{cur_softround_temperature:.3f}",
                 "n_type": f"{quantizer_noise_type:12s}",
                 "noise": f"{cur_noise_parameter:.2f}",
                 "record": log_new_record,

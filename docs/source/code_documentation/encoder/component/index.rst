@@ -14,15 +14,15 @@ Components gather all the modules of the enc.
      coding engine of the codec. It is composed of latent grids, an
      auto-regressive module, an upsampling and a synthesis.
 
-   * ``core/`` contains all the modules stated above and required by a
-     ``CoolChicEncoder``
+   * ``intercoding/`` contains functions required to encode an intra frame such
+     RAFT-based motion estimation, warping an image with an optical flow or
+     finding a global translation between two frames.
 
 
 .. toctree::
 
-   video <video>
    frame <frame>
    coolchic <coolchic>
    core <core/index>
-
+   intercoding <intercoding/index>
 

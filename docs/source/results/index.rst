@@ -3,17 +3,24 @@ Cool-chic experimental results
 
 We provide comprehensive experimental results demonstrating the compression
 performance of Cool-chic, its low decoding complexity and the associated
-encoding complexity. We also provide already encoded bitstreams so that
-everybody can decode them to measure their own quality metrics and decoding
-time.
+encoding complexity.
+
+We also provide some already encoded bitstreams in ``samples/bitstream/`` so
+that everybody can decode them to try out our fast CPU-only neural decoder.
+
 
 .. toctree::
    :maxdepth: 1
    :caption: Image
    :hidden:
 
-   Reproduce our results <image/reproduce_results>
    Compression performance <image/compression_performance>
    Decoding complexity <image/decoding_complexity>
    Encoding complexity <image/encoding_complexity>
 
+.. toctree::
+   :maxdepth: 1
+   :caption: Video
+   :hidden:
+
+   Compression performance <video/compression_performance>

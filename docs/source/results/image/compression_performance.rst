@@ -1,7 +1,7 @@
 :layout: simple
 
-Compression performance
-=======================
+Image compression performance
+=============================
 
 
 .. raw:: html
@@ -28,7 +28,7 @@ BD-rate
 *******
 
 The following table sums up the compression performance obtained by Cool-chic
-3.4 against different anchors. Results are measure through `BD-rates
+4.0 against different anchors. Results are measure through `BD-rates
 <https://github.com/Anserw/Bjontegaard_metric>`_ which represents the relative
 rate required for Cool-chic to obtain the same quality than some other codec.
 
@@ -50,13 +50,12 @@ rate required for Cool-chic to obtain the same quality than some other codec.
   <table class="tg"><thead>
     <tr>
       <th class="tg-86ol" rowspan="2"></th>
-      <th class="tg-86ol" colspan="6">BD-rate of Cool-chic 3.4 vs. [%]</th>
+      <th class="tg-86ol" colspan="5">BD-rate of Cool-chic 4.0 vs. [%]</th>
       <th class="tg-86ol" colspan="2">Avg. decoder complexity</th>
     </tr>
     <tr>
       <th class="tg-86ol"><a href="https://arxiv.org/abs/2001.01568" target="_blank" rel="noopener noreferrer">Cheng</a></th>
       <th class="tg-86ol"><a href="https://arxiv.org/abs/2203.10886" target="_blank" rel="noopener noreferrer">ELIC</a></th>
-      <th class="tg-dfl2"><span style="font-weight:bold">Cool-chic 3.3</span></th>
       <th class="tg-86ol"><a href="https://arxiv.org/abs/2312.02753" target="_blank" rel="noopener noreferrer">C3</a></th>
       <th class="tg-86ol">HEVC (HM 16)</th>
       <th class="tg-86ol">VVC (VTM 19)</th>
@@ -68,7 +67,6 @@ rate required for Cool-chic to obtain the same quality than some other codec.
       <td class="tg-86ol">kodak</td>
       <td class="tg-qch7">-4.2 %</td>
       <td class="tg-xd3r">+7.5 %</td>
-      <td class="tg-qch7">-0.9 %</td>
       <td class="tg-qch7">-4.3 %</td>
       <td class="tg-qch7">-17.2 %</td>
       <td class="tg-xd3r">+3.4 % </td>
@@ -79,7 +77,6 @@ rate required for Cool-chic to obtain the same quality than some other codec.
       <td class="tg-86ol">clic20-pro-valid</td>
       <td class="tg-qch7">-13.2 %</td>
       <td class="tg-qch7">-0.2 %</td>
-      <td class="tg-qch7">-0.3 %</td>
       <td class="tg-qch7">-1.3 %</td>
       <td class="tg-qch7">-25.1 %</td>
       <td class="tg-qch7">-2.3 %<br></td>
@@ -90,7 +87,6 @@ rate required for Cool-chic to obtain the same quality than some other codec.
       <td class="tg-86ol">jvet (BCDEF)</td>
       <td class="tg-5niz">/</td>
       <td class="tg-5niz">/</td>
-      <td class="tg-qch7">-0.2 %</td>
       <td class="tg-5niz">/</td>
       <td class="tg-qch7">-18.3 %</td>
       <td class="tg-xd3r">+18.6 %</td>
@@ -101,7 +97,6 @@ rate required for Cool-chic to obtain the same quality than some other codec.
       <td class="tg-x9uu">jvet (class B)</td>
       <td class="tg-1keu">/</td>
       <td class="tg-1keu">/</td>
-      <td class="tg-arzi">+0.9%</td>
       <td class="tg-1keu">/</td>
       <td class="tg-uflc">-9.9 %</td>
       <td class="tg-arzi">+20.7 %</td>
@@ -112,7 +107,6 @@ rate required for Cool-chic to obtain the same quality than some other codec.
       <td class="tg-x9uu">jvet (class C)</td>
       <td class="tg-1keu">/</td>
       <td class="tg-1keu">/</td>
-      <td class="tg-uflc">-1.3%</td>
       <td class="tg-1keu">/</td>
       <td class="tg-uflc">-16.1 %</td>
       <td class="tg-arzi">+9.2 %</td>
@@ -123,7 +117,6 @@ rate required for Cool-chic to obtain the same quality than some other codec.
       <td class="tg-x9uu">jvet (class D)</td>
       <td class="tg-1keu">/</td>
       <td class="tg-1keu">/</td>
-      <td class="tg-uflc">-1.4%</td>
       <td class="tg-1keu">/</td>
       <td class="tg-uflc">-12.4 %</td>
       <td class="tg-arzi">+9.6 %</td>
@@ -134,7 +127,6 @@ rate required for Cool-chic to obtain the same quality than some other codec.
       <td class="tg-x9uu">jvet (class E)</td>
       <td class="tg-1keu">/</td>
       <td class="tg-1keu">/</td>
-      <td class="tg-uflc">-3.8%</td>
       <td class="tg-1keu">/</td>
       <td class="tg-uflc">-6.2 %</td>
       <td class="tg-arzi">+27.8 %</td>
@@ -145,7 +137,6 @@ rate required for Cool-chic to obtain the same quality than some other codec.
       <td class="tg-x9uu">jvet (class F)</td>
       <td class="tg-1keu">/</td>
       <td class="tg-1keu">/</td>
-      <td class="tg-arzi">+0.2%</td>
       <td class="tg-1keu">/</td>
       <td class="tg-uflc">-31.8 %</td>
       <td class="tg-arzi">+20.6 %</td>

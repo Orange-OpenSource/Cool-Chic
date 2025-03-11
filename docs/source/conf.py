@@ -17,7 +17,7 @@ sys.path.insert(0, basedir)
 project = 'Cool-chic'
 copyright = '2023 - 2025 Orange'
 author = 'Théo Ladune, Pierrick Philippe'
-release = '3.4.1'
+release = '4.0.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -113,27 +113,15 @@ html_theme_options = {
     "globaltoc_expand_depth": 1,
     "accent_color": "red",
     "announcement": (
-        "<center> 🎉 Happy new year release: Cool-chic 3.4.1 with a faster encoder! "
+        "<center> 🎥 Cool-chic 4.0.0: video is back! "
         "<a href=https://github.com/Orange-OpenSource/Cool-Chic>"
-        "Check out the git repository</a> 🎉 </center>"
+        "Check out the git repository</a> 🎥 </center>"
     ),
 
     "nav_links": [
         {
             "title": "Back to homepage!",
             "url": "getting_started/quickstart",
-            # "children": [
-            #     {
-            #         "title": "Setup",
-            #         "url": "getting_started/quickstart",
-            #         # "summary": "Setup",
-            #     },
-            #     {
-            #         "title": "Example",
-            #         "url": "getting_started/example",
-            #         "summary": "The quickest way to use Cool-chic!",
-            #     },
-            # ]
         },
 
     ]

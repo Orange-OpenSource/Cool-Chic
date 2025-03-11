@@ -15,10 +15,7 @@ The ``training`` submodule gather the different functions required to encode
    * ``test.py`` measures more quantities than loss does, e.g. the neural networks
      rate
 
-   * ``quantizemodel.py`` is called at the end of the training to quantize the
-     neural networks rate
-
-   * ``preset.py`` contains training recipe with hyper-parameters controlling the
+   * ``preset.py`` contains training preset with hyper-parameters controlling the
      training process.
 
 
@@ -28,7 +25,6 @@ The ``training`` submodule gather the different functions required to encode
    train <train>
    test <test>
    warmup <warmup>
-   quantizemodel <quantizemodel>
    preset <preset>
 
 

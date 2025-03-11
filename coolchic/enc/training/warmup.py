@@ -11,12 +11,13 @@ import copy
 import time
 from typing import List
 
-from enc.utils.manager import FrameEncoderManager
+from enc.training.manager import FrameEncoderManager
 from enc.component.frame import FrameEncoder
 from enc.training.test import test
 from enc.training.train import train
 from enc.utils.codingstructure import Frame
-from enc.utils.misc import POSSIBLE_DEVICE, mem_info
+from enc.utils.device import POSSIBLE_DEVICE
+from enc.utils.misc import mem_info
 
 
 def warmup(
@@ -107,6 +108,7 @@ def warmup(
                 frame=frame,
                 frame_encoder_manager=frame_encoder_manager,
                 start_lr=warmup_phase.training_phase.lr,
+                lmbda=frame_encoder_manager.lmbda,
                 cosine_scheduling_lr=warmup_phase.training_phase.schedule_lr,
                 max_iterations=warmup_phase.training_phase.max_itr,
                 patience=warmup_phase.training_phase.patience,
@@ -140,7 +142,7 @@ def warmup(
         for candidate in all_candidates:
             s += f'{candidate.get("id"):^{6}}|'
             s += f'{candidate.get("metrics").loss.item() * 1e3:^{_col_width}.4f}|'
-            s += f'{candidate.get("metrics").rate_latent_bpp:^{_col_width}.4f}|'
+            s += f'{candidate.get("metrics").total_rate_latent_bpp:^{_col_width}.4f}|'
             s += f'{candidate.get("metrics").psnr_db:^{_col_width}.4f}|'
             s += "\n"
         print(s)

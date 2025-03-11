@@ -13,8 +13,8 @@ from typing import TypedDict, Union
 import numpy as np
 import torch
 import torch.nn.functional as F
-from enc.io.format.data_type import FRAME_DATA_TYPE, POSSIBLE_BITDEPTH
-from enc.utils.misc import POSSIBLE_DEVICE
+from enc.io.types import FRAME_DATA_TYPE, POSSIBLE_BITDEPTH
+from enc.utils.device import POSSIBLE_DEVICE
 from torch import Tensor
 
 

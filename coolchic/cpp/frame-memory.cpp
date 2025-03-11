@@ -1,10 +1,36 @@
 
 #include "frame-memory.h"
 
-void frame_memory::custom_pad_replicate_plane_in_place_i(int plane, int padlr, int padtb)
+template <class P>
+void frame_memory<P>::print_start(int plane, char const *msg, int n, int prec) const
 {
-    int32_t *scan_in = plane_origin(plane);
-    int32_t *scan_out = scan_in - padtb*stride-padlr;
+    printf("x/%d (h%dx%d): %s\n", 1<<prec, n > 0 ? n : h, n > 0 ? n : w, msg == NULL ? "" : msg);
+    if (std::is_same<P, float>::value)
+    {
+        for (int y = 0; y < (n > 0 ? n : h); y++)
+        {
+            for (int x = 0; x < (n > 0 ? n : w); x++)
+                printf(" %g", (float)const_plane_origin(plane)[y*stride+x]);
+            printf("\n");
+        }
+    }
+    else
+    {
+        for (int y = 0; y < (n > 0 ? n : h); y++)
+        {
+            for (int x = 0; x < (n > 0 ? n : w); x++)
+                printf(" %g", const_plane_origin(plane)[y*stride+x]/((1<<prec)+0.0));
+            printf("\n");
+        }
+    }
+    fflush(stdout);
+}
+
+template <typename P>
+void frame_memory<P>::custom_pad_replicate_plane_in_place_i(int plane, int padlr, int padtb)
+{
+    P *scan_in = plane_origin(plane);
+    P *scan_out = scan_in - padtb*stride-padlr;
     int w_in_padded = w+2*padlr;
     // leading lines
     for (int y = 0; y < padtb; y++)
@@ -66,9 +92,10 @@ void frame_memory::custom_pad_replicate_plane_in_place_i(int plane, int padlr, i
     }
 }
 
-void frame_memory::custom_pad_zero_plane_in_place_i(int plane, int padlr, int padtb)
+template <typename P>
+void frame_memory<P>::custom_pad_zero_plane_in_place_i(int plane, int padlr, int padtb)
 {
-    int32_t *scan_out = plane_origin(plane) - padtb*stride-padlr;
+    P *scan_out = plane_origin(plane) - padtb*stride-padlr;
     int w_in_padded = w+2*padlr;
     // leading lines
     for (int y = 0; y < padtb; y++)
@@ -99,15 +126,43 @@ void frame_memory::custom_pad_zero_plane_in_place_i(int plane, int padlr, int pa
     }
 }
 
-void frame_memory::zero_pad(int plane, int pad)
+template <typename P>
+void frame_memory<P>::zero_pad(int plane, int pad)
 {
     // !!! just the padding.
-    memset(raw()+plane*plane_stride, 0, plane_stride*sizeof(int32_t));
+    memset(raw()+plane*plane_stride, 0, plane_stride*sizeof(P));
 }
 
-void frame_memory::zero_plane_content(int plane)
+template <typename P>
+void frame_memory<P>::zero_plane_content(int plane)
 {
     // !!! just the content.
-    memset(raw()+plane*plane_stride, 0, plane_stride*sizeof(int32_t));
+    memset(raw()+plane*plane_stride, 0, plane_stride*sizeof(P));
 }
 
+
+// for now, instantiate explit float and int32_t frames.
+template
+void frame_memory<int32_t>::print_start(int plane, char const *msg, int n, int prec) const;
+template
+void frame_memory<float>::print_start(int plane, char const *msg, int n, int prec) const;
+
+template
+void frame_memory<int32_t>::custom_pad_replicate_plane_in_place_i(int plane, int padlr, int padtb);
+template
+void frame_memory<float>::custom_pad_replicate_plane_in_place_i(int plane, int padlr, int padtb);
+
+template
+void frame_memory<int32_t>::custom_pad_zero_plane_in_place_i(int plane, int padlr, int padtb);
+template
+void frame_memory<float>::custom_pad_zero_plane_in_place_i(int plane, int padlr, int padtb);
+
+template
+void frame_memory<int32_t>::zero_pad(int plane, int pad);
+template
+void frame_memory<float>::zero_pad(int plane, int pad);
+
+template
+void frame_memory<int32_t>::zero_plane_content(int plane);
+template
+void frame_memory<float>::zero_plane_content(int plane);

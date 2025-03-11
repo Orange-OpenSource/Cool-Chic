@@ -14,9 +14,10 @@
 // N_HIDDEN (16 or 40)
 // N_OUT (3)
 // HIDDEN always RELU
+template <typename P>
 void SYN_NAME(int KS,
-              int32_t *kw7_40, int32_t *kb40, int32_t *kw40_3, int32_t *kb3,
-              int h_in, int w_in, int stride_in, int plane_stride_in, int N_IN, int N_HIDDEN, int32_t *in, int N_OUT, int32_t *out)
+              P *kw7_40, P *kb40, P *kw40_3, P *kb3,
+              int h_in, int w_in, int stride_in, int plane_stride_in, int N_IN, int N_HIDDEN, P *in, int N_OUT, P *out)
 {
     //printf("%s(ks=%d N_IN=%d N_HIDDEN=%d N_OUT=%d\n", xstr(SYN_NAME), KS, N_IN, N_HIDDEN, N_OUT);
 
@@ -46,16 +47,16 @@ void SYN_NAME(int KS,
         printf("%s: bad call, ks=%d must be 1\n", xstr(SYN_NAME), KS);
         exit(1);
     }
-    int32_t *src = in;
-    int32_t *dst = out;
-    int32_t elements_7[n_in]; // in
-    int32_t elements_40[n_hidden]; // hidden
+    P *src = in;
+    P *dst = out;
+    P elements_7[n_in]; // in
+    P elements_40[n_hidden]; // hidden
 
     for (int y = 0; y < h_in; y++, src += stride_in-w_in, dst += stride_in-w_in)
     for (int x = 0; x < w_in; x++, src++, dst++)
     {
-        int32_t *inputs = &elements_7[0];
-        int32_t *hidden = &elements_40[0];
+        P *inputs = &elements_7[0];
+        P *hidden = &elements_40[0];
 
         // load input.
         for (int i = 0; i < n_in; i++)
@@ -65,8 +66,8 @@ void SYN_NAME(int KS,
 
         // ONE HIDDEN LAYER
         {
-            int32_t *kw = kw7_40;
-            int32_t *kb = kb40;
+            P *kw = kw7_40;
+            P *kb = kb40;
 
             for (int i = 0; i < n_hidden; i++)
                 hidden[i] = kb[i];
@@ -75,7 +76,7 @@ void SYN_NAME(int KS,
             {
                 for (int i = 0; i < n_hidden; i++)
                 {
-                    hidden[i] += inputs[il]*kw[i];
+                    hidden[i] += inputs[il]*(kw[i]);
                 }
             }
 
@@ -85,28 +86,43 @@ void SYN_NAME(int KS,
                 if (hidden[i] < 0)
                     hidden[i] = 0;
                 else
-                    hidden[i] >>= SYN_MUL_PRECISION; // take multiplied sum to outputs.
+                {
+                    if constexpr(std::is_same<P, int32_t>::value)
+                        hidden[i] >>= SYN_MUL_PRECISION; // take multiplied sum to outputs.
+                }
             }
         }
 
         // FINAL 40 -> 3
-        int32_t *kw = kw40_3;
-        int32_t *kb = kb3;
+        P *kw = kw40_3;
+        P *kb = kb3;
         for (int ol = 0; ol < n_out; ol++, kw += n_hidden)
         {
-            int32_t sum = kb[ol];
+            P sum = kb[ol];
             for (int il = 0; il < n_hidden; il++)
-                sum += hidden[il]*kw[il];
+                sum += hidden[il]*(kw[il]);
             // no relu
-            // take multiplied sum to output.
-            if (sum < 0)
-                sum = -(-sum >> SYN_MUL_PRECISION);
-            else
-                sum >>= SYN_MUL_PRECISION;
+            if constexpr(std::is_same<P, int32_t>::value)
+            {
+                if (sum < 0)
+                    sum = -(-sum >> SYN_MUL_PRECISION);
+                else
+                    sum >>= SYN_MUL_PRECISION;
+            }
             dst[ol*plane_stride_in] = sum;
         }
     } // x, y
 }
+
+// instantiate int32_t and float
+template
+void SYN_NAME<int32_t>(int KS,
+                       int32_t *kw7_40, int32_t *kb40, int32_t *kw40_3, int32_t *kb3,
+                       int h_in, int w_in, int stride_in, int plane_stride_in, int N_IN, int N_HIDDEN, int32_t *in, int N_OUT, int32_t *out);
+template
+void SYN_NAME<float>(int KS,
+                     float *kw7_40, float *kb40, float *kw40_3, float *kb3,
+                     int h_in, int w_in, int stride_in, int plane_stride_in, int N_IN, int N_HIDDEN, float *in, int N_OUT, float *out);
 
 #undef tostr
 #undef xstr

@@ -47,6 +47,7 @@ public:
         m_blk_sig = new unsigned char[m_nby*m_nbx];
         delete[] m_blk_flat;
         m_blk_flat = new unsigned char[m_nby*m_nbx];
+        // int bits_start = m_layer_CABAC->bitsRead();
 
         memset(m_blk_sig, 1, m_nby*m_nbx*sizeof(m_blk_sig[0]));
         memset(m_blk_flat, 0, m_nby*m_nbx*sizeof(m_blk_flat[0]));
@@ -57,7 +58,7 @@ public:
             if (m_layer_CABAC->decodeBinEP() != 0)
             {
                 // signaled
-                //printf("sig:\n");
+                // printf("sig:\n");
                 if (m_hls_sig_blksize_updated)
                 {
                     // updated context: proba 0.5 is raw index 32
@@ -67,9 +68,9 @@ public:
                         for (int x = 0; x < m_nbx; x++)
                         {
                             m_blk_sig[idx++] = m_layer_CABAC->decodeBin(sigctx, true);
-                            //printf("%c", m_blk_sig[idx-1] ? 'X' : '.');
+                            // printf("%c", m_blk_sig[idx-1] ? 'X' : '.');
                         }
-                        //printf("\n");
+                        // printf("\n");
                     }
                 }
                 else
@@ -79,9 +80,9 @@ public:
                         for (int x = 0; x < m_nbx; x++)
                         {
                             m_blk_sig[idx++] = m_layer_CABAC->decodeBinEP();
-                            //printf("%c", m_blk_sig[idx-1] ? 'X' : '.');
+                            // printf("%c", m_blk_sig[idx-1] ? 'X' : '.');
                         }
-                        //printf("\n");
+                        // printf("\n");
                     }
                 }
             }
@@ -90,7 +91,7 @@ public:
             if (m_layer_CABAC->decodeBinEP() != 0)
             {
                 // signaled
-                //printf("flat:\n");
+                // printf("flat:\n");
                 if (m_hls_sig_blksize_updated)
                 {
                     // updated context: proba 0.5 is raw index 32
@@ -102,11 +103,11 @@ public:
                             if (m_blk_sig[idx])
                             {
                                 m_blk_flat[idx] = m_layer_CABAC->decodeBin(sigctx, true);
-                                //printf("%c", m_blk_sig[idx] ? 'X' : '.');
+                                // printf("%c", m_blk_flat[idx] ? 'X' : '.');
                             }
                             idx++;
                         }
-                        //printf("\n");
+                        // printf("\n");
                     }
                 }
                 else
@@ -118,15 +119,17 @@ public:
                             if (m_blk_sig[idx])
                             {
                                 m_blk_flat[idx] = m_layer_CABAC->decodeBinEP();
-                                //printf("%c", m_blk_sig[idx] ? 'X' : '.');
+                                // printf("%c", m_blk_flat[idx] ? 'X' : '.');
                             }
                             idx++;
                         }
-                        //printf("\n");
+                        // printf("\n");
                     }
                 }
             }
         }
+        // int bits_end = m_layer_CABAC->bitsRead();
+        // printf("sigflat header %d-%d=%d bits\n", bits_end, bits_start, bits_end-bits_start);
     };
 
     ~BACContext() { delete[] m_blk_sig; delete[] m_blk_flat; }

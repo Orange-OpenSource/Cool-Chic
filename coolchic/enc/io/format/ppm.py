@@ -15,7 +15,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from enc.io.format.data_type import POSSIBLE_BITDEPTH
+from enc.io.types import POSSIBLE_BITDEPTH
 
 
 def _skip_one_byte(data: bytearray) -> bytearray:
@@ -164,12 +164,14 @@ def write_ppm(
     """Save an image x into a PPM file.
 
     Args:
-        data: Image to be saved
-        bitdepth: Bitdepth, should be in
+        data (Tensor): Image to be saved
+        bitdepth (POSSIBLE_BITDEPTH): Bitdepth, should be in
             ``[8, 9, 10, 11, 12, 13, 14, 15, 16]``.
-        file_path: Where to save the PPM files
-        bitdepth: Bitdepth of the file. Defaults to 8.
-        norm: True to multiply the data by 2 ** bitdepth - 1. Defaults to True.
+        file_path (str): Where to save the PPM files
+        bitdepth (POSSIBLE_BITDEPTH, optional): Bitdepth of the file.
+            Defaults to 8.
+        norm (bool, optional): True to multiply the data by 2 ** bitdepth - 1.
+            Defaults to True.
     """
     # Remove all first dimensions of size 1
     c, h, w = data.size()[-3:]

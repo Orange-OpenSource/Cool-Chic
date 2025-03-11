@@ -22,7 +22,8 @@
 // POSSIBLE IN-PLACE -- output overwrites input, to minimise cpu cache stress with multi-layer approach.
 // ALWAYS IN-PLACE for SYN_KS == 1
 // stride_in and plane_stride_in are assumed the same for out.
-void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_in, int plane_stride_in, int residue_origin_offset, int N_IN, int32_t *in, int N_OUT, int32_t *out, int residue, int relu)
+template <typename P>
+void SYN_NAME(int KS, P *kw, P *kb, int h_in, int w_in, int stride_in, int plane_stride_in, int residue_origin_offset, int N_IN, P *in, int N_OUT, P *out, int residue, int relu)
 {
     //printf("%s(ks=%d N_IN=%d N_OUT=%d, residue=%d, relu=%d\n", xstr(SYN_NAME), KS, N_IN, N_OUT, residue, relu);
     int const kstride = 1;
@@ -41,27 +42,12 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
 #else
     int const n_out = N_OUT;
 #endif
-#ifdef SYN_RES
-#if SYN_RES == 0
-    if (residue)
-    {
-        printf("%s( residue supplied but not expected)\n", xstr(SYN_NAME));
-        exit(1);
-    }
-#else
-    if (!residue)
-    {
-        printf("%s( residue not supplied but expected)\n", xstr(SYN_NAME));
-        exit(1);
-    }
-#endif
-#endif
 
-    int32_t *in_layer[std::max(n_in, n_out)];
+    P *in_layer[std::max(n_in, n_out)];
     in_layer[0] = in;
     for (int i = 1; i < std::max(n_in, n_out); i++)
         in_layer[i] = in_layer[i-1]+plane_stride_in;
-    int32_t *out_layer[N_OUT];
+    P *out_layer[N_OUT];
     out_layer[0] = out;
     for (int i = 1; i < N_OUT; i++)
         out_layer[i] = out_layer[i-1]+plane_stride_in;
@@ -99,36 +85,32 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
             {
                 __m256i out_avx2[atatime];
                 // initialize with bias.
-#ifdef SYN_RES
-#if SYN_RES == 0
                 for (int ol = 0; ol < atatime; ol++)
                 {
-                    out_avx2[ol] = _mm256_set1_epi32(kb[olbase+ol]);
-                }
-#else
-                for (int ol = 0; ol < atatime; ol++)
-                {
-                    out_avx2[ol] = _mm256_set1_epi32(kb[olbase+ol]);
-                    __m256i in = _mm256_loadu_si256((const __m256i_u*)&in_layer[olbase+ol][offso+residue_origin_offset]);
-                    in = _mm256_slli_epi32(in, SYN_MUL_PRECISION);
-                    out_avx2[ol] = _mm256_add_epi32(out_avx2[ol], in);
-                }
-#endif
-#else
-                for (int ol = 0; ol < atatime; ol++)
-                {
-                    out_avx2[ol] = _mm256_set1_epi32(kb[olbase+ol]);
+                    if constexpr(std::is_same<P, int32_t>::value)
+                        out_avx2[ol] = _mm256_set1_epi32(kb[olbase+ol]);
+                    else
+                        out_avx2[ol] = (__m256i)_mm256_set1_ps(kb[olbase+ol]);
                 }
                 if (residue)
                 {
                     for (int ol = 0; ol < atatime; ol++)
                     {
-                        __m256i in = _mm256_loadu_si256((const __m256i_u*)&in_layer[olbase+ol][offso+residue_origin_offset]);
-                        in = _mm256_slli_epi32(in, SYN_MUL_PRECISION);
-                        out_avx2[ol] = _mm256_add_epi32(out_avx2[ol], in);
+                        if constexpr(std::is_same<P, int32_t>::value)
+                        {
+                            out_avx2[ol] = _mm256_set1_epi32(kb[olbase+ol]);
+                            __m256i in = _mm256_loadu_si256((const __m256i_u*)&in_layer[olbase+ol][offso+residue_origin_offset]);
+                            in = _mm256_slli_epi32(in, SYN_MUL_PRECISION);
+                            out_avx2[ol] = _mm256_add_epi32(out_avx2[ol], in);
+                        }
+                        else
+                        {
+                            out_avx2[ol] = (__m256i)_mm256_set1_ps(kb[olbase+ol]);
+                            __m256i in = _mm256_loadu_si256((const __m256i_u*)&in_layer[olbase+ol][offso+residue_origin_offset]);
+                            out_avx2[ol] = (__m256i)_mm256_add_ps((__m256)out_avx2[ol], (__m256)in);
+                        }
                     }
                 }
-#endif
                 for (int il = 0; il < n_in; il++)
                 {
                     int offsi_block = offsi_line;
@@ -141,42 +123,70 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
                             int kkoffs = koffs;
                             for (int ol = 0; ol < atatime; ol++, kkoffs += n_in*ks2)
                             {
-                                __m256i kk = _mm256_set1_epi32(kw[kkoffs]);
-                                __m256i mul = _mm256_mullo_epi32(in, kk);
-                                out_avx2[ol] = _mm256_add_epi32(out_avx2[ol], mul);
+                                if constexpr(std::is_same<P, int32_t>::value)
+                                {
+                                    __m256i kk = _mm256_set1_epi32(kw[kkoffs]);
+                                    __m256i mul = _mm256_mullo_epi32(in, kk);
+                                    out_avx2[ol] = _mm256_add_epi32(out_avx2[ol], mul);
+                                }
+                                else
+                                {
+                                    __m256 kk = _mm256_set1_ps(kw[kkoffs]);
+                                    __m256 mul = _mm256_mul_ps((__m256)in, kk);
+                                    out_avx2[ol] = (__m256i)_mm256_add_ps((__m256)out_avx2[ol], mul);
+                                }
                             }
                         }
                     }
                 }
                 int n_outs = (x_blk < xlim_blk-1) ? 8 : xlast_blk_size;
                 int32_t store[8];
-                if (relu)
+                if constexpr(std::is_same<P, int32_t>::value)
                 {
-                    // -ves to zero, >> for rest.
-                    for (int ol = 0; ol < atatime; ol++)
+                    if (relu)
                     {
-                        out_avx2[ol] = _mm256_blendv_epi8(z, out_avx2[ol], _mm256_cmpgt_epi32(out_avx2[ol], z));
-                        out_avx2[ol] = _mm256_srai_epi32(out_avx2[ol], SYN_MUL_PRECISION);
-                        if (n_outs == 8)
+                        // -ves to zero, >> for rest.
+                        for (int ol = 0; ol < atatime; ol++)
                         {
-                            _mm256_storeu_si256((__m256i_u*)&out_layer[olbase+ol][offso], out_avx2[ol]);
+                            out_avx2[ol] = _mm256_blendv_epi8(z, out_avx2[ol], _mm256_cmpgt_epi32(out_avx2[ol], z));
+                            out_avx2[ol] = _mm256_srai_epi32(out_avx2[ol], SYN_MUL_PRECISION);
+                            if (n_outs == 8)
+                            {
+                                _mm256_storeu_si256((__m256i_u*)&out_layer[olbase+ol][offso], out_avx2[ol]);
+                            }
+                            else
+                            {
+                                _mm256_storeu_si256((__m256i_u*)&store[0], out_avx2[ol]);
+                                memcpy(&out_layer[olbase+ol][offso], &store[0], n_outs*sizeof(store[0]));
+                            }
                         }
-                        else
+                    }
+                    else
+                    {
+                        // need different treatment for -ve and +ve.
+                        for (int ol = 0; ol < atatime; ol++)
                         {
-                            _mm256_storeu_si256((__m256i_u*)&store[0], out_avx2[ol]);
-                            memcpy(&out_layer[olbase+ol][offso], &store[0], n_outs*sizeof(store[0]));
+                            __m256i sr  = _mm256_srai_epi32(out_avx2[ol], SYN_MUL_PRECISION);
+                            __m256i negsrneg = _mm256_sub_epi32(z, _mm256_srai_epi32(_mm256_sub_epi32(z, out_avx2[ol]), SYN_MUL_PRECISION));
+                            out_avx2[ol] = _mm256_blendv_epi8(negsrneg, sr, _mm256_cmpgt_epi32(out_avx2[ol], z));
+                            if (n_outs == 8)
+                            {
+                                _mm256_storeu_si256((__m256i_u*)&out_layer[olbase+ol][offso], out_avx2[ol]);
+                            }
+                            else
+                            {
+                                _mm256_storeu_si256((__m256i_u*)&store[0], out_avx2[ol]);
+                                memcpy(&out_layer[olbase+ol][offso], &store[0], n_outs*sizeof(store[0]));
+                            }
                         }
-
                     }
                 }
                 else
                 {
-                    // need different treatment for -ve and +ve.
                     for (int ol = 0; ol < atatime; ol++)
                     {
-                        __m256i sr  = _mm256_srai_epi32(out_avx2[ol], SYN_MUL_PRECISION);
-                        __m256i negsrneg = _mm256_sub_epi32(z, _mm256_srai_epi32(_mm256_sub_epi32(z, out_avx2[ol]), SYN_MUL_PRECISION));
-                        out_avx2[ol] = _mm256_blendv_epi8(negsrneg, sr, _mm256_cmpgt_epi32(out_avx2[ol], z));
+                        if (relu)
+                            out_avx2[ol] = _mm256_blendv_epi8(z, out_avx2[ol], (__m256i) _mm256_cmp_ps((__m256)out_avx2[ol], (__m256)z, _CMP_GT_OS));
                         if (n_outs == 8)
                         {
                             _mm256_storeu_si256((__m256i_u*)&out_layer[olbase+ol][offso], out_avx2[ol]);
@@ -188,11 +198,18 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
                         }
                     }
                 }
+
             } // olbase
             offso += 8;
         } // x_blk
     } // y
 }
+
+// instantiate int32_t and float
+template
+void SYN_NAME<int32_t>(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_in, int plane_stride_in, int residue_origin_offset, int N_IN, int32_t *in, int N_OUT, int32_t *out, int residue, int relu);
+template
+void SYN_NAME<float>(int KS, float *kw, float *kb, int h_in, int w_in, int stride_in, int plane_stride_in, int residue_origin_offset, int N_IN, float *in, int N_OUT, float *out, int residue, int relu);
 
 #undef tostr
 #undef xstr
@@ -202,4 +219,3 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
 #undef SYN_N_IN
 #undef SYN_N_OUT
 #undef SYN_ATATIME
-#undef SYN_RES

@@ -11,7 +11,9 @@ import typing
 from dataclasses import dataclass, field, fields
 from typing import Any, Dict, List, Optional, OrderedDict, Tuple, TypedDict
 
-from enc.visu.console import pretty_string_nn, pretty_string_ups
+from enc.component.types import DescriptorCoolChic, DescriptorNN
+from enc.nnquant.expgolomb import measure_expgolomb_rate
+from enc.utils.termprint import pretty_string_nn, pretty_string_ups
 from torch import nn, Tensor
 
 import torch
@@ -30,14 +32,8 @@ from enc.component.core.quantizer import (
 )
 from enc.component.core.synthesis import Synthesis
 from enc.component.core.upsampling import Upsampling
-from enc.utils.misc import (
-    MAX_ARM_MASK_SIZE,
-    POSSIBLE_DEVICE,
-    DescriptorCoolChic,
-    DescriptorNN,
-    measure_expgolomb_rate,
-)
 
+from enc.utils.device import POSSIBLE_DEVICE
 
 """A cool-chic encoder is composed of:
     - A set of 2d hierarchical latent grids
@@ -50,9 +46,6 @@ one or more features by representing it as a set of 2d entropy coding-friendly
 latent grids. After upsampling, these latent grids allows to synthesize the
 desired signal.
 """
-
-"""Dataclass to store the parameters of CoolChicEncoder for one frame."""
-
 
 @dataclass
 class CoolChicEncoderParameter:
@@ -85,6 +78,7 @@ class CoolChicEncoderParameter:
             quantization. See the documentation of Cool-chic forward pass.
             Defaults to 16.
     """
+
     layers_synthesis: List[str]
     n_ft_per_res: List[int]
     dim_arm: int = 24
@@ -112,13 +106,24 @@ class CoolChicEncoderParameter:
         """
         self.img_size = img_size
 
-    def pretty_string(self) -> str:
-        """Return a pretty string formatting the data within the class"""
+    def pretty_string(self, coolchic_name: str = "") -> str:
+        """Return a pretty string presenting the CoolChicEncoderParameter.
+
+        Args:
+            coolchic_name (str): Optional name added to the title. Only for
+                display purpose. Defaults to "".
+
+        Returns:
+            str: Pretty string ready to be printed.
+        """
         ATTRIBUTE_WIDTH = 25
         VALUE_WIDTH = 80
 
-        s = "CoolChicEncoderParameter value:\n"
-        s += "-------------------------------\n"
+        s = ""
+        # title = f"CoolChicEncoderParameter {coolchic_name}:"
+
+        # s = f"{title}\n"
+        # s += "-" * len(title) + "\n"
         for k in fields(self):
             s += f"{k.name:<{ATTRIBUTE_WIDTH}}: {str(getattr(self, k.name)):<{VALUE_WIDTH}}\n"
         s += "\n"
@@ -225,7 +230,7 @@ class CoolChicEncoder(nn.Module):
         #   0 0 0 0 0 0 0 0 0
 
         # No more than 40 context pixels i.e. a 9x9 mask size (see example above)
-        max_mask_size = MAX_ARM_MASK_SIZE
+        max_mask_size = 9
         max_context_pixel = int((max_mask_size**2 - 1) / 2)
         assert self.param.dim_arm <= max_context_pixel, (
             f"You can not have more context pixels "
@@ -285,8 +290,8 @@ class CoolChicEncoder(nn.Module):
         self,
         quantizer_noise_type: POSSIBLE_QUANTIZATION_NOISE_TYPE = "kumaraswamy",
         quantizer_type: POSSIBLE_QUANTIZER_TYPE = "softround",
-        soft_round_temperature: Optional[float] = 0.3,
-        noise_parameter: Optional[float] = 1.0,
+        soft_round_temperature: Optional[Tensor] = torch.tensor(0.3),
+        noise_parameter: Optional[Tensor] = torch.tensor(1.0),
         AC_MAX_VAL: int = -1,
         flag_additional_outputs: bool = False,
     ) -> CoolChicEncoderOutput:
@@ -390,7 +395,9 @@ class CoolChicEncoder(nn.Module):
         # Get all the context as a single 2D vector of size [B, context size]
         flat_context = torch.cat(
             [
-                _get_neighbor(spatial_latent_i, self.mask_size, self.non_zero_pixel_ctx_index)
+                _get_neighbor(
+                    spatial_latent_i, self.mask_size, self.non_zero_pixel_ctx_index
+                )
                 for spatial_latent_i in decoder_side_latent
             ],
             dim=0,
@@ -399,7 +406,7 @@ class CoolChicEncoder(nn.Module):
         # Get all the B latent variables as a single one dimensional vector
         flat_latent = torch.cat(
             [spatial_latent_i.view(-1) for spatial_latent_i in decoder_side_latent],
-            dim=0
+            dim=0,
         )
 
         # Feed the spatial context to the arm MLP and get mu and scale
@@ -415,6 +422,8 @@ class CoolChicEncoder(nn.Module):
 
         # Upsampling and synthesis to get the output
         synthesis_output = self.synthesis(self.upsampling(decoder_side_latent))
+
+        synthesis_output = synthesis_output
 
         additional_data = {}
         if flag_additional_outputs:
@@ -492,7 +501,22 @@ class CoolChicEncoder(nn.Module):
         Args:
             param (OrderedDict[str, Tensor]): Parameters to be set.
         """
-        self.load_state_dict(param)
+        # avoid:
+        # Missing key(s) in state_dict: "synthesis.layers.0.weight", "synthesis.layers.0.bias", "synthesis.layers.2.weight", "synthesis.layers.2.bias", "synthesis.layers.4.weight", "synthesis.layers.4.bias", "synthesis.layers.6.weight", "synthesis.layers.6.bias".
+        # Unexpected key(s) in state_dict: "synthesis.branch_blender.parametrizations.weight.original", "synthesis.synth_branches.0.0.weight", "synthesis.synth_branches.0.0.bias", "synthesis.synth_branches.0.2.weight", "synthesis.synth_branches.0.2.bias", "synthesis.synth_branches.0.4.weight", "synthesis.synth_branches.0.4.bias", "synthesis.synth_branches.0.6.weight", "synthesis.synth_branches.0.6.bias".
+        # We only have one branch, remove the branch indicators.
+        new = {}
+        for k, v in param.items():
+            if "branch_blender" in k:
+                continue
+            if "synth_branches" in k:
+                newk = k.replace("synth_branches.0.", "layers.")
+                print(f'{k}->{newk}')
+                new[newk] = v
+                continue
+            new[k] = v
+
+        self.load_state_dict(new)
 
     def initialize_latent_grids(self) -> None:
         """Initialize the latent grids. The different tensors composing
@@ -581,8 +605,6 @@ class CoolChicEncoder(nn.Module):
             k: {"weight": None, "bias": None} for k in self.modules_to_send
         }
 
-
-
     # ------- Get flops, neural network rates and quantization step
     def get_flops(self) -> None:
         """Compute the number of MAC & parameters for the model.
@@ -625,18 +647,21 @@ class CoolChicEncoder(nn.Module):
 
         self = self.train(mode=True)
 
-    def get_network_rate(self) -> DescriptorCoolChic:
+    def get_network_rate(self) -> Tuple[DescriptorCoolChic, int]:
         """Return the rate (in bits) associated to the parameters
         (weights and biases) of the different modules
 
         Returns:
-            DescriptorCoolChic: The rate (in bits) associated with the weights
-            and biases of each module
+            Tuple[DescriptorCoolChic, int]: The rate (in bits) associated with
+            the weights and biases of each module. Also return the total rate
+            in bits.
         """
         rate_per_module: DescriptorCoolChic = {
             module_name: {"weight": 0.0, "bias": 0.0}
             for module_name in self.modules_to_send
         }
+
+        total_rate = 0.
 
         for module_name in self.modules_to_send:
             cur_module = getattr(self, module_name)
@@ -646,7 +671,9 @@ class CoolChicEncoder(nn.Module):
                 self.nn_expgol_cnt.get(module_name),
             )
 
-        return rate_per_module
+            total_rate += sum(rate_per_module[module_name].values())
+
+        return rate_per_module, total_rate
 
     def get_network_quantization_step(self) -> DescriptorCoolChic:
         """Return the quantization step associated to the parameters (weights
@@ -661,15 +688,14 @@ class CoolChicEncoder(nn.Module):
 
     def get_network_expgol_count(self) -> DescriptorCoolChic:
         """Return the Exp-Golomb count parameter associated to the parameters
-        (weights and biases) of the different modules. Those quantization can be
-        ``None`` if the model has not yet been quantized.
+        (weights and biases) of the different modules. Those exp-golomb param
+        can be ``None`` if the model has not yet been quantized.
 
         Returns:
             DescriptorCoolChic: The Exp-Golomb count parameter associated
             with the weights and biases of each module.
         """
         return self.nn_expgol_cnt
-
 
     def str_complexity(self) -> str:
         """Return a string describing the number of MAC (**not mac per pixel**) and the
@@ -783,7 +809,7 @@ class CoolChicEncoder(nn.Module):
             return long_description
         else:
             short_description = (
-                f"\nCool-chic decoding complexity: {total_mac_per_pix:.0f} MAC / pixel\n"
+                # f"\nCool-chic decoding complexity: {total_mac_per_pix:.0f} MAC / pixel\n"
                 f"   - {'ARM':<10} {arm_complexity:5.0f} MAC / pixel ; {arm_share_complexity:4.1f} % of the complexity\n"
                 f"   - {'Upsampling':<10} {ups_complexity:5.0f} MAC / pixel ; {ups_share_complexity:4.1f} % of the complexity\n"
                 f"   - {'Synthesis':<10} {syn_complexity:5.0f} MAC / pixel ; {syn_share_complexity:4.1f} % of the complexity\n"
