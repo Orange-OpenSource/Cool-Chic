@@ -8,29 +8,23 @@
 
 
 import os
-import subprocess
 import sys
 
 import configargparse
 from enc.component.coolchic import CoolChicEncoderParameter
+from enc.component.frame import load_frame_encoder
 from enc.component.video import (
     FrameEncoderManager,
-    VideoEncoder,
-    load_video_encoder,
+    _get_frame_path_prefix,
+    encode_one_frame,
 )
 from enc.utils.codingstructure import CodingStructure
-from enc.utils.misc import TrainingExitCode, get_best_device
 from enc.utils.parsecli import (
     get_coding_structure_from_args,
     get_coolchic_param_from_args,
     get_manager_from_args,
 )
-
-"""
-Use this file to train i.e. encode a GOP i.e. something which starts with one
-intra frame and is then followed by <intra_period> inter frames. Note that an
-image is simply a GOP of size 1 with no inter frames.
-"""
+import torch
 
 if __name__ == "__main__":
     # =========================== Parse arguments =========================== #
@@ -51,7 +45,7 @@ if __name__ == "__main__":
     parser.add(
         "-i",
         "--input",
-        help="Path of the input image. Either .png (RGB444) or .yuv (YUV420)",
+        help="Path of the input image. Either .png or .yuv",
         type=str,
     )
     parser.add(
@@ -71,46 +65,97 @@ if __name__ == "__main__":
         help="Exit and save the encoding after this duration. Use -1 to only exit at the end.",
     )
 
-    parser.add_argument("--print_detailed_archi", action="store_true", help="Print detailed NN architecture")
-    # -------- Configuration files
-    parser.add("--enc_cfg", is_config_file=True, help="Encoder configuration file")
+    parser.add_argument(
+        "--print_detailed_archi",
+        action="store_true",
+        help="Print detailed NN architecture",
+    )
+    parser.add_argument(
+        "--print_detailed_struct",
+        action="store_true",
+        help="Print detailed Coding structure",
+    )
 
-    parser.add("--dec_cfg", is_config_file=True, help="Decoder configuration file")
+    parser.add(
+        "--intra_pos",
+        help="Display index of the intra frames. "
+        "Format is 0,4,7 if you want the frame 0, 4 and 7 to be intra frames. "
+        "-1 can be used to denote the last frame, -2 the 2nd to last etc. "
+        "x-y is a range from x (included) to y (included). This does not work "
+        "with the negative indexing. "
+        "0,4-7,-2 ==> Intra for the frame 0, 4, 5, 6, 7 and the 2nd to last."
+        "Frame 0 must be an intra frame.",
+        type=str,
+        default="0",
+    )
+    parser.add(
+        "--p_pos",
+        help="Display index of the P frames. Same format than --intra_pos ",
+        type=str,
+        default="",
+    )
+    parser.add(
+        "--n_frames",
+        help="How many frames to code",
+        type=int,
+        default=1,
+    )
+    parser.add(
+        "--frame_offset",
+        help="Shift the position of the 0-th frame of the video. "
+        "If --frame_offset=15 skip the first 15 frames of the video.",
+        type=int,
+        default=0,
+    )
+
+    parser.add(
+        "--coding_idx",
+        help="Index (in coding order) of the frame to be coded. 0 is first",
+        type=int,
+        default=0,
+    )
+
+    # -------- Configuration files
+    parser.add("--enc_cfg", is_config_file=True, help="Encoder config file")
+    parser.add(
+        "--dec_cfg_residue",
+        is_config_file=True,
+        help="Residue (or intra) decoder config file",
+    )
+    parser.add(
+        "--dec_cfg_motion", is_config_file=True, help="Motion decoded config file"
+    )
 
     # -------- These arguments are in the configuration files
 
     # ==== Encoder-side arguments
-    parser.add(
-        "--intra_period",
-        help="Number of inter frames in the GOP. 0 for image coding",
-        type=int,
-        default=0,
-    )
-    parser.add(
-        "--p_period",
-        help="Distance between P-frames. 0 for image coding",
-        type=int,
-        default=0,
-    )
 
     parser.add("--start_lr", help="Initial learning rate", type=float, default=1e-2)
     parser.add(
         "--n_itr",
-        help="Maximum number of iterations per phase",
+        help="Number of iterations for the main training stage. Use this to "
+        "change the duration of the encoding.",
         type=int,
         default=int(1e4),
     )
+    parser.add(
+        "--n_itr_pretrain_motion",
+        help="Number of iterations for the motion pre-training stage.",
+        type=int,
+        default=int(1e3),
+    )
+
     parser.add("--n_train_loops", help="Number of training loops", type=int, default=1)
     parser.add(
-        "--recipe",
+        "--preset",
         help='Recipe type. Either "c3x" or "debug".',
         type=str,
         default="c3x",
     )
 
-    # ==== Encoder-side arguments
+    # ==== Decoder-side arguments
     parser.add(
-        "--layers_synthesis",
+        "--layers_synthesis_residue",
         type=str,
         default="48-1-linear-relu,X-1-linear-none,X-3-residual-relu,X-3-residual-none",
         help="Syntax example: "
@@ -123,7 +168,8 @@ if __name__ == "__main__":
         "    <output_dim>-<kernel_size>-<type>-<non_linearity>. "
         " "
         "<output_dim> is the number of output features. If set to X, this is replaced by the "
-        "number of required output features i.e. 3 for a RGB or YUV frame. "
+        "number of required output features i.e. 3 for a RGB or YUV frame or 4 for a P-frame "
+        "residue + alpha. "
         " "
         "<kernel_size> is the spatial dimension of the kernel. Use 1 to mimic an MLP. "
         " "
@@ -131,32 +177,74 @@ if __name__ == "__main__":
         "with a residual connexion block i.e. layer(x) = x + conv(x). "
         " "
         "<non_linearity> Can be 'none' for no non-linearity, 'relu' for a ReLU "
-        "non-linearity. ",
+        "non-linearity. "
+        " Parameterize the residue decoder.",
+    )
+    parser.add(
+        "--layers_synthesis_motion",
+        type=str,
+        default="9-1-linear-relu,X-1-linear-none,X-3-residual-none",
+        help="Identical to --layers_synthesis_residue but for the motion decoder.",
     )
 
     parser.add(
-        "--arm",
+        "--arm_residue",
         type=str,
         default="16,2",
-        help="<arm_context_and_layer_dimension>,<number_of_hidden_layers>"
-        "First number indicates both the context size **AND** the hidden layer dimension."
-        "Second number indicates the number of hidden layer(s). 0 gives a linear ARM module.",
+        help="<arm_context_and_layer_dimension>,<number_of_hidden_layers> "
+        "First number indicates both the context size **AND** the hidden layer dimension. "
+        "Second number indicates the number of hidden layer(s). 0 gives a linear ARM module. "
+        " Parameterize the residue decoder.",
+    )
+    parser.add(
+        "--arm_motion",
+        type=str,
+        default="8,1",
+        help="Identical to --arm_residue but for the motion decoder.",
     )
 
     parser.add(
-        "--ups_k_size",
+        "--n_ft_per_res_residue",
+        type=str,
+        default="1,1,1,1,1,1,1",
+        help="Number of feature for each latent resolution. e.g. "
+        " --n_ft_per_res_residue=1,1,1,1,1,1,1 "
+        " for 7 latent grids with variable resolutions. "
+        " Parameterize the residue decoder.",
+    )
+    parser.add(
+        "--n_ft_per_res_motion",
+        type=str,
+        default="1,1,1,1,1,1,1",
+        help="Identical to --n_ft_per_res_residue but for the motion decoder.",
+    )
+
+    parser.add(
+        "--ups_k_size_residue",
         type=int,
         default=8,
         help="Upsampling kernel size for the transposed convolutions. "
-        "Must be even and >= 4.",
+        "Must be even and >= 4. Parameterize the residue decoder.",
+    )
+    parser.add(
+        "--ups_k_size_motion",
+        type=int,
+        default=8,
+        help="Identical to --ups_k_size_residue but for the motion decoder.",
     )
 
     parser.add(
-        "--ups_preconcat_k_size",
+        "--ups_preconcat_k_size_residue",
         type=int,
         default=7,
         help="Upsampling kernel size for the pre-concatenation convolutions. "
-        "Must be odd.",
+        "Must be odd. Parameterize the residue decoder.",
+    )
+    parser.add(
+        "--ups_preconcat_k_size_motion",
+        type=int,
+        default=7,
+        help="Identical to --ups_preconcat_k_size_residue but for the motion decoder.",
     )
 
     parser.add(
@@ -172,20 +260,28 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print(args)
     print("----------")
-    print(
-        parser.format_values()
-    )  # useful for logging where different settings came from
+    # useful for logging where different settings came from
+    print(parser.format_values())
     # =========================== Parse arguments =========================== #
 
     # =========================== Parse arguments =========================== #
-    workdir = f'{args.workdir.rstrip("/")}/'
+    os.chdir(args.workdir)
 
-    path_video_encoder = f"{workdir}video_encoder.pt"
-    if os.path.exists(path_video_encoder):
-        video_encoder = load_video_encoder(path_video_encoder)
+    # This is not stored inside a FrameEncoder so we need to reconstruct it
+    coding_structure = CodingStructure(**get_coding_structure_from_args(args))
+
+    # Get the frame to code
+    frame = coding_structure.get_frame_from_coding_order(args.coding_idx)
+
+    # Check if we have some 000X-frame_encoder.pt somewhere
+    frame_save_prefix = _get_frame_path_prefix(frame.display_order)
+    path_frame_encoder = f"{frame_save_prefix}frame_encoder.pt"
+    if os.path.exists(path_frame_encoder):
+        frame_encoder, frame_encoder_manager = load_frame_encoder(path_frame_encoder)
+        coolchic_enc_param = frame_encoder.coolchic_enc_param
 
     else:
-        print(
+        start_print = (
             "\n\n"
             "*----------------------------------------------------------------------------------------------------------*\n"
             "|                                                                                                          |\n"
@@ -202,14 +298,13 @@ if __name__ == "__main__":
             '|    `"Y8888888 P"Y8888P"    P"Y8888P"    8P\'"Y88                  P""Y8888PP88P     `Y88P""Y8P""Y8888PP   |\n'
             "|                                                                                                          |\n"
             "|                                                                                                          |\n"
-            "| version 3.4.1, Jan. 2025                                                              © 2023-2025 Orange |\n"
+            "| version 4.0.0, March 2025                                                             © 2023-2025 Orange |\n"
             "*----------------------------------------------------------------------------------------------------------*\n"
         )
-
-        subprocess.call(f"mkdir -p {workdir}", shell=True)
+        print(start_print)
 
         # Dump raw parameters into a text file to keep track
-        with open(f"{workdir}param.txt", "w") as f_out:
+        with open(f"{frame_save_prefix}param.txt", "w") as f_out:
             f_out.write(str(args))
             f_out.write("\n")
             f_out.write("----------\n")
@@ -217,38 +312,60 @@ if __name__ == "__main__":
                 parser.format_values()
             )  # useful for logging where different settings came from
 
-        # ----- Parse arguments & construct video encoder
-        coding_structure = CodingStructure(**get_coding_structure_from_args(args))
-        coolchic_encoder_parameter = CoolChicEncoderParameter(
-            **get_coolchic_param_from_args(args)
-        )
+        # Successively parse the Cool-chic architectures for the residue
+        # and the motion Cool-chic
+        coolchic_enc_param = {
+            cc_name: CoolChicEncoderParameter(
+                **get_coolchic_param_from_args(args, cc_name)
+            )
+            for cc_name in ["residue", "motion"]
+        }
         frame_encoder_manager = FrameEncoderManager(**get_manager_from_args(args))
 
-        video_encoder = VideoEncoder(
-            coding_structure=coding_structure,
-            shared_coolchic_parameter=coolchic_encoder_parameter,
-            shared_frame_encoder_manager=frame_encoder_manager,
-        )
-
     # Automatic device detection
-    device = get_best_device()
-    print(f'{"Device":<20}: {device}')
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    print(f"{'Device':<26}: {device}")
 
-    print(f"\n{video_encoder.coding_structure.pretty_string()}\n")
-    exit_code = video_encoder.encode(
-        path_original_sequence=args.input,
-        device=device,
-        workdir=workdir,
-        job_duration_min=args.job_duration_min,
-        print_detailed_archi=args.print_detailed_archi
+    print(
+        f"\n{coding_structure.pretty_string(print_detailed_struct=args.print_detailed_struct)}\n"
     )
 
-    video_encoder_savepath = f"{workdir}video_encoder.pt"
-    video_encoder.save(video_encoder_savepath)
+    exit_code = encode_one_frame(
+        video_path=args.input,
+        coding_structure=coding_structure,
+        coolchic_enc_param=coolchic_enc_param,
+        frame_encoder_manager=frame_encoder_manager,
+        coding_index=args.coding_idx,
+        job_duration_min=args.job_duration_min,
+        device=device,
+        print_detailed_archi=args.print_detailed_archi,
+    )
 
     # Bitstream
-    if args.output != "" and exit_code == TrainingExitCode.END:
-        from enc.bitstream.encode import encode_video
-        encode_video(video_encoder, args.output, hls_sig_blksize=16)
+    if args.output != "":
+        from enc.bitstream.encode import encode_frame
+        frame_encoder_savepath = f"{_get_frame_path_prefix(frame.display_order)}frame_encoder.pt"
+
+        frame_encoder, _ = load_frame_encoder(frame_encoder_savepath)
+
+        if frame.frame_type == "I":
+            print("ref_frame_encoder is set to None for I frames")
+            ref_frame_encoder = None
+        else:
+            # For non-intra frame, we use a reference frame encoder to prevent
+            # sending the architecture of the NNs for the current frames if they
+            # are identical to the previous ones.
+            prev_display_idx = coding_structure.get_frame_from_coding_order(args.coding_idx - 1).display_order
+            ref_frame_encoder_path = f"{_get_frame_path_prefix(prev_display_idx)}frame_encoder.pt"
+            print("ref_frame_encoder_path", ref_frame_encoder_path)
+            ref_frame_encoder, _ = load_frame_encoder(ref_frame_encoder_path)
+
+        encode_frame(
+            frame_encoder,
+            ref_frame_encoder,
+            args.output,
+            frame.display_order,
+            hls_sig_blksize=16
+        )
 
     sys.exit(exit_code.value)

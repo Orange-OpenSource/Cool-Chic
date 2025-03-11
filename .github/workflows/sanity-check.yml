@@ -1,0 +1,16 @@
+name: sanity_check
+
+on: [push]
+
+jobs:
+
+  sanity-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./
+    steps:
+      - name: Install Cool-chic
+        run: pip install -e .
+      - name: Run sanity check
+        run: python3 -m test.sanity_check

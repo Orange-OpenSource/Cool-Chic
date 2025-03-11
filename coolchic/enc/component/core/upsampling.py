@@ -194,6 +194,10 @@ class UpsamplingSeparableSymmetricConv2d(nn.Module):
         weight = self.weight.view(1, -1)
         padding = k // 2
 
+        # If zero channel, there is no data --> nothing to do!
+        if x.size()[1] == 0:
+            return x
+
         # Train using non-separable (more stable)
         if self.training:
             # Kronecker product of (1 k) & (k 1) --> (k, k).

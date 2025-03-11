@@ -8,6 +8,8 @@ frame.
 .. toctree::
 
    component <component/index>
-   training <training/index>
    io <io/index>
+   nnquant <nnquant/index>
+   training <training/index>
+   utils <utils/index>
 

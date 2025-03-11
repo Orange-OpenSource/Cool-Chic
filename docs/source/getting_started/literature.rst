@@ -10,6 +10,16 @@ Used in this repo
 This repository is based on several papers successively enhancing Cool-chic. Check-out the `release history <https://github.com/Orange-OpenSource/Cool-Chic/releases>`_ to see previous versions of Cool-chic.
 
 
+2025
+****
+
+* January: `Improved Encoding for Overfitted Video Codecs, Leguay et al <https://arxiv.org/abs/2501.16976>`_
+
+  * Add RAFT-guided motion training and joint rate-distortion optimization. Corresponds to Cool-chic 4.0
+
+  * ``git clone https://github.com/Orange-OpenSource/Cool-Chic.git``
+
+
 2024
 ****
 
@@ -17,7 +27,7 @@ This repository is based on several papers successively enhancing Cool-chic. Che
 
   * Replace the upsampling with separable and symmetrical filters for adaptive, lighter and more efficient latent upsampling. Corresponds to Cool-chic 3.4
 
-  * ``git clone https://github.com/Orange-OpenSource/Cool-Chic.git``
+  * ``git clone --branch 3.4.1 https://github.com/Orange-OpenSource/Cool-Chic.git``
 
 
 * May: `Overfitted image coding at reduced complexity, Blard et al <https://arxiv.org/abs/2403.11651>`_
@@ -63,6 +73,13 @@ Other papers
 
 Some other papers have enhanced or adapted Cool-chic to particular use-cases but
 have not (yet?) been integrated  in this repository.
+
+2025
+****
+
+  * February: `Compact Latent Representation for Image Compression (CLRIC), Ameen et al. <https://arxiv.org/abs/2412.00505>`_
+
+  * Use Cool-chic to compress the feature space of a diffusion model, easily transforming a diffusion model into an image codec.
 
 2024
 ****

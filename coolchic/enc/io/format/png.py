@@ -10,9 +10,9 @@
 import os
 from typing import Tuple
 
-from einops import rearrange
 import torch
-from enc.io.format.data_type import POSSIBLE_BITDEPTH
+from einops import rearrange
+from enc.io.types import POSSIBLE_BITDEPTH
 from PIL import Image
 from torch import Tensor
 from torchvision.transforms.functional import to_pil_image, to_tensor
@@ -27,7 +27,8 @@ def read_png(file_path: str) -> Tuple[Tensor, POSSIBLE_BITDEPTH]:
     Returns:
         Image data [1, 3, H, W] in [0., 1.] and its bitdepth.
     """
-    assert os.path.isfile(file_path), f"No file found at {file_path}."
+
+    assert os.path.isfile(file_path), f"No file found at {file_path}"
 
     data = to_tensor(Image.open(file_path))
     data = rearrange(data, "c h w -> 1 c h w")

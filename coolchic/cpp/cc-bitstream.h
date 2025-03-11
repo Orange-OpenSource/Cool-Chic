@@ -18,9 +18,9 @@ struct cc_bs_gop_header
     int img_h;
     int img_w;
     int frame_data_type; // 0 rgb, 1 yuv420, 2 yuv444
-    int bitdepth;
-    int intra_period;
-    int p_period;
+    int output_bitdepth;
+    //int intra_period;
+    //int p_period;
 };
 
 struct cc_bs_syn_layer {
@@ -41,13 +41,9 @@ struct cc_bs_layer_quant_info
     int n_bytes_nn_bias;
 };
 
-struct cc_bs_frame_header
+struct cc_bs_frame_coolchic
 {
-    int n_bytes_header;
-    int n_latent_n_resolutions;
-    int latent_n_2d_grid;
-    std::vector<int> n_bytes_per_latent;
-    std::vector<int> n_ft_per_latent;
+    bool latents_zero;
     int n_hidden_layers_arm;
     int dim_arm;
 
@@ -56,23 +52,20 @@ struct cc_bs_frame_header
     int  n_ups_preconcat_kernel;
     int  ups_preconcat_k_size;
 
-    int flow_gain;
-    int n_syn_branches;
     int n_syn_layers;
     std::vector<struct cc_bs_syn_layer> layers_synthesis;
     struct cc_bs_layer_quant_info arm_lqi;
     struct cc_bs_layer_quant_info ups_lqi;
     struct cc_bs_layer_quant_info syn_lqi;
 
-    int ac_max_val_nn;
-    int ac_max_val_latent;
-    int display_index;
-
     int hls_sig_blksize;
-};
 
-struct cc_bs_frame {
-    struct cc_bs_frame_header m_frame_header;
+    int n_latent_n_resolutions;
+    int latent_n_2d_grid;
+    std::vector<int> n_ft_per_latent;
+    std::vector<int> n_bytes_per_latent;
+
+    // weights, biases and latents.  BAC coded.
     std::vector<unsigned char> m_arm_weights_hevc;
     std::vector<unsigned char> m_arm_biases_hevc;
     std::vector<unsigned char> m_ups_weights_hevc; // both lb and hb
@@ -80,6 +73,32 @@ struct cc_bs_frame {
     std::vector<unsigned char> m_syn_weights_hevc; // all branches
     std::vector<unsigned char> m_syn_biases_hevc; // all branches
     std::vector<std::vector<unsigned char>> m_latents_hevc;
+
+public:
+    void copy_archi_from(struct cc_bs_frame_coolchic const &src, int topology_copy_bits);
+    void print();
+};
+
+// topology-copy bits.
+#define TOP_COPY_ARM 0
+#define TOP_COPY_UPS 1
+#define TOP_COPY_SYN 2
+#define TOP_COPY_LAT 3
+
+struct cc_bs_frame_header
+{
+    short n_bytes_header;
+    int display_index;
+    unsigned char frame_type; // 'I', 'P', 'B'
+    int topology_copy[2]; // bits. arm, ups, syn, lat
+    bool latents_zero[2];
+    int  global_flow[2][2]; // [ref0|ref1][y|x]
+    // frame type giving number of coolchics. and references.
+};
+
+struct cc_bs_frame {
+    struct cc_bs_frame_header m_frame_header;
+    std::vector<struct cc_bs_frame_coolchic> m_coolchics; // residue, motion
 };
 
 class cc_bs {
@@ -87,7 +106,7 @@ public:
     cc_bs() { m_f = NULL; }
     ~cc_bs() { if (m_f != NULL) fclose(m_f); }
     bool open(std::string filename, int verbosity = 0);
-    struct cc_bs_frame *decode_frame(int verbosity = 0);
+    struct cc_bs_frame *decode_frame(struct cc_bs_frame const *prev_coded_I_frame_symbols, struct cc_bs_frame const *prev_coded_frame_symbols, int verbosity = 0);
 private:
     bool read_gop_header(int verbosity = 0);
 

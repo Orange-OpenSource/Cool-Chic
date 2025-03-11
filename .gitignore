@@ -1,5 +1,4 @@
 .vscode/
-samples/
 images/
 venv/
 *.pyc
