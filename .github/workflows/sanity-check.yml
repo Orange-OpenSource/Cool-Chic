@@ -10,11 +10,10 @@ jobs:
       run:
         working-directory: ./
     steps:
-      - name: See where I am
-        run: pwd
-      - name: See what is here
-        run: ls -lh
-      - name: Install Cool-chic
-        run: pip install -e .
-      - name: Run sanity check
-        run: python3 -m test.sanity_check
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip' # caching pip dependencies
+      - run: pip install -e .
+      - run: python3 -m test.sanity_check
