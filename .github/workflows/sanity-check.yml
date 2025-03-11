@@ -11,7 +11,9 @@ jobs:
         working-directory: ./
     steps:
       - name: See where I am
-        run: pwd && ls -lh
+        run: pwd
+      - name: See what is here
+        run: ls -lh
       - name: Install Cool-chic
         run: pip install -e .
       - name: Run sanity check
