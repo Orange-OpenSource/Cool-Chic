@@ -1,6 +1,6 @@
 :layout: landing
-:description: Cool-chic is a low-complexity neural image codec, offering coding
-    performance on par with VVC and fast CPU-only decoding.
+:description: Cool-chic is a low-complexity neural image and video codec,
+    offering image coding performance on par with VVC and fast CPU-only decoding.
 
 .. raw:: html
 
@@ -21,17 +21,16 @@
 
 .. rst-class:: lead
 
-   Cool-chic (pronounced :accent:`/kul ʃik/` as in French 🥖🧀🍷) is a low-complexity neural
-   image codec based on overfitting. It offers coding performance on par with
-   H.266/VVC for 1000 multiplications per decoded pixel, allowing for fast
-   CPU-only decoding.
+   Cool-chic (pronounced :accent:`/kul ʃik/` as in French 🥖🧀🍷) is a
+   low-complexity neural image and video codec based on overfitting. It offers
+   image coding performance on par with H.266/VVC for 1000 multiplications per
+   decoded pixel, allowing for fast CPU-only decoding.
 
 
 .. container:: buttons
 
    `Docs <https://orange-opensource.github.io/Cool-Chic/getting_started/quickstart.html>`_
-   `What's new in 3.4? <https://orange-opensource.github.io/Cool-Chic/getting_started/new_stuff.html>`_
-   `Decode some bitstreams <https://orange-opensource.github.io/Cool-Chic/results/image/reproduce_results.html>`_
+   `Release note <https://orange-opensource.github.io/Cool-Chic/getting_started/new_stuff.html>`_
    `Coding performance <https://orange-opensource.github.io/Cool-Chic/results/image/compression_performance.html>`_
 
 
@@ -70,7 +69,6 @@
    :alt: Logo Orange
 
 
-
 |
 
 |
@@ -89,28 +87,36 @@ video, Kim et al. <https://arxiv.org/abs/2312.02753>`_
    :hidden:
 
    Quickstart <getting_started/quickstart>
+   What's new in 4.0? <getting_started/new_stuff>
    Example <getting_started/example>
-   What's new in 3.4? <getting_started/new_stuff>
    Literature <getting_started/literature>
 
 .. toctree::
    :maxdepth: 1
-   :caption: How to use Cool-chic?
+   :caption: Image coding
    :hidden:
 
-   Overview <encoding/overview>
-   Decoder configuration <encoding/architecture>
-   Encoder configuration <encoding/preset>
-   Decoding a bitstream <decoding/decoding_images>
+   Overview <image_compression/overview>
+   Decoder configuration <image_compression/architecture>
+   Encoder configuration <image_compression/preset>
+   Decoding a bitstream <image_compression/decoding_images>
 
-.. Video <encoding/video>
+.. toctree::
+   :maxdepth: 1
+   :caption: Video coding
+   :hidden:
+
+   Overview <video_compression/overview>
+   Decoder configuration <video_compression/architecture>
+   Encoder configuration <video_compression/encoding>
 
 .. toctree::
    :maxdepth: 2
    :caption: Compression performance
    :hidden:
 
-   Image <results/index>
+   Image <results/image/index>
+   Video <results/video/index>
 
 .. toctree::
    :caption: Code Documentation

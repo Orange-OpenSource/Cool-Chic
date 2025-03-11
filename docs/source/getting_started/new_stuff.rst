@@ -1,24 +1,15 @@
-What's new in Cool-chic 3.4.1?
-==============================
+What's new in Cool-chic 4.0?
+============================
 
 
-Cool-chic 3.4.1 significantly speeds-up the encoding process
+Cool-chic 4.0 brings back video compression, with performance significantly
+improved compared to Cool-chic 3.0, see paper `Improved Encoding for Overfitted
+Video Codecs, Leguay et al <https://arxiv.org/abs/2501.16976>`_ for more details.
 
-* Speed-up GPU Encoding **up to 3 times**! See :ref:`the detailed encoding time
-  results <encoding_timing>`.
+* Encode an inter frame with two Cool-chic modules: one dedicated to motion and the other to residue
 
-* Change encoder configuration files with better medium and slow :ref:`encoder configurations <encoder_cfg_files>`.
+* Pre-training of the motion module guided through a RAFT optical flow estimator
 
 Check-out the `release history
 <https://github.com/Orange-OpenSource/Cool-Chic/releases>`_ to see previous
 versions of Cool-chic.
-
-.. attention::
-
-   🛑 Cool-chic 3.4 temporarily disables video coding. If you really want to
-   compress videos you can
-
-   * Go back to 3.1: ``git clone --branch v3.1
-     https://github.com/Orange-OpenSource/Cool-Chic.git``
-
-   * Wait for Cool-chic 4.0 for better and faster video coding 😉.

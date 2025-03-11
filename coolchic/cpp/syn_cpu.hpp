@@ -18,7 +18,8 @@
 #define xstr(x) tostr(x)
 
 // stride and plane_stride are assumed the same for in and out.
-void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_in, int plane_stride_in, int residue_origin_offset, int N_IN, int32_t *in, int N_OUT, int32_t *out, int residue, int relu)
+template <typename P>
+void SYN_NAME(int KS, P *kw, P *kb, int h_in, int w_in, int stride_in, int plane_stride_in, int residue_origin_offset, int N_IN, P *in, int N_OUT, P *out, int residue, int relu)
 {
     //printf("%s(ks=%d N_IN=%d N_OUT=%d, residue=%d relu=%d\n", xstr(SYN_NAME), KS, N_IN, N_OUT, residue, relu);
 
@@ -39,7 +40,7 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
     int const n_out = N_OUT;
 #endif
 
-    int32_t *in_layer[std::max(n_in, n_out)];
+    P *in_layer[std::max(n_in, n_out)];
     in_layer[0] = in;
     for (int i = 1; i < std::max(n_in, n_out); i++)
         in_layer[i] = in_layer[i-1]+plane_stride_in;
@@ -53,14 +54,14 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
     }
 #else
     //not in-place
-    int32_t *out_layer[n_out];
+    P *out_layer[n_out];
     out_layer[0] = out;
     for (int i = 1; i < n_out; i++)
         out_layer[i] = out_layer[i-1]+plane_stride_in;
 #endif
 
     // here we collect the output during processing, and flush later.
-    int32_t out_cache[n_out];
+    P out_cache[n_out];
 
     // we want to operate the out kernels one after the other, using the same inputs.
     // then advance all the outs.
@@ -71,14 +72,17 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
         int offso = offs0;
         for (int x = 0; x < w_in-ks+1; x += kstride, offs += kstride, offso++)
         {
-            int32_t *k = kw;
+            P *k = kw;
             for (int ol = 0; ol < n_out; ol++)
             {
-                int32_t sum = (int32_t)kb[ol];
+                P sum = kb[ol];
                 if (residue)
                 {
                     // a residue has not been multiplied.
-                    sum += (int32_t)in_layer[ol][offso+residue_origin_offset]<<SYN_MUL_PRECISION;
+                    if constexpr(std::is_same<P, int32_t>::value)
+                        sum += in_layer[ol][offso+residue_origin_offset]<<SYN_MUL_PRECISION;
+                    else
+                        sum += in_layer[ol][offso+residue_origin_offset];
                 }
                 for (int il = 0; il < n_in; il++)
                 {
@@ -86,20 +90,30 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
                     for (int yy = 0; yy < ks; yy++, offs2 += stride_in-ks)
                         for (int xx = 0; xx < ks; xx++, offs2++)
                         {
-                            int32_t xxres = ((int32_t)in_layer[il][offs2]*(*k++));
+                            P xxres = in_layer[il][offs2]*(*k++);
                             sum += xxres;
                         }
                 }
                 // take multiplied sum to output after reluing.
-                if (sum < 0)
+                if constexpr(std::is_same<P, int32_t>::value)
                 {
-                    if (relu)
-                        sum = 0;
+                    if (sum < 0)
+                    {
+                        if (relu)
+                            sum = 0;
+                        else
+                            sum = -(-sum >> SYN_MUL_PRECISION);
+                    }
                     else
-                        sum = -(-sum >> SYN_MUL_PRECISION);
+                    {
+                        sum >>= SYN_MUL_PRECISION;
+                    }
                 }
                 else
-                    sum >>= SYN_MUL_PRECISION;
+                {
+                    if (sum < 0 && relu)
+                        sum = 0;
+                }
                 out_cache[ol] = sum;
             }
             // flush.
@@ -110,6 +124,12 @@ void SYN_NAME(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_i
         }
     }
 }
+
+// instantiate int32_t and float.
+template
+void SYN_NAME<int32_t>(int KS, int32_t *kw, int32_t *kb, int h_in, int w_in, int stride_in, int plane_stride_in, int residue_origin_offset, int N_IN, int32_t *in, int N_OUT, int32_t *out, int residue, int relu);
+template
+void SYN_NAME<float>(int KS, float *kw, float *kb, int h_in, int w_in, int stride_in, int plane_stride_in, int residue_origin_offset, int N_IN, float *in, int N_OUT, float *out, int residue, int relu);
 
 #undef tostr
 #undef xstr
