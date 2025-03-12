@@ -92,7 +92,11 @@ def get_global_translation(
             all_shifts = map(lambda x: x.to(device).view((1, 2, 1, 1)), all_shifts)
 
             initial_mse = _compute_mse(raw_ref_data, raw_target_data)
+            initial_shift = torch.tensor([0, 0]).to(device).view((1, 2, 1, 1))
             best_mse = initial_mse
+            best_shift = initial_shift
+            best_psnr = -10 * torch.log10(best_mse + 1e-10)
+
             for shift in all_shifts:
                 # All flows here are a constant [1, 2, H, W] tensor.
                 flow = torch.ones((1, 2, h, w), device=device) * shift + center_flow
@@ -104,7 +108,7 @@ def get_global_translation(
                 if shifted_mse < best_mse:
                     best_shift = shift
                     best_mse = shifted_mse
-                    best_psnr = -10 * torch.log10(shifted_mse + 1e-10)
+                    best_psnr = -10 * torch.log10(best_mse + 1e-10)
 
             center_flow += best_shift
             shifted_ref = warp_fn(raw_ref_data, center_flow)
