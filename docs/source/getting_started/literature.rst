@@ -77,7 +77,7 @@ have not (yet?) been integrated  in this repository.
 2025
 ****
 
-  * February: `Compact Latent Representation for Image Compression (CLRIC), Ameen et al. <https://arxiv.org/abs/2412.00505>`_
+  * February: `Compact Latent Representation for Image Compression (CLRIC), Ameen et al. <https://arxiv.org/abs/2502.14937>`_
 
   * Use Cool-chic to compress the feature space of a diffusion model, easily transforming a diffusion model into an image codec.
 
