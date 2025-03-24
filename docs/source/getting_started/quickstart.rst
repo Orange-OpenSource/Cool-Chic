@@ -17,7 +17,7 @@ need to install ``python3.10-dev`` to compile and bind the Cool-chic C API.
     # We need to get g++, python3.10-dev and pip to compile the Cool-chic
     # C API and bind it to python.
     ~$ sudo add-apt-repository -y ppa:deadsnakes/ppa && sudo apt update
-    ~$ sudo apt install -y build-essential python3.10-dev pip g++-12
+    ~$ sudo apt install -y build-essential python3.10-dev pip g++
     ~$ git clone https://github.com/Orange-OpenSource/Cool-Chic.git && cd Cool-Chic
 
 
@@ -33,7 +33,7 @@ package (torch etc.) and compiles the Cool-chic C API.
 
 .. code:: bash
 
-    (venv) ~/Cool-Chic/$ CXX=g++-12 pip install -e .
+    (venv) ~/Cool-Chic/$ pip install -e .
 
 
 Sanity check
