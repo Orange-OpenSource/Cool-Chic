@@ -1,5 +1,5 @@
-Image coding performance
-==================================
+Video coding performance
+========================
 
 We provide comprehensive experimental results demonstrating the compression
 performance of Cool-chic, its low decoding complexity and the associated

@@ -3,7 +3,6 @@
 Image compression performance
 =============================
 
-
 .. raw:: html
 
     <style> .red {color:red} </style>
@@ -50,7 +49,7 @@ rate required for Cool-chic to obtain the same quality than some other codec.
   <table class="tg"><thead>
     <tr>
       <th class="tg-86ol" rowspan="2"></th>
-      <th class="tg-86ol" colspan="5">BD-rate of Cool-chic 4.0 vs. [%]</th>
+      <th class="tg-86ol" colspan="5">BD-rate of Cool-chic 4.0.0 vs. [%]</th>
       <th class="tg-86ol" colspan="2">Avg. decoder complexity</th>
     </tr>
     <tr>
@@ -146,7 +145,7 @@ rate required for Cool-chic to obtain the same quality than some other codec.
   </tbody></table>
 
 
-Decoding time are obtained on a single CPU core of an an **AMD EPYC 7282 16-Core
+Decoding time are obtained on a single CPU core of an **AMD EPYC 7282 16-Core
 Processor**, PSNR is computed in the **RGB** domain for kodak and CLIC20, in the
 **YUV420** domain for jvet. More details about decoding time are available in
 :doc:`the decoding complexity results <./decoding_complexity>`.

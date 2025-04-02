@@ -84,7 +84,7 @@ by Cool-chic, based on the the coding index and the coding structure parameters.
         --n_itr=5000                                    \
         --lmbda=0.01 # Typical range is 1e-2 (low rate) to 1e-4 (high rate)
 
-.. tips::
+.. note::
 
   Check the :ref:`video coding example script. <video_coding_example>`
   ``samples/encode.py`` to see how successive frames are encoded into frame-wise

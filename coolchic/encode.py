@@ -344,28 +344,13 @@ if __name__ == "__main__":
     # Bitstream
     if args.output != "":
         from enc.bitstream.encode import encode_frame
-        frame_encoder_savepath = f"{_get_frame_path_prefix(frame.display_order)}frame_encoder.pt"
 
-        frame_encoder, _ = load_frame_encoder(frame_encoder_savepath)
-
-        if frame.frame_type == "I":
-            print("ref_frame_encoder is set to None for I frames")
-            ref_frame_encoder = None
-        else:
-            # For non-intra frame, we use a reference frame encoder to prevent
-            # sending the architecture of the NNs for the current frames if they
-            # are identical to the previous ones.
-            prev_display_idx = coding_structure.get_frame_from_coding_order(args.coding_idx - 1).display_order
-            ref_frame_encoder_path = f"{_get_frame_path_prefix(prev_display_idx)}frame_encoder.pt"
-            print("ref_frame_encoder_path", ref_frame_encoder_path)
-            ref_frame_encoder, _ = load_frame_encoder(ref_frame_encoder_path)
-
+        frame_enc_path = (
+            f"{_get_frame_path_prefix(frame.display_order)}frame_encoder.pt"
+        )
+        frame_encoder, _ = load_frame_encoder(frame_enc_path)
         encode_frame(
-            frame_encoder,
-            ref_frame_encoder,
-            args.output,
-            frame.display_order,
-            hls_sig_blksize=16
+            frame_encoder, None, args.output, frame.display_order, hls_sig_blksize=16
         )
 
     sys.exit(exit_code.value)

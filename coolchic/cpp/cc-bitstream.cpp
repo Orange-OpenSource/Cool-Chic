@@ -231,9 +231,9 @@ static bool read_cc_archi(struct cc_bs_frame_coolchic &out, int topology_copy_bi
         for (int i = 0; i < out.n_latent_n_resolutions; i++)
         {
             out.n_ft_per_latent[i] = read_int_1(bs);
-            if (out.n_ft_per_latent[i] != 1)
+            if (out.n_ft_per_latent[i] != 0 && out.n_ft_per_latent[i] != 1)
             {
-                printf("unsupported: #ft for latent resolution %d: %d; only 1 is supported\n", i, out.n_ft_per_latent[i]);
+                printf("unsupported: #ft for latent resolution %d: %d; only 0 or 1 are supported\n", i, out.n_ft_per_latent[i]);
                 printf("printing partial coolchic\n");
                 out.print();
                 exit(1);
@@ -266,12 +266,16 @@ static bool read_cc_lengths(struct cc_bs_frame_coolchic &cc, bool latents_zero, 
         read_n_bytes_nn(bs, cc.ups_lqi);
     read_n_bytes_nn(bs, cc.syn_lqi);
 
-    cc.n_bytes_per_latent.resize(cc.latent_n_2d_grid);
-    for (int i = 0; i < cc.latent_n_2d_grid; i++)
+    cc.n_bytes_per_latent.resize(cc.n_latent_n_resolutions);
+    for (int i = 0; i < cc.n_latent_n_resolutions; i++)
+    {
         if (cc.latents_zero)
+            cc.n_bytes_per_latent[i] = 0;
+        else if (cc.n_ft_per_latent[i] == 0)
             cc.n_bytes_per_latent[i] = 0;
         else
             cc.n_bytes_per_latent[i] = read_utf_coded(bs);
+    }
 
     return true;
 }

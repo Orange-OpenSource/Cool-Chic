@@ -501,22 +501,7 @@ class CoolChicEncoder(nn.Module):
         Args:
             param (OrderedDict[str, Tensor]): Parameters to be set.
         """
-        # avoid:
-        # Missing key(s) in state_dict: "synthesis.layers.0.weight", "synthesis.layers.0.bias", "synthesis.layers.2.weight", "synthesis.layers.2.bias", "synthesis.layers.4.weight", "synthesis.layers.4.bias", "synthesis.layers.6.weight", "synthesis.layers.6.bias".
-        # Unexpected key(s) in state_dict: "synthesis.branch_blender.parametrizations.weight.original", "synthesis.synth_branches.0.0.weight", "synthesis.synth_branches.0.0.bias", "synthesis.synth_branches.0.2.weight", "synthesis.synth_branches.0.2.bias", "synthesis.synth_branches.0.4.weight", "synthesis.synth_branches.0.4.bias", "synthesis.synth_branches.0.6.weight", "synthesis.synth_branches.0.6.bias".
-        # We only have one branch, remove the branch indicators.
-        new = {}
-        for k, v in param.items():
-            if "branch_blender" in k:
-                continue
-            if "synth_branches" in k:
-                newk = k.replace("synth_branches.0.", "layers.")
-                print(f'{k}->{newk}')
-                new[newk] = v
-                continue
-            new[k] = v
-
-        self.load_state_dict(new)
+        self.load_state_dict(param)
 
     def initialize_latent_grids(self) -> None:
         """Initialize the latent grids. The different tensors composing

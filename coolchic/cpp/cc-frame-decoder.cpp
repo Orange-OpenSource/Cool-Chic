@@ -357,7 +357,7 @@ void cc_frame_decoder::read_syn(struct cc_bs_frame_coolchic &frame_symbols)
     // layer weights.
     for (int bidx = 0; bidx < 1; bidx++) // no more branches.
     {
-        int n_in_ft = frame_symbols.n_latent_n_resolutions; // !!! features per layer
+        int n_in_ft = frame_symbols.latent_n_2d_grid;
         for (int lidx = 0; lidx < frame_symbols.n_syn_layers; lidx++)
         {
             struct cc_bs_syn_layer &syn = frame_symbols.layers_synthesis[lidx];
@@ -386,7 +386,7 @@ bool cc_frame_decoder::can_fuse(struct cc_bs_frame_coolchic &frame_symbols)
 
 void cc_frame_decoder::check_allocations(struct cc_bs_frame_coolchic &frame_symbols)
 {
-    int const latent_n_resolutions = frame_symbols.n_latent_n_resolutions;
+    int const latent_n_resolutions = frame_symbols.latent_n_2d_grid;
 
     int n_max_planes = latent_n_resolutions;
     m_arm_pad = 4; // by how much the arm frame is padded.
@@ -658,17 +658,28 @@ void cc_frame_decoder::run_ups(struct cc_bs_frame_coolchic &frame_symbols)
     // assign the int32_t full res option to full_res_out, preferring m_syn_1 if both are int.
     frame_memory<UPS_INT_FLOAT> *full_res_out = hoop(&m_syn_1, &m_pre_syn_1);
 
-    // full-res down to lowest-res.  refine & upsample each as necessary to full res.
+    // processing order full-res down to lowest-res.
+    // refine & upsample each as necessary to full res, placed finally in m_syn_1.
+    // the layer is not processed, and dst_plane is not incremented, if n_ft_per_latent is 0.
+    int global_dst_plane = 0;
     for (int layer_number = 0, h_grid = m_gop_header.img_h, w_grid = m_gop_header.img_w;
          layer_number < frame_symbols.n_latent_n_resolutions;
          layer_number++, h_grid = (h_grid+1)/2, w_grid = (w_grid+1)/2)
     {
+        if (frame_symbols.n_ft_per_latent[layer_number] == 0)
+        {
+            continue; // skip.  we do not increment global_dst_plane.
+        }
+
         if (m_zero_layer[layer_number])
         {
             // no need to upsample.  just zero the final content.
             full_res_out->zero_plane_content(layer_number);
+            // we have produced output.
+            global_dst_plane += 1;
             continue;
         }
+
         // layer_number 0: hb_layer is (nlatents-1)%nhblayers.
         // n_resolution-2 is number of hb layers max.
         int preconcat_layer = (frame_symbols.n_latent_n_resolutions-2-layer_number)%m_ups_n_preconcat;
@@ -689,6 +700,8 @@ void cc_frame_decoder::run_ups(struct cc_bs_frame_coolchic &frame_symbols)
                 ups_refine_cpu(frame_symbols.ups_preconcat_k_size, m_upsw_preconcat[preconcat_layer].data, (*ups_input_pyramid)[0], *full_res_out, ARM_PRECISION, m_ups_hw);
             }
 #endif
+            // we have produced output.
+            global_dst_plane += 1;
             continue;
         }
 
@@ -728,21 +741,21 @@ void cc_frame_decoder::run_ups(struct cc_bs_frame_coolchic &frame_symbols)
             int ups_layer = (frame_symbols.n_latent_n_resolutions-2-target_layer)%m_ups_n;
             // upsample, either to next pyramid level up or, instead of to [0], to m_syn_1[layer_number].
             frame_memory<UPS_INT_FLOAT> *ups_dst = NULL;
-            int dst_plane;
+            int this_dst_plane;
             if (target_layer == 0)
             {
                 ups_dst = full_res_out;
-                dst_plane = layer_number;
+                this_dst_plane = global_dst_plane;
             }
             else
             {
                 ups_dst = &(*ups_input_pyramid)[target_layer];
-                dst_plane = 0;
+                this_dst_plane = 0;
             }
 #ifdef CCDECAPI_AVX2
             if (m_use_avx2)
             {
-                ups_upsample_avx2(frame_symbols.ups_k_size, m_upsw[ups_layer].data, *ups_src, *ups_dst, dst_plane, ups_prec, m_ups_hw);
+                ups_upsample_avx2(frame_symbols.ups_k_size, m_upsw[ups_layer].data, *ups_src, *ups_dst, this_dst_plane, ups_prec, m_ups_hw);
             }
 #endif
 #if defined(CCDECAPI_AVX2_OPTIONAL)
@@ -750,10 +763,13 @@ void cc_frame_decoder::run_ups(struct cc_bs_frame_coolchic &frame_symbols)
 #endif
 #if defined(CCDECAPI_AVX2_OPTIONAL) || defined(CCDECAPI_CPU)
             {
-                ups_upsample_cpu(frame_symbols.ups_k_size, m_upsw[ups_layer].data, *ups_src, *ups_dst, dst_plane, ups_prec, m_ups_hw);
+                ups_upsample_cpu(frame_symbols.ups_k_size, m_upsw[ups_layer].data, *ups_src, *ups_dst, this_dst_plane, ups_prec, m_ups_hw);
             }
 #endif
         }
+
+        // produced an upsampled output.
+        global_dst_plane += 1;
     }
 
     if constexpr(std::is_same<UPS_INT_FLOAT, int32_t>::value && std::is_same<SYN_INT_FLOAT, float>::value)
@@ -868,7 +884,7 @@ frame_memory<SYN_INT_FLOAT> *cc_frame_decoder::run_syn_blend2(struct cc_bs_frame
 //     return value is either syn_in or syn_tmp.
 frame_memory<SYN_INT_FLOAT> *cc_frame_decoder::run_syn_branch(struct cc_bs_frame_coolchic &frame_symbols, int branch_no, frame_memory<SYN_INT_FLOAT> *syn_in, frame_memory<SYN_INT_FLOAT> *syn_out, frame_memory<SYN_INT_FLOAT> *syn_tmp)
 {
-    int    n_syn_in = frame_symbols.n_latent_n_resolutions;
+    int    n_syn_in = frame_symbols.latent_n_2d_grid; // activate layers.
     frame_memory<SYN_INT_FLOAT> *syn_in_i = NULL; // internal in/out
     frame_memory<SYN_INT_FLOAT> *syn_out_i = NULL; // internal in/out
     if (syn_out == syn_in)
@@ -1044,42 +1060,47 @@ frame_memory<SYN_INT_FLOAT> *cc_frame_decoder::run_syn_branch(struct cc_bs_frame
                     }
                 }
 #if defined(CCDECAPI_AVX2)
-                if (m_use_avx2 && n_syn_in == 7)
+                if (m_use_avx2)
                 {
-                    if (n_hidden == 48 && n_syn_out == 3)
-                        custom_conv_ks1_in7_hidden48_out3_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
-                    else if (n_hidden == 40)
+                    if (n_syn_in == 7)
                     {
-                        if (n_syn_out == 3)
-                            custom_conv_ks1_in7_hidden40_out3_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
-                        else if (n_syn_out == 6)
-                            custom_conv_ks1_in7_hidden40_out6_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
-                        else if (n_syn_out == 9)
-                            custom_conv_ks1_in7_hidden40_out9_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
-                        else
-                            custom_conv_ks1_inX_hiddenX_outX(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
-                    }
-                    else if (n_hidden == 32 && n_syn_out == 3)
-                        custom_conv_ks1_in7_hidden32_out3_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
-                    else if (n_hidden == 16)
-                    {
-                        if (n_syn_out == 3)
-                            custom_conv_ks1_in7_hidden16_out3_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
-                        else if (n_syn_out == 4)
-                            custom_conv_ks1_in7_hidden16_out4_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
-                        else if (n_syn_out == 5)
-                            custom_conv_ks1_in7_hidden16_out5_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
-                        else
-                            custom_conv_ks1_inX_hiddenX_outX(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
-                    }
-                    else if (n_hidden == 8)
-                    {
-                        if (n_syn_out == 3)
-                            custom_conv_ks1_in7_hidden8_out3_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
-                        else if (n_syn_out == 4)
-                            custom_conv_ks1_in7_hidden8_out4_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
-                        else if (n_syn_out == 5)
-                            custom_conv_ks1_in7_hidden8_out5_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                        if (n_hidden == 48 && n_syn_out == 3)
+                            custom_conv_ks1_in7_hidden48_out3_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                        else if (n_hidden == 40)
+                        {
+                            if (n_syn_out == 3)
+                                custom_conv_ks1_in7_hidden40_out3_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                            else if (n_syn_out == 6)
+                                custom_conv_ks1_in7_hidden40_out6_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                            else if (n_syn_out == 9)
+                                custom_conv_ks1_in7_hidden40_out9_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                            else
+                                custom_conv_ks1_inX_hiddenX_outX(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                        }
+                        else if (n_hidden == 32 && n_syn_out == 3)
+                            custom_conv_ks1_in7_hidden32_out3_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                        else if (n_hidden == 16)
+                        {
+                            if (n_syn_out == 3)
+                                custom_conv_ks1_in7_hidden16_out3_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                            else if (n_syn_out == 4)
+                                custom_conv_ks1_in7_hidden16_out4_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                            else if (n_syn_out == 5)
+                                custom_conv_ks1_in7_hidden16_out5_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                            else
+                                custom_conv_ks1_inX_hiddenX_outX(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                        }
+                        else if (n_hidden == 8)
+                        {
+                            if (n_syn_out == 3)
+                                custom_conv_ks1_in7_hidden8_out3_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                            else if (n_syn_out == 4)
+                                custom_conv_ks1_in7_hidden8_out4_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                            else if (n_syn_out == 5)
+                                custom_conv_ks1_in7_hidden8_out5_avx2(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                            else
+                                custom_conv_ks1_inX_hiddenX_outX(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
+                        }
                         else
                             custom_conv_ks1_inX_hiddenX_outX(1, synw_fused, m_synb[syn_wb_idx].data, m_synw[syn_wb_idx+1].data, m_synb[syn_wb_idx+1].data, m_gop_header.img_h, m_gop_header.img_w, syn_in_i->stride, syn_in_i->plane_stride, n_syn_in, n_hidden, syn_in_i->origin(), n_syn_out, syn_out_i->origin());
                     }
@@ -1208,7 +1229,7 @@ frame_memory<SYN_INT_FLOAT> *cc_frame_decoder::run_syn(struct cc_bs_frame_coolch
     if (m_verbosity >= 100)
     {
         printf("SYNTHESIS INPUTS\n");
-        for (int p = 0; p < frame_symbols.n_latent_n_resolutions; p++)
+        for (int p = 0; p < frame_symbols.latent_n_2d_grid; p++)
         {
             printf("SYNPLANE %d ", p);
             m_syn_1.print_start(p, "SYNIN", -1, UPS_PRECISION);
