@@ -18,7 +18,7 @@ PSNR in the YUV420 domain are obtained as follows:
 
 .. math::
 
-    \mathrm{PSNR_{YUV420}} = -10 \log_{10} \left(\frac{\mathrm{MSE}_Y + \mathrm{MSE}_U + \mathrm{MSE}_V}{6}\right).
+    \mathrm{PSNR_{YUV420}} = -10 \log_{10} \left(\frac{4\mathrm{MSE}_Y + \mathrm{MSE}_U + \mathrm{MSE}_V}{6}\right).
 
 
 
@@ -26,10 +26,11 @@ Random-access compression
 *************************
 
 The following table sums up the compression performance obtained by Cool-chic
-4.0 against HEVC in a random access configuration settings. An intra period of
-32 frames is used. Results are measure through `BD-rates
-<https://github.com/Anserw/Bjontegaard_metric>`_ which represents the relative
-rate required for Cool-chic to obtain the same quality than some other codec.
+4.0 against several conventional codecs in a random access configuration
+settings. An intra period of 32 frames is used. Results are measure through
+`BD-rates <https://github.com/Anserw/Bjontegaard_metric>`_ which represents the
+relative rate required for Cool-chic to obtain the same quality than some other
+codec.
 
 .. raw:: html
 
