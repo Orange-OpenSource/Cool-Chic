@@ -29,7 +29,9 @@
     .
     <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/new_stuff.html">What's new in 4.0.0?</a>
     ·
-    <a href="https://orange-opensource.github.io/Cool-Chic/results/image/compression_performance.html">Coding performance</a>
+    <a href="https://orange-opensource.github.io/Cool-Chic/results/image/compression_performance.html">Image coding performance</a>
+    .
+    <a href="https://orange-opensource.github.io/Cool-Chic/results/video/compression_performance.html">Video coding performance</a>
   </p>
 </div>
 
