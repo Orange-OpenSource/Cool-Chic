@@ -1,4 +1,5 @@
 .. _image_compression_overview:
+
 Image compression with Cool-chic
 ================================
 

@@ -558,7 +558,10 @@ def write_frame_header(
 
         if not latents_zero:
             for i, v in enumerate(n_bytes_per_latent[cc_name]):
-                byte_to_write += utf_code(v)
+                latent_i = cc_enc.latent_grids[i]
+                n_ft_i = latent_i.size()[1]
+                if n_ft_i > 0:
+                    byte_to_write += utf_code(v)
 
         cc_idx += 1
 

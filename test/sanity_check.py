@@ -1,6 +1,7 @@
 import glob
 import os
 import subprocess
+import math
 from typing import Any, Dict, List
 
 import numpy as np
@@ -47,7 +48,6 @@ def decode(bitstream_path: str, decoded_path: str) -> None:
         f'--input={bitstream_path} '
         f'--output={decoded_path} '
         '--verbosity=2 '
-        '--no_avx2 '
     )
     subprocess.call(cmd, shell=True)
 
@@ -104,23 +104,40 @@ def evaluate_decoder_side(seq_path: str, decoded_path: str, bitstream_path: str)
         f"--candidate={decoded_path} "
         f"--ref={seq_path} "
         f"--noheader "
+        f"--verbosity=1"
     )
     out = subprocess.getoutput(cmd)
 
     if seq_path.endswith(".yuv"):
-        psnr_db_611, psnr_db_y, psnr_db_u, psnr_db_v = map(lambda x: float(x), [x for x in out.split() if x][1:5])
+        # Get all lines i.e. all frames psnr except the last one (average results)
+        # We're going to recompute the average ourself
+        out = [line for line in out.split("\n")[:-1]]
+
+        assert len(out) == n_frames, (
+            f"We should have one PSNR measurement per frames. Found {n_frames} frames "
+            f"and {len(out)} PSNR measurements"
+        )
 
         # Mimic cool-chic psnr computation: mse weighted by the number of pixels
         width_uv, height_uv = map(lambda x: int(x), [x for x in out_identify.split()[4:6] if x])
         n_pix_y = width * height
         n_pix_uv = width_uv * height_uv
 
-        weighted_mse = (
-            n_pix_y * 10 ** (-psnr_db_y / 10)
-            + n_pix_uv * 10 ** (-psnr_db_u / 10)
-            + n_pix_uv * 10 ** (-psnr_db_v / 10)
-        ) / (n_pix_y + 2 * n_pix_uv)
-        weighted_psnr = -10 * np.log10(weighted_mse + 1e-10)
+        weighted_mse = 0
+        for line in out:
+            # For each frame, recompute MSE YUV weighted by the number of
+            # pixels for each channel
+            psnr_db_y, psnr_db_u, psnr_db_v = map(lambda x: float(x), [x for x in line.split()])
+            weighted_mse += (
+                n_pix_y * 10 ** (-psnr_db_y / 10)
+                + n_pix_uv * 10 ** (-psnr_db_u / 10)
+                + n_pix_uv * 10 ** (-psnr_db_v / 10)
+            ) / (n_pix_y + 2 * n_pix_uv)
+
+        # Get the final MSE by dividing by the overall number of frames
+        weighted_mse = weighted_mse / n_frames
+        weighted_psnr = -10 * math.log10(weighted_mse + 1e-10)
+
         decoder_results.update({"psnr_db": weighted_psnr})
 
     # image
@@ -138,7 +155,7 @@ if __name__ == '__main__':
     LIST_SEQ = [
         "/data/192x128_kodim15.png",
         "/data/kodim15_192x128_01p_yuv420_8b.yuv",
-        "/data/D-BQSquare_224x128_60p_yuv420_8b.yuv",
+        "/data/D-BQSquare-5frames_224x128_60p_yuv420_8b.yuv",
         "/data/kodim15_192x128_01p_yuv420_10b.yuv",
         "/data/kodim15_192x128_01p_yuv444_8b.yuv",
         "/data/kodim15_192x128_01p_yuv444_10b.yuv",
@@ -155,7 +172,7 @@ if __name__ == '__main__':
     # encoder logs and what we obtain at the decoder side.
     for seq_path in LIST_SEQ:
         # Clean everything in TEST_WORKDIR
-        subprocess.call(f"rm {TEST_WORKDIR}/*", shell=True)
+        subprocess.call(f"rm -f {TEST_WORKDIR}/*", shell=True)
 
         # Get all the path required to encode, decode and evaluate
         seq_name, ext = os.path.splitext(os.path.basename(seq_path))

@@ -6,7 +6,7 @@ Cool-chic encodes each video frames successively through the
 
 
 Encoding an image into a .cool bitstream
-""""""""""""""""""""""""""""""""""""""""""""
+""""""""""""""""""""""""""""""""""""""""
 
 Encoding an image or a video frame with CoolChic requires to specify
 
@@ -30,11 +30,12 @@ Encoding an image or a video frame with CoolChic requires to specify
         --dec_cfg_residue=cfg/dec/intra_residue/hop.cfg \
         --lmbda=0.001    # Typical range is 1e-2 (low rate) to 1e-4 (high rate)
 
-More details on encoding images with Cool-chic is available in the :doc:`encoder documentation <./../encoding/overview>`.
+More details on encoding images with Cool-chic is available in the :doc:`encoder documentation <./../image_compression/overview>`.
 
 .. _video_coding_example:
+
 Encoding a video into a .cool bitstream
-"""""""""""""""""""""""""""""""""""""""""""
+"""""""""""""""""""""""""""""""""""""""
 
 Encoding a video requires to encode successively each video frames through the
 ``coolchic/encode.py`` script. We provide a ``samples/encode.py`` script
@@ -54,7 +55,7 @@ allowing to easily do video encoding.
 
 
 Decoding a .cool bitstream
-""""""""""""""""""""""""""""""
+""""""""""""""""""""""""""
 
 
 Decoding an image or a video with CoolChic requires to specify the input and output paths.
@@ -66,10 +67,11 @@ We provide a few already encoded bitstreams, ready to be decoded in ``samples/bi
 
     (venv) ~/Cool-Chic$ python coolchic/decode.py \
         -i=samples/bitstream/kodim14.cool \
-        -o=decoded-kodim14.ppm
+        -o=decoded-kodim14.ppm \
+        --verbosity=1
 
 Note that Cool-Chic outputs either `PPM
 <https://en.wikipedia.org/wiki/Portable_pixmap>`_ or `YUV
 <https://en.wikipedia.org/wiki/Y%E2%80%B2UV>`_ files.
 
-More details on decoding images with Cool-chic is available in the :doc:`decoder documentation <./../decoding/decoding_images>`.
+More details on decoding images with Cool-chic is available in the :doc:`decoder documentation <./../image_compression/decoding_images>`.

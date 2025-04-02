@@ -3,7 +3,7 @@
 Image decoding complexity
 =========================
 
-As described in the :doc:`decoder configuration <../../encoding/architecture>`
+As described in the :doc:`decoder configuration <../../image_compression/architecture>`
 section, Cool-chic decoder can be made as simple (or complex) as desired. We
 present here the performance-complexity continuum obtained through the :ref:`4
 provided configurations <decoder_cfg_files>` (*VLOP*, *LOP*, *MOP*, *HOP*). We
