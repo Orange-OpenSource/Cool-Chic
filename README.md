@@ -223,21 +223,6 @@ The Cool-chic page provides [comprehensive video rate-distortion results](https:
 
 ### Random access results (intra period 32)
 
-  <style type="text/css">
-  .tg .tg-m5nv{border-color:#656565;text-align:center;vertical-align:top}
-  .tg .tg-dfl2{border-color:#656565;font-family:inherit;text-align:center;vertical-align:top}
-  .tg .tg-uflc{border-color:#656565;color:#009901;text-align:center;vertical-align:top}
-  .tg .tg-86ol{border-color:#656565;font-family:inherit;font-weight:bold;text-align:center;vertical-align:center}
-  .tg .tg-9mze{border-color:#656565;font-family:inherit;font-style:italic;text-align:center;vertical-align:top}
-  .tg .tg-u3ui{border-color:#656565;font-family:inherit;font-weight:bold;text-align:center;vertical-align:top}
-  .tg .tg-qch7{border-color:#656565;color:#009901;font-family:inherit;text-align:center;vertical-align:top}
-  .tg .tg-arzi{border-color:#656565;color:#cb0000;text-align:center;vertical-align:top}
-  .tg .tg-xd3r{border-color:#656565;color:#cb0000;font-family:inherit;text-align:center;vertical-align:top}
-  .tg .tg-aaaa{border-color:#656565;color:#cb0000;font-weight:bold;font-family:inherit;text-align:center;vertical-align:top}
-  .tg .tg-5niz{border-color:#656565;color:#9b9b9b;font-family:inherit;text-align:center;vertical-align:top}
-  .tg .tg-x9uu{border-color:#656565;font-weight:bold;text-align:center;vertical-align:top}
-  .tg .tg-1keu{border-color:#656565;color:#9b9b9b;text-align:center;vertical-align:top}
-  </style>
   <table class="tg"><thead>
   <tr>
       <th class="tg-86ol" rowspan="2">Sequence</th>
