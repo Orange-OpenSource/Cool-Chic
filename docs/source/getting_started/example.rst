@@ -49,7 +49,7 @@ allowing to easily do video encoding.
         -i myTestVideo_1920x1080_24p_yuv420_8b.yuv \
         -o myTestVideo_1920x1080_24p_yuv420_8b.cool \
         --workdir=./dummy_workdir \
-        --lambda=0.001 \
+        --lmbda=0.001 \
         --n_frames=33 \
         --intra_pos=0,-1
 
