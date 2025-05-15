@@ -313,6 +313,7 @@ def encode_one_frame(
             print("No compilation for torch version anterior to 2.5.0\n")
         else:
             print("Compiling frame encoder!\n")
+            torch._dynamo.reset()
             frame_encoder = torch.compile(
                 frame_encoder,
                 dynamic=False,
