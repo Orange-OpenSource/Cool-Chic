@@ -6,7 +6,7 @@ from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import setup
 from sys import platform
 
-__version__ = "4.0.0"
+__version__ = "4.0.1-dev"
 
 CCLIB_PATH = "coolchic/CCLIB"
 
