@@ -46,7 +46,7 @@ def _parse_arm_archi(arm: str) -> Dict[str, int]:
     Returns:
         Dict[str, int]: The ARM architecture
     """
-    assert len(arm.split(",")) == 2, f"--arm format should be X,Y." f" Found {arm}"
+    assert len(arm.split(",")) == 2, f"--arm format should be X,Y. Found {arm}"
 
     dim_arm, n_hidden_layers_arm = [int(x) for x in arm.split(",")]
     arm_param = {"dim_arm": dim_arm, "n_hidden_layers_arm": n_hidden_layers_arm}
@@ -185,13 +185,13 @@ def get_coding_structure_from_args(args: argparse.Namespace) -> Dict[str, Any]:
     n_frames = args.n_frames
     frame_offset = args.frame_offset
 
-    assert (
-        n_frames > 0
-    ), f"There must be at least one frame to encode. Found --n_frames={n_frames}"
+    assert n_frames > 0, (
+        f"There must be at least one frame to encode. Found --n_frames={n_frames}"
+    )
 
-    assert (
-        frame_offset >= 0
-    ), f"Negative frame_offset is not possible. Found --frame_offset={frame_offset}"
+    assert frame_offset >= 0, (
+        f"Negative frame_offset is not possible. Found --frame_offset={frame_offset}"
+    )
 
     if "input" in args:
         if _is_image(args.input):
@@ -204,7 +204,9 @@ def get_coding_structure_from_args(args: argparse.Namespace) -> Dict[str, Any]:
         "n_frames": n_frames,
         "intra_pos": _parse_frame_pos(args.intra_pos, n_frames),
         "p_pos": _parse_frame_pos(args.p_pos, n_frames),
-        "seq_name": os.path.basename(args.input).split(".")[0] if "input" in args else "",
+        "seq_name": os.path.basename(args.input).split(".")[0]
+        if "input" in args
+        else "",
         "frame_offset": frame_offset,
     }
     return coding_structure_config

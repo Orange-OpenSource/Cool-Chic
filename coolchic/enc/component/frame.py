@@ -256,7 +256,7 @@ class FrameEncoder(nn.Module):
                 additional_data.update(
                     {
                         # Append the cc_name (e.g. residue) in front of the key
-                        f"{cc_name}{k}": v
+                        f"{cc_name}_{k}": v
                         for k, v in cc_enc_out_i.get("additional_data").items()
                     }
                 )

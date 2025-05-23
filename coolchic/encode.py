@@ -18,6 +18,8 @@ from enc.component.video import (
     _get_frame_path_prefix,
     encode_one_frame,
 )
+from enc.nocc.nocc import load_no_coolchic
+from enc.training.presets import AVAILABLE_PRESETS
 from enc.utils.codingstructure import CodingStructure
 from enc.utils.parsecli import (
     get_coding_structure_from_args,
@@ -148,9 +150,18 @@ if __name__ == "__main__":
     parser.add("--n_train_loops", help="Number of training loops", type=int, default=1)
     parser.add(
         "--preset",
-        help='Recipe type. Either "c3x" or "debug".',
+        help=f'Recipe type. Available: {list(AVAILABLE_PRESETS.keys())}',
         type=str,
-        default="c3x",
+        default="c3x_intra",
+    )
+    parser.add(
+        "--init_from_nocc",
+        help="Path of a trained Non-overfitted (NO) Cool-chic model. "
+        "If not empty, this NO-CC is used to initialize the latent and "
+        "the 3 decoded neural networks: ARM, Upsampling and Synthesis."
+        "This is only available for RGB I-frame.",
+        type=str,
+        default="",
     )
 
     # ==== Decoder-side arguments
@@ -276,6 +287,12 @@ if __name__ == "__main__":
     # Check if we have some 000X-frame_encoder.pt somewhere
     frame_save_prefix = _get_frame_path_prefix(frame.display_order)
     path_frame_encoder = f"{frame_save_prefix}frame_encoder.pt"
+
+    no_coolchic = (
+        None if args.init_from_nocc == "" else
+        {"residue": load_no_coolchic(args.init_from_nocc)}
+    )
+
     if os.path.exists(path_frame_encoder):
         frame_encoder, frame_encoder_manager = load_frame_encoder(path_frame_encoder)
         coolchic_enc_param = frame_encoder.coolchic_enc_param
@@ -298,7 +315,7 @@ if __name__ == "__main__":
             '|    `"Y8888888 P"Y8888P"    P"Y8888P"    8P\'"Y88                  P""Y8888PP88P     `Y88P""Y8P""Y8888PP   |\n'
             "|                                                                                                          |\n"
             "|                                                                                                          |\n"
-            "| version 4.0.0, March 2025                                                             © 2023-2025 Orange |\n"
+            "| version 4.0.1-dev, May 2025                                                         © 2023-2025 Orange   |\n"
             "*----------------------------------------------------------------------------------------------------------*\n"
         )
         print(start_print)
@@ -336,6 +353,7 @@ if __name__ == "__main__":
         coolchic_enc_param=coolchic_enc_param,
         frame_encoder_manager=frame_encoder_manager,
         coding_index=args.coding_idx,
+        no_coolchic=no_coolchic,
         job_duration_min=args.job_duration_min,
         device=device,
         print_detailed_archi=args.print_detailed_archi,

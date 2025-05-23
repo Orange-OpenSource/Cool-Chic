@@ -674,7 +674,7 @@ void cc_frame_decoder::run_ups(struct cc_bs_frame_coolchic &frame_symbols)
         if (m_zero_layer[layer_number])
         {
             // no need to upsample.  just zero the final content.
-            full_res_out->zero_plane_content(layer_number);
+            full_res_out->zero_plane_content(global_dst_plane);
             // we have produced output.
             global_dst_plane += 1;
             continue;

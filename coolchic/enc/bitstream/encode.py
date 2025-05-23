@@ -471,10 +471,10 @@ def encode_frame(
             ctr_2d_ft = 0
             # Loop on the different resolutions
             for index_lat_resolution in range(cc_enc.param.latent_n_grids):
-                current_mu = encoder_output.additional_data.get(f'{cc_name}detailed_mu')[index_lat_resolution]
-                current_scale = encoder_output.additional_data.get(f'{cc_name}detailed_scale')[index_lat_resolution]
-                current_log_scale = encoder_output.additional_data.get(f'{cc_name}detailed_log_scale')[index_lat_resolution]
-                current_y = encoder_output.additional_data.get(f'{cc_name}detailed_sent_latent')[index_lat_resolution]
+                current_mu = encoder_output.additional_data.get(f'{cc_name}_detailed_mu')[index_lat_resolution]
+                current_scale = encoder_output.additional_data.get(f'{cc_name}_detailed_scale')[index_lat_resolution]
+                current_log_scale = encoder_output.additional_data.get(f'{cc_name}_detailed_log_scale')[index_lat_resolution]
+                current_y = encoder_output.additional_data.get(f'{cc_name}_detailed_sent_latent')[index_lat_resolution]
 
                 c_i, h_i, w_i = current_y.size()[-3:]
 

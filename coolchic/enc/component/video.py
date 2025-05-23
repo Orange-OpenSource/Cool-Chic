@@ -11,10 +11,11 @@ import copy
 from enum import Enum
 import os
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional
 from enc.component.intercoding.globalmotion import get_global_translation
 from enc.component.intercoding.raft import get_raft_optical_flow
 from enc.nnquant.quantizemodel import quantize_model
+from enc.nocc.nocc import NoCoolChic
 import torch
 from enc.component.coolchic import CoolChicEncoder, CoolChicEncoderParameter
 from enc.component.frame import FrameEncoder, NAME_COOLCHIC_ENC, load_frame_encoder
@@ -31,6 +32,8 @@ from enc.utils.device import POSSIBLE_DEVICE
 from enc.utils.misc import mem_info
 from torch import Tensor
 from enc.io.framedata import FrameData
+
+from enc.nocc.nocc import check_match_archi
 
 
 # =========================== Job management ============================ #
@@ -69,6 +72,7 @@ def encode_one_frame(
     coolchic_enc_param: Dict[NAME_COOLCHIC_ENC, CoolChicEncoderParameter],
     frame_encoder_manager: FrameEncoderManager,
     coding_index: int,
+    no_coolchic: Optional[Dict[NAME_COOLCHIC_ENC, NoCoolChic]] = None,
     job_duration_min: int = -1,
     device: POSSIBLE_DEVICE = "cpu",
     print_detailed_archi: bool = False,
@@ -233,6 +237,7 @@ def encode_one_frame(
             for idx_lat, latent_i in enumerate(pretrained_motion_enc.latent_grids):
                 pretrained_motion_enc.latent_grids[idx_lat] = latent_i * gain_ratio
 
+
         # Get the number of candidates from the initial warm-up phase
         n_candidates = frame_encoder_manager.preset.warmup.phases[0].candidates
 
@@ -263,6 +268,58 @@ def encode_one_frame(
                     )
 
                 cur_frame_encoder.set_global_flow(global_flows[0], global_flows[1])
+
+                if no_coolchic is not None:
+                    raise ValueError(
+                        "No-Cool-chic not available for P or B frames. "
+                        "Remove arguments --init_from_nocc"
+                    )
+
+            # Use no cool-chic only for the intra frames
+            elif no_coolchic is not None:
+
+                if frame.data.frame_data_type != "rgb":
+                    raise ValueError(
+                        "No-Cool-chic is not available for non-RGB data. Found "
+                        f"frame_data_type={frame.data.frame_data_type}. "
+                        "Remove arguments --init_from_nocc"
+                    )
+
+                archi_match = check_match_archi(
+                    nocc_param=no_coolchic["residue"].cc_enc.param,
+                    cc_param=cur_frame_encoder.coolchic_enc["residue"].param,
+                    error_on_mismatch=True
+                )
+
+                if not archi_match:
+                    print(
+                        "No cool-chic architecture is not aligned with the "
+                        "desired architecture. Ignoring init from No-Cool-chic!"
+                    )
+                    continue
+
+                # 1, compute the no-cool chic latent.
+                # 2, rescale then by the difference of the encoder_gains
+                # between no cool chic and the current coolchic encoder
+                # 3, use set param to plug both the latents and the neural nets
+                # of the no cool chic into the coolchic encoder
+
+                # Run analysis on CPU
+                no_cc_latent = no_coolchic["residue"].analysis(frame.data.data.cpu())
+
+                no_cc_gain_ratio = (
+                    no_coolchic["residue"].cc_enc.encoder_gains
+                    / cur_frame_encoder.coolchic_enc["residue"].encoder_gains
+                )
+
+                for idx_latent, latent_i in enumerate(no_cc_latent):
+                    no_coolchic["residue"].cc_enc.latent_grids[idx_latent] = (
+                        latent_i * no_cc_gain_ratio
+                    )
+
+                cur_frame_encoder.coolchic_enc["residue"].set_param(
+                    no_coolchic["residue"].cc_enc.get_param()
+                )
 
             list_candidates.append(cur_frame_encoder)
 
