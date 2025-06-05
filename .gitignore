@@ -1,38 +1,22 @@
-# Ignore some files
-*.bin
-*.yuv
-*.png
-*.pt
+.vscode/
+images/
+venv/
 *.pyc
-*.mp4
+*.pt
+*.png
+*.out
 
-# Ignore some temporary directories within the sources
-src/.vscode/settings.json
-src/tmp_bitstream_working_dir/*
-src/tmp_out_bistream/*
-src/logs/*
+docs/build/
+.DS_Store
+__pycache__/
+*.py[cod]
+*$py.class
+*.nfs*
 
-tmp_bitstream_working_dir/*
-tmp_out_bistream/*
-logs/*
-tmp/*
+test/test-workdir/
+test/out/
+venv/
 
-# Don't add videos or models...
-models/*
-raw_video/*
-compressed/*
-scripts/*
-
-# ... Except these ones
-# Models
-!models/ms_ssim-2021cc-1/0_model.pt
-!models/ms_ssim-2021cc-2/0_model.pt
-!models/ms_ssim-2021cc-3/0_model.pt
-!models/ms_ssim-2021cc-4/0_model.pt
-!models/ms_ssim-2021cc-5/0_model.pt
-!models/ms_ssim-2021cc-6/0_model.pt
-!models/ms_ssim-2021cc-7/0_model.pt
-
-# Video samples
-!raw_videos/BlowingBubbles_416x240_50_420.yuv
-
+coolchic/CCLIB/
+coolchic.egg-info/
+*.so

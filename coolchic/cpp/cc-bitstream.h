@@ -1,0 +1,118 @@
+/*
+    Software Name: Cool-Chic
+    SPDX-FileCopyrightText: Copyright (c) 2023-2025 Orange
+    SPDX-License-Identifier: BSD 3-Clause "New"
+
+    This software is distributed under the BSD-3-Clause license.
+    Authors: see CONTRIBUTORS.md
+*/
+
+
+/*
+ * bitstream reading.
+ */
+// !!! enum FRAME_DATA_TYPE
+struct cc_bs_gop_header
+{
+    int n_bytes_header;
+    int img_h;
+    int img_w;
+    int frame_data_type; // 0 rgb, 1 yuv420, 2 yuv444
+    int output_bitdepth;
+    //int intra_period;
+    //int p_period;
+};
+
+struct cc_bs_syn_layer {
+    int n_out_ft;
+    int ks;
+    bool residual;
+    bool relu;
+};
+
+// quantization information for module weights or biases.  Possibly multiple layers encoded.
+struct cc_bs_layer_quant_info
+{
+    int q_step_index_nn_weight;
+    int q_step_index_nn_bias;
+    int scale_index_nn_weight;
+    int scale_index_nn_bias;
+    int n_bytes_nn_weight;
+    int n_bytes_nn_bias;
+};
+
+struct cc_bs_frame_coolchic
+{
+    bool latents_zero;
+    int n_hidden_layers_arm;
+    int dim_arm;
+
+    int  n_ups_kernel;
+    int  ups_k_size;
+    int  n_ups_preconcat_kernel;
+    int  ups_preconcat_k_size;
+
+    int n_syn_layers;
+    std::vector<struct cc_bs_syn_layer> layers_synthesis;
+    struct cc_bs_layer_quant_info arm_lqi;
+    struct cc_bs_layer_quant_info ups_lqi;
+    struct cc_bs_layer_quant_info syn_lqi;
+
+    int hls_sig_blksize;
+
+    int n_latent_n_resolutions;
+    int latent_n_2d_grid;
+    std::vector<int> n_ft_per_latent;
+    std::vector<int> n_bytes_per_latent;
+
+    // weights, biases and latents.  BAC coded.
+    std::vector<unsigned char> m_arm_weights_hevc;
+    std::vector<unsigned char> m_arm_biases_hevc;
+    std::vector<unsigned char> m_ups_weights_hevc; // both lb and hb
+    std::vector<unsigned char> m_ups_biases_hevc; // both lb and hb
+    std::vector<unsigned char> m_syn_weights_hevc; // all branches
+    std::vector<unsigned char> m_syn_biases_hevc; // all branches
+    std::vector<std::vector<unsigned char>> m_latents_hevc;
+
+public:
+    void copy_archi_from(struct cc_bs_frame_coolchic const &src, int topology_copy_bits);
+    void print();
+};
+
+// topology-copy bits.
+#define TOP_COPY_ARM 0
+#define TOP_COPY_UPS 1
+#define TOP_COPY_SYN 2
+#define TOP_COPY_LAT 3
+
+struct cc_bs_frame_header
+{
+    short n_bytes_header;
+    int display_index;
+    unsigned char frame_type; // 'I', 'P', 'B'
+    int topology_copy[2]; // bits. arm, ups, syn, lat
+    bool latents_zero[2];
+    int  global_flow[2][2]; // [ref0|ref1][y|x]
+    // frame type giving number of coolchics. and references.
+};
+
+struct cc_bs_frame {
+    struct cc_bs_frame_header m_frame_header;
+    std::vector<struct cc_bs_frame_coolchic> m_coolchics; // residue, motion
+};
+
+class cc_bs {
+public:
+    cc_bs() { m_f = NULL; }
+    ~cc_bs() { if (m_f != NULL) fclose(m_f); }
+    bool open(std::string filename, int verbosity = 0);
+    struct cc_bs_frame *decode_frame(struct cc_bs_frame const *prev_coded_I_frame_symbols, struct cc_bs_frame const *prev_coded_frame_symbols, int verbosity = 0);
+private:
+    bool read_gop_header(int verbosity = 0);
+
+public:
+    std::string m_filename;
+    struct cc_bs_gop_header m_gop_header;
+private:
+    FILE *m_f;
+};

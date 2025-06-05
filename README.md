@@ -1,283 +1,322 @@
-# AIVC: _Artificial Intelligence-based Video Coding_
-
-## In a few words
-
-AIVC is a neural-based video codec offering competitive performance and a lot of flexibility.
-
-Many more details are available @ [https://orange-opensource.github.io/AIVC/](https://orange-opensource.github.io/AIVC/)
-
-A paper describing AIVC is available @ [_AIVC: Artificial Intelligence based Video Codec_, Ladune _et al._](https://arxiv.org/abs/2202.04365)
+[![Forks][forks-shield]][forks-url]
+[![Stargazers][stars-shield]][stars-url]
+[![Issues][issues-shield]][issues-url]
+[![BSD-3 License][license-shield]][license-url]
+[![PyTorch][pytorch-shield]][pytorch-url]
 
 
-<!-- __AIVC__ is a **fully-learned video coder**. It offers many practical features and great flexibility:
 
-| Features                | What's inside?  |
-| :---:                   | :-: |
-| Coding configurations   | Random Access (RA), Low-delay P (LDP) , All Intra (AI) |
-| Tunable Intra Period    | Up to 64
-| Tunable GOP size        | Up to 64
-| 7 Different rates target   | 1 MBit/s to 20 MBit/s (for 1080p videos)
-| Competitive performances| On par with HM (HEVC Test Model)
-| Convenient input format | 8-bit YUV 4:2:0 videos
+<!-- PROJECT LOGO -->
+<br />
+<div align="center">
 
-AIVC is an refined version of the system described in our ICLR 21 paper: [_Conditional Coding for Flexible Learned Video Compression_, Ladune _et al._](https://arxiv.org/abs/2104.09103)
+<picture>
+  <!-- User prefers light mode: -->
+  <source srcset="docs/source/assets/coolchic-logo-light.png" media="(prefers-color-scheme: light)" alt="Cool-chic Logo" height="200"/>
 
-Some slides presenting AIVC are available [_here_](https://theoladune.github.io/AIVC-Seminar/).
+  <!-- User prefers dark mode: -->
+  <source srcset="docs/source/assets/coolchic-logo-dark.png"  media="(prefers-color-scheme: dark)" alt="Cool-chic Logo" height="200"/>
 
-A descriptive factsheet will be available soon! -->
+  <!-- User has no color preference: -->
+  <img src="docs/source/assets/coolchic-logo-dark.png" alt="Cool-chic Logo" height="200"/>
+</picture>
+  <p align="center">
+    <!-- Low-complexity neural image codec based on overfitting. -->
+    <br />
+    <a href="https://orange-opensource.github.io/Cool-Chic/"><strong>Explore the docs </strong></a>
+    <!-- <br />
+    <br /> -->
+    .
+    <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/new_stuff.html">What's new in 4.0.0?</a>
+    ·
+    <a href="https://orange-opensource.github.io/Cool-Chic/results/image/compression_performance.html">Image coding performance</a>
+    .
+    <a href="https://orange-opensource.github.io/Cool-Chic/results/video/compression_performance.html">Video coding performance</a>
+  </p>
+</div>
 
+<!-- # What's Cool-chic? -->
 
-<!-- ## Rate-distortion performance
+Cool-chic (pronounced <span class="ipa">/kul ʃik/</span> as in French 🥖🧀🍷) is
+a low-complexity neural image codec based on overfitting.
 
-Rate-distortion results of the models are presented on different datasets:
+* 🏆 **Coding performance**: Cool-chic compresses images as well as H.266/VVC
 
-* [CLIC 21 video track](www.compression.cc), validation set (720p)
-* HEVC Class B (1080p), C (480p), D (240p) and E (720p)
+* 🪶 **Lightweight decoder**: Cool-chic decoder performs only 1000 multiplications per decoded pixel
 
-With two different coding configurations
+* 🚀 **Fast CPU-only decoder**: Decode a 1280x720 image in 100 ms on CPU with our decoder written in C
 
-| Test configuration  | Bi-directional prediction | Intra Period | GOP size |
-| :---:               | :-:                       |  :-:         |  :-:     |
-| Random Access (RA)  | ✅                        |     32       | 32       |
-| Low-delay P (LDP )  | ❌                        |     32<sup>*</sup>  | /        |
-
-<sup>*</sup>  _set to 8 for AIVC and 32 for HEVC_
-
-Additionally, we present All Intra (pure image coding) results for the CLIC dataset.
-
----
-
-### CLIC 2021 video track, validation set
-<p align="center"><img width="400" alt="CLIC_RD" src="doc/rd_performance/clic21.png"></p>
-
----
-
-### HEVC Class B (1080p)
-
-<p align="center">
-<img width="400" alt="BasketballDrive" src="doc/rd_performance/BasketballDrive_1920x1080_50_420.png"> <img width="400" alt="BQTerrace_RD" src="doc/rd_performance/BQTerrace_1920x1080_60_420.png">
-</p>
-
-<p align="center">
-<img width="400" alt="Cactus_RD" src="doc/rd_performance/Cactus_1920x1080_50_420.png"> <img width="400" alt="Kimono_RD" src="doc/rd_performance/Kimono_1920x1080_24_420.png"> 
-</p>
-
-<p align="center">
-    <img width="400" alt="ParkScene_RD" src="doc/rd_performance/ParkScene_1920x1080_24_420.png">
-</p>
-
----
-
-### HEVC Class C (480p)
-
-<p align="center">
-<img width="400" alt="RaceHorses_RD" src="doc/rd_performance/RaceHorses_832x480_30_420.png"> <img width="400" alt="BQMall_RD" src="doc/rd_performance/BQMall_832x480_60_420.png">
-</p>
-
-<p align="center">
-<img width="400" alt="PartyScene_RD" src="doc/rd_performance/PartyScene_832x480_50_420.png"> <img width="400" alt="BasketballDrill_RD" src="doc/rd_performance/BasketballDrill_832x480_50_420.png"> 
-</p>
+* 🖼️ **I/O format**: Encode PNG, PPM and YUV 420 & 444 files with a bitdepth of 8 to 16 bits
 
 
----
+<div align="center">
 
-### HEVC Class D (240p)
+### 🎥 __Cool-chic 4.0.0: Video is back!__ 🎥
 
-<p align="center">
-<img width="400" alt="RaceHorses_RD" src="doc/rd_performance/RaceHorses_416x240_30_420.png"> <img width="400" alt="BQSquare_RD" src="doc/rd_performance/BQSquare_416x240_60_420.png">
-</p>
+</div>
 
-<p align="center">
-<img width="400" alt="BlowingBubbles_RD" src="doc/rd_performance/BlowingBubbles_416x240_50_420.png"> <img width="400" alt="BasketballPass_RD" src="doc/rd_performance/BasketballPass_416x240_50_420.png"> 
-</p>
+- Cool-chic now compresses inter frames with two cool-chic modules: one for the motion and one for the residue
+- The motion module training is guided through a RAFT optical flow estimator for more accurate motion.
 
----
+Check-out the [release history](https://github.com/Orange-OpenSource/Cool-Chic/releases) to see previous versions of Cool-chic.
 
-### HEVC Class E (720p videoconferencing)
+# Setup
 
-<p align="center">
-<img width="400" alt="FourPeople_RD" src="doc/rd_performance/FourPeople_1280x720_60_420.png"> <img width="400" alt="Johnny_RD" src="doc/rd_performance/Johnny_1280x720_60_420.png">
-</p>
-
-<p align="center">
-<img width="400" alt="KristenAndSara_RD" src="doc/rd_performance/KristenAndSara_1280x720_60_420.png">
-</p>
-
---- -->
-
-## Quick start
-
-### Download
-
-Some (big) files are stored using Git LFS which has to be installed prior to cloning the repository:
-
-```
-$ sudo apt-get install git-lfs
-$ git lfs install
-```
-
-Clone the repositories from GitHub:
-
-```
-$ git clone https://github.com/Orange-OpenSource/AIVC.git
-```
-
-### Docker container
-
-The best way to ensure reproducibility is to run the code within a docker container built from the following Dockerfile
-
-```
-FROM pytorch/pytorch:1.7.0-cuda11.0-cudnn8-devel
-
-RUN apt-get update && \
-    pip install scipy && \
-    pip install torchac # Thanks to Fabian Mentzer for the package! https://github.com/fab-jul/torchac
-```
-
-Create the docker image by executing the following command within the folder containing the Dockerfile 
-
-```
-$ docker build -t aivc .
-```
-
-Finally, launch an interactive container of the aivc docker image
+More details are available on the [Cool-chic page](https://orange-opensource.github.io/Cool-Chic/getting_started/quickstart.html)
 
 ```bash
-$ docker run -it -v <path_to_aivc>:<path_to_aivc> aivc bash # <path_to_aivc> is the path where the repo is cloned
+# We need to get these packages to compile the C API and bind it to python.
+sudo add-apt-repository -y ppa:deadsnakes/ppa && sudo apt update
+sudo apt install -y build-essential python3.10-dev pip g++
+git clone https://github.com/Orange-OpenSource/Cool-Chic.git && cd Cool-Chic
+
+# Install create and activate virtual env
+python3.10 -m pip install virtualenv
+python3.10 -m virtualenv venv && source venv/bin/activate
+
+# Install Cool-chic
+pip install -e .
+
+# Sanity check
+python -m test.sanity_check
 ```
 
-### Sanity check
-
-Finally, launch the following script to ensure than everything is working properly.
-
-```
-$ cd AIVC/src
-$ ./sanity_script.sh
-```
-
-This scripts encodes, decodes and measures the size and quality of the compressed video. It should return
-
-```
-PSNR    [dB]: 26.72133
-MS-SSIM     : 0.93531
-MS-SSIM [dB]: 11.89147
-Size [bytes]: 28429
-```
-
-## Usage
-
-### Structure
-
-The script ```aivc.py``` performs 3 tasks
-1. It encodes a .yuv video into a bitstream
-2. It decodes a bitstream into a .yuv video
-3. It measures the size of the bitstream and the quality (MS-SSIM and PSNR) of the compressed video. (_Quality measure derives from the [CLIC video track](http://compression.cc/)_)
-
-### Data format
-
-The input and output format is YUV 420. To be processed by the model and to measure the quality, each frame is transformed into a triplet of PNGs, one for each color channel.
-
-## How to compress?
-
-The ```sanity_script.sh``` provides an example of how to compress a video.
-
-```bash
-python aivc.py \
-    -i ../raw_videos/BlowingBubbles_416x240_50_420 \
-    -o ../compressed.yuv \
-    --bitstream_out ../bitstream.bin \
-    --start_frame 0 \
-    --end_frame 100 \
-    --coding_config RA \
-    --gop_size 16 \
-    --intra_period 32 \
-    --model ms_ssim-2021cc-6
-```
-
-| Option          | Description                                                | Usage                                                                                                     | Example                                                                                            |
-|-----------------|------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------|
-| -i              | Path of the input video.                                   | Either a .yuv file or a folder containing the already extracted PNGs triplet                              | -i ../raw_videos/BlowingBubbles_416x240_50_420.yuv  -i ../raw_videos/BlowingBubbles_416x240_50_420 |
-| -o              | Path of the compressed video                               | A .yuv file (the PNG triplets are generated alongside the .yuv in a dedicated folder)                     | -o ../compressed.yuv                                                                               |
-| --bitstream_out | Path of the bitstream                                      | A .bin file                                                                                               | --bitstream_out ../bitstream.bin                                                                   |
-| --start_frame   | Index of the first frame to compress                       | An integer, 0 corresponds to the very first frame                                                         | --start_frame 0                                                                                    |
-| --end_frame     | Index of the last frame to compress                        | An integer, the last frame is included. Use -1 to compress until the last frame.                          | --end_frame 100                                                                                    |
-| --coding_config | Desired coding configuration                               | RA for Random Access (I, P and B-frames) LDP for Low-delay P (I and P-frames) AI for All Intra (I-frames) | --coding_configuration RA                                                                          |
-| --gop_size      | Number of frames within a hierarchical GOP (RA only)       | Must be a power of two. Min: 2, Max: 65535.  This is different from the intra period! See example below.     | --gop_size 16                                                                                      |
-| --intra_period  | Number of inter-frames between two intra (RA and LDP only) | Must be a multiple of gop size (RA) Min: 2, Max: 65535.                  | --intra_period 32                                                                                  |
-| --model         | Model used to perform encoding and decoding.               | ms_ssim-2021cc-X where X in [1, 7]. 1 is the highest rate, 7 the lowest rate.                                    | --model ms_ssim-2021cc-6                                                                                  |
-| --cpu           | Run on CPU                                                 |                                                                                                           | --cpu                                                                                              |
-
-## Coding structures
-
-### Random Access
-
-This is a random access coding structure
-   * Intra period: 16
-   * GOP size 8
-
-<img src="doc/coding_structures/RA_big.png" alt="RA" height="178"/>
-
-### Low-delay P
-
-This is a low-delay P coding structure
-   * Intra period: 16
-
-<img src="doc/coding_structures/LDP_big.png" alt="LDP" height="150"/>
-
-### All Intra
-
-Plain image coding for all the frames
-
-<img src="doc/coding_structures/AI.png" alt="AI" height="135"/>
+You're good to go!
 
 
-## Contribute
+## Image compression performance
 
-Questions, remarks, bug reports can be posted on the [AIVC google group](https://groups.google.com/g/aivc).
+The Cool-chic page provides [comprehensive image rate-distortion results](https://orange-opensource.github.io/Cool-Chic/results/image/compression_performance.html).
+
+<table class="tg"><thead>
+  <tr>
+    <th class="tg-86ol" rowspan="2"></th>
+    <th class="tg-86ol" colspan="5">BD-rate of Cool-chic 4.0 vs. [%]</th>
+    <th class="tg-86ol" colspan="2">Avg. decoder complexity</th>
+  </tr>
+  <tr>
+    <th class="tg-86ol"><a href="https://arxiv.org/abs/2001.01568" target="_blank" rel="noopener noreferrer">Cheng</a></th>
+    <th class="tg-86ol"><a href="https://arxiv.org/abs/2203.10886" target="_blank" rel="noopener noreferrer">ELIC</a></th>
+    <th class="tg-86ol"><a href="https://arxiv.org/abs/2312.02753" target="_blank" rel="noopener noreferrer">C3</a></th>
+    <th class="tg-86ol">HEVC (HM 16)</th>
+    <th class="tg-86ol">VVC (VTM 19)</th>
+    <th class="tg-86ol">MAC / pixel</th>
+    <th class="tg-86ol">CPU Time [ms]</th>
+  </tr></thead>
+<tbody>
+  <tr>
+    <td class="tg-86ol">kodak</td>
+    <td class="tg-qch7">-4.2 %</td>
+    <td class="tg-xd3r">+7.5 %</td>
+    <td class="tg-qch7">-4.3 %</td>
+    <td class="tg-qch7">-17.2 %</td>
+    <td class="tg-xd3r">+3.4 % </td>
+    <td class="tg-dfl2">1303</td>
+    <td class="tg-dfl2">74</td>
+  </tr>
+  <tr>
+    <td class="tg-86ol">clic20-pro-valid</td>
+    <td class="tg-qch7">-13.2 %</td>
+    <td class="tg-qch7">-0.2 %</td>
+    <td class="tg-qch7">-1.3 %</td>
+    <td class="tg-qch7">-25.1 %</td>
+    <td class="tg-qch7">-2.3 %<br></td>
+    <td class="tg-dfl2">1357</td>
+    <td class="tg-dfl2">354</td>
+  </tr>
+  <tr>
+    <td class="tg-86ol">jvet (BCDEF)</td>
+    <td class="tg-5niz">/</td>
+    <td class="tg-5niz">/</td>
+    <td class="tg-5niz">/</td>
+    <td class="tg-qch7">-18.3 %</td>
+    <td class="tg-xd3r">+18.6 %</td>
+    <td class="tg-dfl2">1249</td>
+    <td class="tg-dfl2">143</td>
+  </tr>
+  <tr>
+    <td class="tg-x9uu">jvet (class B)</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-9.9 %</td>
+    <td class="tg-arzi">+20.7 %</td>
+    <td class="tg-m5nv">1300</td>
+    <td class="tg-m5nv">282</td>
+  </tr>
+  <tr>
+    <td class="tg-x9uu">jvet (class C)</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-16.1 %</td>
+    <td class="tg-arzi">+9.2 %</td>
+    <td class="tg-m5nv">1289</td>
+    <td class="tg-m5nv">69</td>
+  </tr>
+  <tr>
+    <td class="tg-x9uu">jvet (class D)</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-12.4 %</td>
+    <td class="tg-arzi">+9.6 %</td>
+    <td class="tg-m5nv">948</td>
+    <td class="tg-m5nv">18</td>
+  </tr>
+  <tr>
+    <td class="tg-x9uu">jvet (class E)</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-6.2 %</td>
+    <td class="tg-arzi">+27.8 %</td>
+    <td class="tg-m5nv">1347</td>
+    <td class="tg-m5nv">125</td>
+  </tr>
+  <tr>
+    <td class="tg-x9uu">jvet (class F)</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-1keu">/</td>
+    <td class="tg-uflc">-31.8 %</td>
+    <td class="tg-arzi">+20.6 %</td>
+    <td class="tg-m5nv">1249</td>
+    <td class="tg-m5nv">182</td>
+  </tr>
+</tbody></table>
+
+<br/>
+
+## Compression performance and decoding time
+
+_Decoding time are obtained on a single CPU core of an an AMD EPYC 7282 16-Core Processor_
+
+_PSNR is computed in the RGB domain for kodak and CLIC20, in the YUV420 domain for jvet_
 
 
-## Changelog
+### Kodak
 
-* February 2022
-  * Fix memory leak
-  * Allow for more coding configurations
-* September 2021
-  * Initial release of the code
-  * Models
+<div style="text-align: center;">
+    <img src="./docs/source/assets/kodak/concat_img.png" alt="Kodak rd results" width="90%" style="centered"/>
+</div>
+<br/>
+
+### CLIC20 Pro Valid
+
+<div style="text-align: center;">
+    <img src="./docs/source/assets/clic20-pro-valid/concat_img.png" alt="CLIC20 rd results" width="90%" style="centered"/>
+</div>
+<br/>
+
+### JVET Class B
+
+<div style="text-align: center;">
+    <img src="./docs/source/assets/jvet/concat_img_classB.png" alt="JVET class B rd results" width="90%" style="centered"/>
+</div>
+<br/>
+
+</br>
 
 
-## Contact
+## Video compression performance
 
-* [Personal page](https://theoladune.github.io/)
-* E-mail: theo.ladune@gmail.com
+The Cool-chic page provides [comprehensive video rate-distortion results](https://orange-opensource.github.io/Cool-Chic/results/video/compression_performance.html).
 
----
+### Random access results (intra period 32)
 
-## License
+  <table class="tg"><thead>
+  <tr>
+      <th class="tg-86ol" rowspan="2">Sequence</th>
+      <th class="tg-86ol" colspan="3">BD-rate of Cool-chic 4.0.0 against [%]</th>
+      <th class="tg-86ol" colspan="2">Decoding complexity</th>
+  </tr>
+  <tr>
+      <th class="tg-86ol">HEVC (HM 16)</th>
+      <th class="tg-86ol">HEVC (x265-medium)</th>
+      <th class="tg-86ol">AVC (x264-medium)</th>
+      <th class="tg-86ol">MAC / pixel</th>
+      <th class="tg-86ol">Frame rate [fps]</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+      <td class="tg-9mze">C-BasketballDrill</td>
+      <td class="tg-xd3r">+59.6</td>
+      <td class="tg-xd3r">+15.2</td>
+      <td class="tg-qch7">-11.5</td>
+      <td class="tg-dfl2">946</td>
+      <td class="tg-dfl2">18.3</td>
+  </tr>
+  <tr>
+      <td class="tg-9mze">C-BQMall</td>
+      <td class="tg-xd3r">+128.7</td>
+      <td class="tg-xd3r">+49.3</td>
+      <td class="tg-xd3r">+20.6</td>
+      <td class="tg-dfl2">945</td>
+      <td class="tg-dfl2">16.7</td>
+  </tr>
+  <tr>
+      <td class="tg-9mze">C-PartyScene</td>
+      <td class="tg-xd3r">+113.0</td>
+      <td class="tg-xd3r">+37.9</td>
+      <td class="tg-xd3r">+20.3</td>
+      <td class="tg-dfl2">946</td>
+      <td class="tg-dfl2">17.5</td>
+  </tr>
+  <tr>
+      <td class="tg-9mze">C-RaceHorses</td>
+      <td class="tg-xd3r">+118.7</td>
+      <td class="tg-xd3r">+41.0</td>
+      <td class="tg-xd3r">+19.3</td>
+      <td class="tg-dfl2">950</td>
+      <td class="tg-dfl2">16.5</td>
+  </tr>
+  <tr>
+      <td class="tg-u3ui">Average</td>
+      <td class="tg-aaaa">+105.0</td>
+      <td class="tg-aaaa">+35.9</td>
+      <td class="tg-aaaa">+12.2</td>
+      <td class="tg-u3ui">947</td>
+      <td class="tg-u3ui">17.3</td>
+  </tr>
+  </tbody></table>
 
-Copyright 2021 Orange
+### C-BasketballDrill
 
-Redistribution and use in source and binary forms, with or without modification,
-are permitted provided that the following conditions are met:
+<div style="text-align: center;">
+    <img src="./docs/source/assets/video-ra-jvet-c/rd-C-BasketballDrill_832x480_50p_yuv420_8b.png" alt="BasketballDrill rd results" width="90%" style="centered"/>
+</div>
+<br/>
 
-1. Redistributions of source code must retain the above copyright notice, this
-list of conditions and the following disclaimer.
 
-2. Redistributions in binary form must reproduce the above copyright notice,
-this list of conditions and the following disclaimer in the documentation and/or
-other materials provided with the distribution.
+# Thanks
 
-3. Neither the name of the copyright holder nor the names of its contributors
-may be used to endorse or promote products derived from this software without
-specific prior written permission.
+Special thanks go to Hyunjik Kim, Matthias Bauer, Lucas Theis, Jonathan Richard Schwarz and Emilien Dupont for their great work enhancing Cool-chic: [_C3: High-performance and low-complexity neural compression from a single image or video_, Kim et al.](https://arxiv.org/abs/2312.02753)
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
-ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+<!-- MARKDOWN LINKS & IMAGES -->
+<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
+[contributors-shield]: https://img.shields.io/github/contributors/Orange-OpenSource/Cool-Chic.svg?style=for-the-badge
+[contributors-url]: https://github.com/Orange-OpenSource/Cool-Chic/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/Orange-OpenSource/Cool-Chic.svg?style=for-the-badge
+[forks-url]: https://github.com/Orange-OpenSource/Cool-Chic/network/members
+[stars-shield]: https://img.shields.io/github/stars/Orange-OpenSource/Cool-Chic.svg?style=for-the-badge
+[stars-url]: https://github.com/Orange-OpenSource/Cool-Chic/stargazers
+[issues-shield]: https://img.shields.io/github/issues/Orange-OpenSource/Cool-Chic.svg?style=for-the-badge
+[issues-url]: https://github.com/Orange-OpenSource/Cool-Chic/issues
+[license-shield]: https://img.shields.io/github/license/Orange-OpenSource/Cool-Chic.svg?style=for-the-badge
+[license-url]: https://github.com/Orange-OpenSource/Cool-Chic/blob/master/LICENSE.txt
+[pytorch-shield]: https://img.shields.io/badge/PyTorch-0769AD?style=for-the-badge&logo=pytorch&logoColor=white
+[pytorch-url]: https://pytorch.org/
+
+<div align="center">
+
+
+#
+
+</br>
+
+<picture>
+  <!-- User has no color preference: -->
+  <img src="docs/source/assets/logo_orange.png" alt="Cool-chic Logo" height="150"/>
+</picture>
+</div>
