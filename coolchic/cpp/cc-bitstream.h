@@ -64,6 +64,7 @@ struct cc_bs_frame_coolchic
     int latent_n_2d_grid;
     std::vector<int> n_ft_per_latent;
     std::vector<int> n_bytes_per_latent;
+    int n_leading_zero_feature_layers;
 
     // weights, biases and latents.  BAC coded.
     std::vector<unsigned char> m_arm_weights_hevc;
@@ -93,6 +94,7 @@ struct cc_bs_frame_header
     int topology_copy[2]; // bits. arm, ups, syn, lat
     bool latents_zero[2];
     int  global_flow[2][2]; // [ref0|ref1][y|x]
+    int  warp_filter_length;
     // frame type giving number of coolchics. and references.
 };
 

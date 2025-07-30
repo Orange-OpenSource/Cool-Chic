@@ -316,13 +316,13 @@ def utf_code(val, signed = False):
 
     nbytes = 1
     # 7 bits per byte output.  How many bytes to code val?
-
-    while (1<<(7*nbytes)) <= val:
+    
+    while (1<<(7*nbytes))-1 < val:
         nbytes += 1
-
+    
     byte_to_write = b""
-    while nbytes > 0:
-        byte_to_write += ((1<<7)|(val>>(nbytes*7)&0x7f)).to_bytes(1, byteorder="big", signed=False)
+    while nbytes > 1:
+        byte_to_write += ((1<<7)|((val>>((nbytes-1)*7))&0x7f)).to_bytes(1, byteorder="big", signed=False)
         nbytes -= 1
 
     # High bit not set on last byte.
@@ -348,10 +348,10 @@ def get_ref_cc(ref_frame_encoder, cc_idx):
     return result
 
 # Returns a bit mask of what topologies are equal:
-# ARM bit 0
-# UPS bit 1
-# SYN bit 2
-# LAT bit 3
+TOPOLOGY_ARM = 0
+TOPOLOGY_UPS = 1
+TOPOLOGY_SYN = 2
+TOPOLOGY_LAT = 3
 def cc_topologies_equal(cc_enc_1, cc_enc_2):
     if cc_enc_2 is None:
         return 0
@@ -364,19 +364,18 @@ def cc_topologies_equal(cc_enc_1, cc_enc_2):
     #        lat {cc_enc_1.param.latent_n_grids} {cc_enc_1.param.n_ft_per_res}")
     if cc_enc_1.param.dim_arm == cc_enc_2.param.dim_arm \
         and cc_enc_1.param.n_hidden_layers_arm == cc_enc_2.param.n_hidden_layers_arm:
-        result |= (1<<0)
+        result |= (1<<TOPOLOGY_ARM)
     if cc_enc_1.upsampling.n_ups_kernel == cc_enc_2.upsampling.n_ups_kernel \
         and cc_enc_1.upsampling.n_ups_preconcat_kernel == cc_enc_2.upsampling.n_ups_preconcat_kernel \
         and cc_enc_1.param.ups_k_size == cc_enc_2.param.ups_k_size \
         and cc_enc_1.param.ups_preconcat_k_size == cc_enc_2.param.ups_preconcat_k_size:
-        result |= (1<<1)
+        result |= (1<<TOPOLOGY_UPS)
     if cc_enc_1.param.layers_synthesis == cc_enc_2.param.layers_synthesis:
-        result |= (1<<2)
+        result |= (1<<TOPOLOGY_SYN)
     if cc_enc_1.param.latent_n_grids == cc_enc_2.param.latent_n_grids \
         and cc_enc_1.param.n_ft_per_res == cc_enc_2.param.n_ft_per_res: # list comparison
-        result |= (1<<3)
+        result |= (1<<TOPOLOGY_LAT)
 
-    #print("returning 0x%x"%(result))
     return result
 
 def code_cc_topology(cc_enc, topologies_equal_bits):
@@ -396,13 +395,13 @@ def code_cc_topology(cc_enc, topologies_equal_bits):
         f"{cc_enc.n_hidden_layers_arm} in {cc_name}"
     )
 
-    if (topologies_equal_bits&(1<<0)) == 0:
+    if (topologies_equal_bits&(1<<TOPOLOGY_ARM)) == 0:
         byte_to_write += (
             ((cc_enc.param.dim_arm // 8) << 4) \
             | cc_enc.param.n_hidden_layers_arm
         ).to_bytes(1, byteorder="big", signed=False)
 
-    if (topologies_equal_bits&(1<<1)) == 0:
+    if (topologies_equal_bits&(1<<TOPOLOGY_UPS)) == 0:
         byte_to_write += (
             ((cc_enc.upsampling.n_ups_kernel)<<4)|(cc_enc.param.ups_k_size)
         ).to_bytes(1, byteorder="big", signed=False)
@@ -410,7 +409,7 @@ def code_cc_topology(cc_enc, topologies_equal_bits):
             ((cc_enc.upsampling.n_ups_preconcat_kernel)<<4)|(cc_enc.param.ups_preconcat_k_size)
         ).to_bytes(1, byteorder="big", signed=False)
 
-    if (topologies_equal_bits&(1<<2)) == 0:
+    if (topologies_equal_bits&(1<<TOPOLOGY_SYN)) == 0:
         byte_to_write += len(
             cc_enc.param.layers_synthesis
         ).to_bytes(1, byteorder="big", signed=False)
@@ -425,19 +424,23 @@ def code_cc_topology(cc_enc, topologies_equal_bits):
                 + _POSSIBLE_SYNTHESIS_NON_LINEARITY.index(non_linearity)
             ).to_bytes(1, byteorder="big", signed=False)
 
-    if (topologies_equal_bits&(1<<3)) == 0:
+    if (topologies_equal_bits&(1<<TOPOLOGY_LAT)) == 0:
         byte_to_write += cc_enc.param.latent_n_grids.to_bytes(
             1, byteorder="big", signed=False
         )
 
+        # features                                  
+        n_feature_byte = 0                          
         for i, latent_i in enumerate(cc_enc.latent_grids):
             n_ft_i = latent_i.size()[1]
-            if n_ft_i > 2**8 - 1:
+            if n_ft_i > 1:
                 print(f"Number of feature maps for latent {i} is too big in {cc_name}!")
-                print(f"Found {n_ft_i}, should be smaller than {2 ** 8 - 1}")
+                print(f"Found {n_ft_i}, should be 0 or 1")
                 print("Exiting!")
                 return
-            byte_to_write += n_ft_i.to_bytes(1, byteorder="big", signed=False)
+            n_feature_byte |= n_ft_i << (7-i)       
+    
+        byte_to_write += n_feature_byte.to_bytes(1, byteorder="big", signed=False)
 
     return byte_to_write
 
@@ -448,6 +451,14 @@ def cc_latents_zero(cc_enc, n_bytes_per_latent):
         if l != 0:
             return 0
     return 1
+
+def code_filter_length(filter_length: int):
+    # We can code even values in range [2..16]
+    # The 8 values are coded in 3 bits.
+    if filter_length < 2 or filter_length > 16 or filter_length%2 != 0:
+        print(f"unsupporte warp filter length {filter_length}: only even values [2..16]")
+        exit(1)
+    return (filter_length-2)//2
 
 def write_frame_header(
     frame_encoder: FrameEncoder,
@@ -478,8 +489,6 @@ def write_frame_header(
     """
 
 
-    print(f'FRAME TYPE {frame_encoder.frame_type}')
-
     # UTF:  n_header_bytes
     # UTF:  display_index
 
@@ -487,10 +496,6 @@ def write_frame_header(
     byte_to_write += utf_code(display_index)
 
     frame_type_bits = code_frame_type(frame_encoder.frame_type)
-
-    # BITS: (hi to lo)
-    # BITS: lat_all_zero:   2 bits I->1+0, P|B->2
-    # BITS: frame_type: 2 bits (I 00, P 01, B 10)
 
     cc_eq_bits = [0, 0]
     cc_latz_bits = [0, 0]
@@ -502,26 +507,24 @@ def write_frame_header(
         cc_idx += 1
 
     if frame_encoder.frame_type == "I":
+        # low to high order
         # frame-type(2), latz0(1).
         byte_to_write += ((frame_type_bits)|(cc_latz_bits[0]<<2)).to_bytes(1, byteorder="big", signed=False)
     else:
+        # low to high order
         # frame_type(2), latz0(1), cceq0(4)
-        # latz1(1), cceq1(4)
+        # latz1(1), cceq1(4), filter_length(3)
+        filter_length_bits = code_filter_length(frame_encoder.warp_parameter.filter_size)
         byte_to_write += ((frame_type_bits)|(cc_latz_bits[0]<<2)|(cc_eq_bits[0]<<3)).to_bytes(1, byteorder="big", signed=False)
-        byte_to_write += ((cc_latz_bits[1])|(cc_eq_bits[1]<<1)).to_bytes(1, byteorder="big", signed=False)
-
-    print("topology-equal-bits: 0x%x 0x%x"%(cc_eq_bits[0], cc_eq_bits[1]))
-    print("latents-zero-bits:", cc_latz_bits)
+        byte_to_write += ((cc_latz_bits[1])|(cc_eq_bits[1]<<1)|(filter_length_bits<<5)).to_bytes(1, byteorder="big", signed=False)
 
     # global flows
     if frame_encoder.frame_type == "P" or frame_encoder.frame_type == "B":
         byte_to_write += utf_code(int(frame_encoder.global_flow_1[0,0,0,0]), signed=True)
         byte_to_write += utf_code(int(frame_encoder.global_flow_1[0,1,0,0]), signed=True)
-        print("global_flow_1", frame_encoder.global_flow_1)
         if frame_encoder.frame_type == "B":
             byte_to_write += utf_code(int(frame_encoder.global_flow_2[0,0,0,0]), signed=True)
             byte_to_write += utf_code(int(frame_encoder.global_flow_2[0,1,0,0]), signed=True)
-            print("global_flow_2", frame_encoder.global_flow_2)
 
     # Write, if necessary, CC topology, followed by quantization levels and later CABAC coded substream lengths.
     cc_idx = 0

@@ -37,6 +37,8 @@ public:
           ,m_arm_pad(0)
           ,m_ups_pad(0)
           ,m_max_pad(0)
+          ,m_target_img_h(0)
+          ,m_target_img_w(0)
           { 
             if (m_output_bitdepth == 0)
                 m_output_bitdepth = m_gop_header.output_bitdepth;
@@ -95,6 +97,10 @@ private:
     int             m_arm_pad;
     int             m_ups_pad;
     int             m_max_pad;
+
+    // we can now send a downsampled image through syn.
+    int             m_target_img_h;
+    int             m_target_img_w;
 
     frame_memory<UPS_INT_FLOAT>    m_ups_h2w2; // internal refinement target prior to upsample.
     frame_memory<UPS_INT_FLOAT>    m_ups_hw;  // during 2-pass refinement and 2-padd upsample.

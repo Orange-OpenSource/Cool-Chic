@@ -9,7 +9,7 @@
 from typing import List
 
 import torch
-from enc.component.intercoding.warp import warp_fn
+from enc.component.intercoding.warp import vanilla_warp_fn
 from enc.io.format.yuv import convert_420_to_444, rgb2yuv, yuv2rgb
 from enc.io.framedata import FrameData
 from enc.training.loss import _compute_mse
@@ -87,7 +87,7 @@ def get_raft_optical_flow(
         raw_ref_data = (raw_ref_data + 1) * 0.5
 
         flows.append(raft_flow)
-        raft_pred = warp_fn(raw_ref_data, raft_flow)
+        raft_pred = vanilla_warp_fn(raw_ref_data, raft_flow, mode="bicubic")
 
         # Compute the PSNR of the prediction obtained by raft.
         # Note that we compute this prediction in the 444 domain even though

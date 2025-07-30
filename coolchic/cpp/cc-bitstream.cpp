@@ -225,21 +225,25 @@ static bool read_cc_archi(struct cc_bs_frame_coolchic &out, int topology_copy_bi
     if ((topology_copy_bits&(1<<TOP_COPY_LAT)) == 0)
     {
         out.n_latent_n_resolutions = read_int_1(bs);
-        out.latent_n_2d_grid = 0;
 
+        int features = read_int_1(bs); // 0 or 1 features per resolution high res is high bit.
+        out.latent_n_2d_grid = 0;
         out.n_ft_per_latent.resize(out.n_latent_n_resolutions);
         for (int i = 0; i < out.n_latent_n_resolutions; i++)
         {
-            out.n_ft_per_latent[i] = read_int_1(bs);
-            if (out.n_ft_per_latent[i] != 0 && out.n_ft_per_latent[i] != 1)
-            {
-                printf("unsupported: #ft for latent resolution %d: %d; only 0 or 1 are supported\n", i, out.n_ft_per_latent[i]);
-                printf("printing partial coolchic\n");
-                out.print();
-                exit(1);
-            }
+            out.n_ft_per_latent[i] = (features >> (7-i))&0x01;
             out.latent_n_2d_grid += out.n_ft_per_latent[i];
         }
+    }
+
+    // motion can target a reduced resolution result.
+    out.n_leading_zero_feature_layers = 0;
+    for (int layer_number = 0; layer_number < out.n_latent_n_resolutions; layer_number++)
+    {
+        if (out.n_ft_per_latent[layer_number] == 0)
+            out.n_leading_zero_feature_layers += 1;
+        else
+            break;
     }
 
     return true;
@@ -342,6 +346,7 @@ static bool read_frame_header(FILE *bs, struct cc_bs_frame_header &frame_header,
             frame_header.latents_zero[1] = (bits&0x1) != 0;
             bits >>= 1;
             frame_header.topology_copy[1] = (bits&0xf);
+            bits >>= 4;
             break;
 
     case 2: frame_header.frame_type = 'B';
@@ -354,6 +359,7 @@ static bool read_frame_header(FILE *bs, struct cc_bs_frame_header &frame_header,
             frame_header.latents_zero[1] = (bits&0x1) != 0;
             bits >>= 1;
             frame_header.topology_copy[1] = (bits&0xf);
+            bits >>= 4;
             break;
 
     default: return false; // perhaps EOF.
@@ -368,6 +374,7 @@ static bool read_frame_header(FILE *bs, struct cc_bs_frame_header &frame_header,
             frame_header.global_flow[1][0] = read_utf_coded(bs, true);
             frame_header.global_flow[1][1] = read_utf_coded(bs, true);
         }
+        frame_header.warp_filter_length = 2+((bits&0x7)<<1);
     }
 
     if (feof(bs))
@@ -465,8 +472,13 @@ struct cc_bs_frame *cc_bs::decode_frame(struct cc_bs_frame const *prev_coded_I_f
                         result->m_frame_header.topology_copy[0], result->m_frame_header.topology_copy[1],
                         prev_frame_symbols == NULL ? -1 : prev_frame_symbols->m_frame_header.display_index);
         printf("    latents_zero: %d %d\n", result->m_frame_header.latents_zero[0], result->m_frame_header.latents_zero[1]);
-        printf("    global_flow_1: %d,%d\n", result->m_frame_header.global_flow[0][0], result->m_frame_header.global_flow[0][1]);
-        printf("    global_flow_2: %d,%d\n", result->m_frame_header.global_flow[1][0], result->m_frame_header.global_flow[1][1]);
+        if (result->m_frame_header.frame_type != 'I')
+        {
+            printf("    global_flow_1: %d,%d\n", result->m_frame_header.global_flow[0][0], result->m_frame_header.global_flow[0][1]);
+            if (result->m_frame_header.frame_type == 'B')
+                printf("    global_flow_2: %d,%d\n", result->m_frame_header.global_flow[1][0], result->m_frame_header.global_flow[1][1]);
+            printf("    warp_filter_length: %d\n", result->m_frame_header.warp_filter_length);
+        }
 
         for (auto &cc: result->m_coolchics)
             cc.print();

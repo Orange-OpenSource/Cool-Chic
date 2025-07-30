@@ -51,6 +51,12 @@ if __name__ == "__main__":
         " "
         "Otherwise, specify an integer in [8, 16] to set the output bitdepth."
     )
+    parser.add_argument(
+        "--motion_accuracy",
+        type=int,
+        default=64,
+        help="motion accuracy 1/n; n defaults to 64."
+    )
     args = parser.parse_args()
     # =========================== Parse arguments =========================== #
 
@@ -76,6 +82,7 @@ if __name__ == "__main__":
             args.output,
             args.output_bitdepth,
             args.output_chroma_format,
+            args.motion_accuracy,
             args.verbosity,
         )
     else:
@@ -84,5 +91,6 @@ if __name__ == "__main__":
             args.output,
             args.output_bitdepth,
             args.output_chroma_format,
+            args.motion_accuracy,
             args.verbosity,
         )

@@ -18,6 +18,45 @@ Similarly, it is possible to provide a decoder configuration file for the motion
 Cool-chic decoder through the ``--dec_cfg_motion`` arguments. Example
 configuration files are listed in ``cfg/dec/motion/``.
 
+Motion compensation options
+"""""""""""""""""""""""""""
+
+Motion compensation requires to interpolate in between pixels e.g., to achieve a
+shift of 7.25 pixels. To do so, an interpolation filter is used. The size of the
+interpolation filter is parameterized by ``--warp_filter_size``. See paper `Efficient Sub-pixel Motion
+Compensation in Learned Video Codecs, Ladune et al
+<https://arxiv.org/pdf/2507.21926>`_ for more details.
+
+The type of interpolation performed is derived from the filter size. Note that
+``--warp_filter_size`` must be even
+
+.. list-table:: Motion compensation interpolation.
+   :widths: 30 30
+   :header-rows: 1
+
+   * - ``warp_filter_size``
+     - Type
+   * - 2
+     - Bilinear
+   * - 4
+     - Bicubic
+   * - 6 or above
+     - Sinc-based
+
+Motion fields downsampling
+""""""""""""""""""""""""""
+
+To obtain uniform motion on a block of :math:`B \times B` pixels, we rely on
+``--n_ft_per_res_motion``. As explained :ref:`here <no_high_res_latent>`, having
+the first :math:`N` latents of the motion Cool-chic with no feature leads to a
+decoding of a motion fields with motion values common to blocks of :math:`2^N
+\times 2^N` pixels.
+
+.. code-block::
+
+    # Each motion vector is common for a block of 8x8 pixels.
+    --n_ft_per_res_motion=0,0,0,1,1
+
 Frame-wise decoder configuration
 """"""""""""""""""""""""""""""""
 

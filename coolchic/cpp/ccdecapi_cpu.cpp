@@ -22,6 +22,7 @@ int cc_decode_cpu(
     std::string &out_ppm_filename,
     int output_bitdepth = 0,
     int output_chroma_format = 0,
+    int motion_q = 64,
     int verbosity = 0);
 
 PYBIND11_MODULE(ccdecapi_cpu, m) {

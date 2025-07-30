@@ -52,7 +52,6 @@
 #define SYN_KS     1
 #include "syn_avx2.hpp"
 
-// !!! test
 #define SYN_NAME   custom_conv_ks1_in7_out40_avx2
 #define SYN_KS     1
 #define SYN_N_IN   7
@@ -60,7 +59,6 @@
 #define SYN_ATATIME 4
 #include "syn_avx2.hpp"
 
-// !!! test
 #define SYN_NAME   custom_conv_ks1_in7_out16_avx2
 #define SYN_KS     1
 #define SYN_N_IN   7

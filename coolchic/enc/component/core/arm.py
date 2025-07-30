@@ -43,7 +43,7 @@ class ArmLinear(nn.Module):
         Args:
             in_channels: Number of input features :math:`C_{in}`.
             out_channels: Number of output features :math:`C_{out}`.
-            residual: True to add a residual connexion to the layer. Defaults to
+            residual: True to add a residual connection to the layer. Defaults to
                 False.
         """
 

@@ -46,7 +46,7 @@ elseif(UNIX)
 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -g -Wall -Winline -DCCDEC_EXE -DCCDECAPI_AVX2_OPTIONAL")
 
-    target_sources(ccdec PRIVATE ccdecapi.cpp cc-bitstream.cpp cc-contexts.cpp frame-memory.cpp cc-frame-decoder.cpp arm_cpu.cpp arm_avx2.cpp ups_cpu.cpp ups_avx2.cpp syn_cpu.cpp syn_avx2.cpp BitStream.cpp TDecBinCoderCABAC.cpp Contexts.cpp)
+    target_sources(ccdec PRIVATE ccdecapi.cpp cc-bitstream.cpp cc-contexts.cpp frame-memory.cpp cc-frame-decoder.cpp arm_cpu.cpp arm_avx2.cpp ups_cpu.cpp ups_avx2.cpp syn_cpu.cpp syn_avx2.cpp warp.cpp BitStream.cpp TDecBinCoderCABAC.cpp Contexts.cpp)
     set(CMAKE_EXE_LINKER_FLAGS "-static")
 
     set_source_files_properties(arm_avx2.cpp PROPERTIES COMPILE_FLAGS "-mavx2")

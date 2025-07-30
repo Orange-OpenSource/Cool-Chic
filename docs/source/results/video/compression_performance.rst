@@ -47,66 +47,72 @@ codec.
     .tg .tg-aaaa{border-color:#656565;color:#cb0000;font-weight:bold;font-family:inherit;text-align:center;vertical-align:top}
     .tg .tg-5niz{border-color:#656565;color:#9b9b9b;font-family:inherit;text-align:center;vertical-align:top}
     .tg .tg-x9uu{border-color:#656565;font-weight:bold;text-align:center;vertical-align:top}
+    .tg .tg-qch8{border-color:#656565;color:#009901;font-weight:bold;font-family:inherit;text-align:center;vertical-align:top}
     .tg .tg-1keu{border-color:#656565;color:#9b9b9b;text-align:center;vertical-align:top}
     </style>
-    <table class="tg"><thead>
-    <tr>
-        <th class="tg-86ol" rowspan="2">Sequence</th>
-        <th class="tg-86ol" colspan="3">BD-rate of Cool-chic 4.0.0 against [%]</th>
-        <th class="tg-86ol" colspan="2">Decoding complexity</th>
-    </tr>
-    <tr>
-        <th class="tg-86ol">HEVC (HM 16)</th>
-        <th class="tg-86ol">HEVC (x265-medium)</th>
-        <th class="tg-86ol">AVC (x264-medium)</th>
-        <th class="tg-86ol">MAC / pixel</th>
-        <th class="tg-86ol">Frame rate [fps]</th>
-    </tr></thead>
-    <tbody>
-    <tr>
-        <td class="tg-9mze">C-BasketballDrill</td>
-        <td class="tg-xd3r">+59.6</td>
-        <td class="tg-xd3r">+15.2</td>
-        <td class="tg-qch7">-11.5</td>
-        <td class="tg-dfl2">946</td>
-        <td class="tg-dfl2">18.3</td>
-    </tr>
-    <tr>
-        <td class="tg-9mze">C-BQMall</td>
-        <td class="tg-xd3r">+128.7</td>
-        <td class="tg-xd3r">+49.3</td>
-        <td class="tg-xd3r">+20.6</td>
-        <td class="tg-dfl2">945</td>
-        <td class="tg-dfl2">16.7</td>
-    </tr>
-    <tr>
-        <td class="tg-9mze">C-PartyScene</td>
-        <td class="tg-xd3r">+113.0</td>
-        <td class="tg-xd3r">+37.9</td>
-        <td class="tg-xd3r">+20.3</td>
-        <td class="tg-dfl2">946</td>
-        <td class="tg-dfl2">17.5</td>
-    </tr>
-    <tr>
-        <td class="tg-9mze">C-RaceHorses</td>
-        <td class="tg-xd3r">+118.7</td>
-        <td class="tg-xd3r">+41.0</td>
-        <td class="tg-xd3r">+19.3</td>
-        <td class="tg-dfl2">950</td>
-        <td class="tg-dfl2">16.5</td>
-    </tr>
-    <tr>
-        <td class="tg-u3ui">Average</td>
-        <td class="tg-aaaa">+105.0</td>
-        <td class="tg-aaaa">+35.9</td>
-        <td class="tg-aaaa">+12.2</td>
-        <td class="tg-u3ui">947</td>
-        <td class="tg-u3ui">17.3</td>
-    </tr>
-    </tbody></table>
+  <table class="tg"><thead>
+  <tr>
+      <th class="tg-86ol" rowspan="2">Sequence</th>
+      <th class="tg-86ol" colspan="4">BD-rate of Cool-chic 4.1.0 against [%]</th>
+      <th class="tg-86ol" colspan="2">Decoding complexity</th>
+  </tr>
+  <tr>
+      <th class="tg-86ol">HEVC (HM 16)</th>
+      <th class="tg-86ol">HEVC (x265-medium)</th>
+      <th class="tg-86ol">AVC (x264-medium)</th>
+      <th class="tg-86ol">Cool-chic 4.0</th>
+      <th class="tg-86ol">MAC / pixel</th>
+      <th class="tg-86ol">Frame rate [fps]</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+      <td class="tg-9mze">C-BasketballDrill</td>
+      <td class="tg-xd3r">+30.8</td>
+      <td class="tg-qch7">-5.2</td>
+      <td class="tg-qch7">-29.5</td>
+      <td class="tg-qch7">-17.5</td>
+      <td class="tg-dfl2">639</td>
+      <td class="tg-dfl2">13.3</td>
+  </tr>
+  <tr>
+      <td class="tg-9mze">C-BQMall</td>
+      <td class="tg-xd3r">+77.1</td>
+      <td class="tg-xd3r">+16.6</td>
+      <td class="tg-qch7">-6.0</td>
+      <td class="tg-qch7">-21.1</td>
+      <td class="tg-dfl2">639</td>
+      <td class="tg-dfl2">13.2</td>
+  </tr>
+  <tr>
+      <td class="tg-9mze">C-PartyScene</td>
+      <td class="tg-xd3r">+28.3</td>
+      <td class="tg-qch7">-15.1</td>
+      <td class="tg-qch7">-39.2</td>
+      <td class="tg-qch7">-39.1</td>
+      <td class="tg-dfl2">639</td>
+      <td class="tg-dfl2">12.9</td>
+  </tr>
+  <tr>
+      <td class="tg-9mze">C-RaceHorses</td>
+      <td class="tg-xd3r">+79.6</td>
+      <td class="tg-xd3r">+17.4</td>
+      <td class="tg-xd3r">+8.6</td>
+      <td class="tg-qch7">-16.8</td>
+      <td class="tg-dfl2">639</td>
+      <td class="tg-dfl2">12.1</td>
+  </tr>
+  <tr>
+      <td class="tg-u3ui">Average</td>
+      <td class="tg-aaaa">+54.0</td>
+      <td class="tg-aaaa">+3.4</td>
+      <td class="tg-qch8">-14.0</td>
+      <td class="tg-qch8">-23.6</td>
+      <td class="tg-u3ui">639</td>
+      <td class="tg-u3ui">12.9</td>
+  </tr>
+  </tbody></table>
 
-Decoding time are obtained on a single CPU core of an **Intel Core i9-9940X
-CPU @ 3.30GHz Processor**.
+Decoding time are obtained on a single CPU core of an **AMD EPYC 7282 2.8 GHz Processor**.
 
 Rate-distortion graphs
 **********************

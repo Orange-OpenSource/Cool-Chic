@@ -17,6 +17,7 @@ from enc.utils.termprint import pretty_string_nn, pretty_string_ups
 from torch import nn, Tensor
 
 import torch
+import torch.nn.functional as F
 from fvcore.nn import FlopCountAnalysis, flop_count_table
 
 from enc.component.core.arm import (
@@ -421,9 +422,11 @@ class CoolChicEncoder(nn.Module):
         flat_rate = -torch.log2(proba)
 
         # Upsampling and synthesis to get the output
-        synthesis_output = self.synthesis(self.upsampling(decoder_side_latent))
+        ups_out = self.upsampling(decoder_side_latent)
+        raw_synth_out = self.synthesis(ups_out)
 
-        synthesis_output = synthesis_output
+        # Upsample the output of the synthesis with a nearest neighbor if required
+        synthesis_output = F.interpolate(raw_synth_out, size=self.param.img_size, mode="nearest")
 
         additional_data = {}
         if flag_additional_outputs:
@@ -435,7 +438,8 @@ class CoolChicEncoder(nn.Module):
             additional_data["detailed_rate_bit"] = []
             additional_data["detailed_centered_latent"] = []
             additional_data["hpfilters"] = []
-
+            additional_data["upsampled_latent"] = ups_out
+            
             # "Pointer" for the reading of the 1D scale, mu and rate
             cnt = 0
             # for i, _ in enumerate(filtered_latent):

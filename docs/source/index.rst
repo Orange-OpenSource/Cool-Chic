@@ -88,7 +88,7 @@ video, Kim et al. <https://arxiv.org/abs/2312.02753>`_
    :hidden:
 
    Quickstart <getting_started/quickstart>
-   What's new in 4.0? <getting_started/new_stuff>
+   What's new in 4.1? <getting_started/new_stuff>
    Example <getting_started/example>
    Literature <getting_started/literature>
 

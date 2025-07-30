@@ -102,7 +102,6 @@ void SYN_NAME(int KS,
                     }
                     else
                     {
-                        // !!! temporary 
                         __m256 mul_avx2 = (__m256)_mm256_loadu_si256((const __m256i *)(kw+h8*8));
                         mul_avx2 = _mm256_mul_ps((__m256)input_avx2_pixel, mul_avx2);
                         hidden_avx2[h8] = (__m256i)_mm256_add_ps((__m256)hidden_avx2[h8], mul_avx2);

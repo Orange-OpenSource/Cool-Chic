@@ -204,6 +204,18 @@ def train(
                         parameters_to_optimize+= [
                             *frame_encoder.coolchic_enc[cc_name].latent_grids.parameters()
                         ]
+                    case "warper":
+                        if frame_encoder.frame_type != "I":
+                            parameters_to_optimize+= [
+                                *frame_encoder.warper.parameters()
+                            ]
+                        else:
+                            print(
+                                "Trying to optimize warper but this is an I-frame, "
+                                "so it does not have a warper."
+                            )
+
+
 
     optimizer = torch.optim.Adam(parameters_to_optimize, lr=start_lr)
     best_optimizer_state = copy.deepcopy(optimizer.state_dict())

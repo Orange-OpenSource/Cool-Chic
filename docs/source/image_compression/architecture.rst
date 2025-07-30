@@ -122,6 +122,17 @@ following latent dimensions
   |   latent_grids.2                        |   (1, 1, 128, 192)     |          |
   |   latent_grids.3                        |   (1, 1, 64, 96)       |          |
 
+.. _no_high_res_latent:
+
+.. attention::
+
+    If there is no higher resolution latent *e.g.*
+    ``--n_ft_per_res_residue=0,0,1,1`` the upsampling stops at the highest
+    latent resolution (here 1/4). Then, the dense representation goes to the
+    synthesis and the output is still at the highest latent resolution (*e.g.*
+    1/4). In that case, a final nearest neighbor upsampling is performed to get
+    to the desired full resolution.
+
 
 Auto-regressive module (ARM)
 """"""""""""""""""""""""""""
@@ -210,7 +221,7 @@ by comas. Each layer is decomposed as follows:
 
 * ``kernel_size`` is the size of the convolution kernel
 
-* ``type`` is either ``linear`` (normal convolution) or ``residual`` (convolution + skip connexion)
+* ``type`` is either ``linear`` (normal convolution) or ``residual`` (convolution + skip connection)
 
 * ``non_linearity`` can be ``relu`` or ``none``
 

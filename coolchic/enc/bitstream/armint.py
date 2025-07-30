@@ -48,7 +48,7 @@ class ArmIntLinear(nn.Module):
             out_channels: Number of output features :math:`C_{out}`.
             fpfm: Internal stuff for integer computation.  **No need to modify
                 this**. Defaults to 0.
-            residual: True to add a residual connexion to the layer. Defaults to
+            residual: True to add a residual connection to the layer. Defaults to
                 False.
         """
 

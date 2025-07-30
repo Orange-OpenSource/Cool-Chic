@@ -9,7 +9,7 @@
 from typing import List, Tuple
 
 import torch
-from enc.component.intercoding.warp import warp_fn
+from enc.component.intercoding.warp import vanilla_warp_fn
 from enc.io.format.yuv import convert_420_to_444, convert_444_to_420
 from enc.io.framedata import FrameData
 from enc.training.loss import _compute_mse
@@ -101,7 +101,7 @@ def get_global_translation(
                 # All flows here are a constant [1, 2, H, W] tensor.
                 flow = torch.ones((1, 2, h, w), device=device) * shift + center_flow
 
-                shifted_ref = warp_fn(raw_ref_data, flow)
+                shifted_ref = vanilla_warp_fn(raw_ref_data, flow, mode="nearest")
                 shifted_mse = _compute_mse(shifted_ref, raw_target_data)
                 shifted_psnr = -10 * torch.log10(shifted_mse + 1e-10)
 
@@ -111,7 +111,7 @@ def get_global_translation(
                     best_psnr = -10 * torch.log10(best_mse + 1e-10)
 
             center_flow += best_shift
-            shifted_ref = warp_fn(raw_ref_data, center_flow)
+            shifted_ref = vanilla_warp_fn(raw_ref_data, center_flow, mode="nearest")
             shifted_mse = _compute_mse(shifted_ref, raw_target_data)
             shifted_psnr = -10 * torch.log10(shifted_mse + 1e-10)
             print(

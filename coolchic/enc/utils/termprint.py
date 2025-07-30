@@ -159,9 +159,9 @@ def pretty_string_nn(
     """
 
     lines = [
-        "",  # For residual connexions
-        "",  # For residual connexions
-        "",  # For residual connexions
+        "",  # For residual connections
+        "",  # For residual connections
+        "",  # For residual connections
         "",  # For blocks in themselves
         "",  # For blocks in themselves
         "",  # For blocks in themselves
@@ -175,7 +175,7 @@ def pretty_string_nn(
     idx_bot_block = len(lines) - 1
     top_bot_blocks = [idx_bot_block, idx_top_block]
 
-    # First three lines are for residual connexions
+    # First three lines are for residual connections
     res_blocks = list(range(3))
 
     lines[idx_mid_block] = input_str

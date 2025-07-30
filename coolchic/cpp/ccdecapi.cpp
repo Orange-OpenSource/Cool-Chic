@@ -29,6 +29,7 @@
 #include "cc-bitstream.h"
 
 #include "cc-frame-decoder.h"
+#include "warp.h"
 
 float time_bac_seconds = 0.0;
 float time_arm_seconds = 0.0;
@@ -36,6 +37,8 @@ float time_ups_seconds = 0.0;
 float time_syn_seconds = 0.0;
 float time_blend_seconds = 0.0;
 float time_warp_seconds = 0.0;
+float time_warp_coeffgen_seconds = 0.0;
+float time_warp_coeffget_seconds = 0.0;
 float time_bpred_seconds = 0.0;
 float time_all_seconds = 0.0;
 
@@ -157,17 +160,17 @@ void ppm_out(int nc, int bit_depth, struct frame_memory<P> &in_info, FILE *fout)
 // we 'stabilise' the yuv to (0..255) as integers, as well as uv subsample.
 // incoming 444 is planar, outgoing 420 is planar.
 // A non-NULL pointer (*out) is assumed to have the good size!
-template <typename P>
-void convert_444_420_8b(unsigned char **param_out, struct frame_memory<P> const &in)
+template <typename P, typename POUT, int max_val>
+void convert_444_420_xb(POUT **param_out, struct frame_memory<P> const &in)
 {
     int const h = in.h;
     int const w = in.w;
     int const in_stride = in.stride;
     if (*param_out == NULL)
-        *param_out = new unsigned char[h*w*3/2];
-    unsigned char *out = *param_out;
+        *param_out = new POUT[h*w*3/2];
+    POUT *out = *param_out;
     P const *src = in.const_plane_origin(0); // SYN_LAYER_PRECISION precision
-    unsigned char *dst = out;
+    POUT *dst = out;
 
     // Y.
     for (int y = 0; y < h; y++, src += in_stride-w)
@@ -175,13 +178,13 @@ void convert_444_420_8b(unsigned char **param_out, struct frame_memory<P> const 
         {
             int32_t v255;
             if constexpr(std::is_same<P, int32_t>::value)
-                v255 = ((*src)*255+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
+                v255 = ((*src)*max_val+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
             else
-                v255 = (int)((*src)*255 + 0.5);
+                v255 = (int)((*src)*max_val + 0.5);
             if (v255 < 0)
                 v255 = 0;
-            else if (v255 > 255)
-                v255 = 255;
+            else if (v255 > max_val)
+                v255 = max_val;
             *dst = v255;
         }
 
@@ -192,13 +195,13 @@ void convert_444_420_8b(unsigned char **param_out, struct frame_memory<P> const 
         {
             int32_t v255;
             if constexpr(std::is_same<P, int32_t>::value)
-                v255 = ((*src)*255+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
+                v255 = ((*src)*max_val+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
             else
-                v255 = (int)((*src)*255 + 0.5);
+                v255 = (int)((*src)*max_val + 0.5);
             if (v255 < 0)
                 v255 = 0;
-            else if (v255 > 255)
-                v255 = 255;
+            else if (v255 > max_val)
+                v255 = max_val;
             *dst = v255;
         }
 
@@ -209,97 +212,31 @@ void convert_444_420_8b(unsigned char **param_out, struct frame_memory<P> const 
         {
             int32_t v255;
             if constexpr(std::is_same<P, int32_t>::value)
-                v255 = ((*src)*255+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
+                v255 = ((*src)*max_val+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
             else
-                v255 = (int)((*src)*255 + 0.5);
+                v255 = (int)((*src)*max_val + 0.5);
             if (v255 < 0)
                 v255 = 0;
-            else if (v255 > 255)
-                v255 = 255;
+            else if (v255 > max_val)
+                v255 = max_val;
             *dst = v255;
-        }
-}
-
-// we 'stabilise' the yuv to (0..1023) as integers, as well as uv subsample.
-// incoming 444 is planar, outgoing 420 is planar.
-// A non-NULL pointer (*out) is assumed to have the good size!
-template <typename P>
-void convert_444_420_10b(unsigned short **param_out, struct frame_memory<P> const &in)
-{
-    int const h = in.h;
-    int const w = in.w;
-    int const in_stride = in.stride;
-    if (*param_out == NULL)
-        *param_out = new unsigned short[h*w*3/2];
-    unsigned short *out = *param_out;
-    P const *src = in.const_plane_origin(0); // SYN_LAYER_PRECISION precision
-    unsigned short *dst = out;
-
-    // Y.
-    for (int y = 0; y < h; y++, src += in_stride-w)
-        for (int x = 0; x < w; x++, src++, dst++)
-        {
-            int32_t v1023;
-            if constexpr(std::is_same<P, int32_t>::value)
-                v1023 = ((*src)*1023+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
-            else
-                v1023 = (int)((*src)*1023 + 0.5);
-            if (v1023 < 0)
-                v1023 = 0;
-            else if (v1023 > 1023)
-                v1023 = 1023;
-            *dst = v1023;
-        }
-
-    // U. 'nearest'
-    src = in.const_plane_origin(1);
-    for (int y = 0; y < h/2; y++, src += in_stride-w+in_stride)
-        for (int x = 0; x < w/2; x++, src += 2, dst++)
-        {
-            int32_t v1023;
-            if constexpr(std::is_same<P, int32_t>::value)
-                v1023 = ((*src)*1023+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
-            else
-                v1023 = (int)((*src)*1023 + 0.5);
-            if (v1023 < 0)
-                v1023 = 0;
-            else if (v1023 > 1023)
-                v1023 = 1023;
-            *dst = v1023;
-        }
-
-    // V. 'nearest'
-    src = in.const_plane_origin(2);
-    for (int y = 0; y < h/2; y++, src += in_stride-w+in_stride)
-        for (int x = 0; x < w/2; x++, src += 2, dst++)
-        {
-            int32_t v1023;
-            if constexpr(std::is_same<P, int32_t>::value)
-                v1023 = ((*src)*1023+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
-            else
-                v1023 = (int)((*src)*1023 + 0.5);
-            if (v1023 < 0)
-                v1023 = 0;
-            else if (v1023 > 1023)
-                v1023 = 1023;
-            *dst = v1023;
         }
 }
 
 // we 'stabilise' the yuv to (0..255) as integers prior to saving them
 // incoming 444 is planar, outgoing 444 is planar.
 // A non-NULL pointer (*out) is assumed to have the good size!
-template <typename P>
-void get_raw_444_8b(unsigned char **param_out, struct frame_memory<P> &in)
+template <typename P, typename POUT, int max_val>
+void get_raw_444_xb(POUT **param_out, struct frame_memory<P> &in)
 {
     int const h = in.h;
     int const w = in.w;
     int const in_stride = in.stride;
     if (*param_out == NULL)
-        *param_out = new unsigned char[h*w*3];
-    unsigned char *out = *param_out;
+        *param_out = new POUT[h*w*3];
+    POUT *out = *param_out;
     P *src = in.plane_origin(0); // SYN_LAYER_PRECISION precision
-    unsigned char *dst = out;
+    POUT *dst = out;
 
     // Y.
     for (int y = 0; y < h; y++, src += in_stride-w)
@@ -307,13 +244,13 @@ void get_raw_444_8b(unsigned char **param_out, struct frame_memory<P> &in)
         {
             int32_t v255;
             if constexpr(std::is_same<P, int32_t>::value)
-                v255 = ((*src)*255+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
+                v255 = ((*src)*max_val+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
             else
-                v255 = (int)((*src)*255 + 0.5);
+                v255 = (int)((*src)*max_val + 0.5);
             if (v255 < 0)
                 v255 = 0;
-            else if (v255 > 255)
-                v255 = 255;
+            else if (v255 > max_val)
+                v255 = max_val;
             *dst = v255;
         }
 
@@ -324,13 +261,13 @@ void get_raw_444_8b(unsigned char **param_out, struct frame_memory<P> &in)
         {
             int32_t v255;
             if constexpr(std::is_same<P, int32_t>::value)
-                v255 = ((*src)*255+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
+                v255 = ((*src)*max_val+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
             else
-                v255 = (int)((*src)*255 + 0.5);
+                v255 = (int)((*src)*max_val + 0.5);
             if (v255 < 0)
                 v255 = 0;
-            else if (v255 > 255)
-                v255 = 255;
+            else if (v255 > max_val)
+                v255 = max_val;
             *dst = v255;
         }
 
@@ -341,97 +278,31 @@ void get_raw_444_8b(unsigned char **param_out, struct frame_memory<P> &in)
         {
             int32_t v255;
             if constexpr(std::is_same<P, int32_t>::value)
-                v255 = ((*src)*255+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
+                v255 = ((*src)*max_val+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
             else
-                v255 = (int)((*src)*255 + 0.5);
+                v255 = (int)((*src)*max_val + 0.5);
             if (v255 < 0)
                 v255 = 0;
-            else if (v255 > 255)
-                v255 = 255;
+            else if (v255 > max_val)
+                v255 = max_val;
             *dst = v255;
         }
 }
 
-// we 'stabilise' the yuv to (0..1023) as integers prior to saving them
-// incoming 444 is planar, outgoing 444 is planar.
-// A non-NULL pointer (*out) is assumed to have the good size!
-template <typename P>
-void get_raw_444_10b(unsigned short **param_out, struct frame_memory<P> &in)
-{
-    int const h = in.h;
-    int const w = in.w;
-    int const in_stride = in.stride;
-    if (*param_out == NULL)
-        *param_out = new unsigned short[h*w*3];
-    unsigned short *out = *param_out;
-    P *src = in.plane_origin(0); // SYN_LAYER_PRECISION precision
-    unsigned short *dst = out;
-
-    // Y.
-    for (int y = 0; y < h; y++, src += in_stride-w)
-        for (int x = 0; x < w; x++, src++, dst++)
-        {
-            int32_t v1023;
-            if constexpr(std::is_same<P, int32_t>::value)
-                v1023 = ((*src)*1023+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
-            else
-                v1023 = (int)((*src)*1023 + 0.5);
-            if (v1023 < 0)
-                v1023 = 0;
-            else if (v1023 > 1023)
-                v1023 = 1023;
-            *dst = v1023;
-        }
-
-    // U. 'nearest'
-    src = in.plane_origin(1);
-    for (int y = 0; y < h; y++, src += in_stride-w)
-        for (int x = 0; x < w; x++, src++, dst++)
-        {
-            int32_t v1023;
-            if constexpr(std::is_same<P, int32_t>::value)
-                v1023 = ((*src)*1023+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
-            else
-                v1023 = (int)((*src)*1023 + 0.5);
-            if (v1023 < 0)
-                v1023 = 0;
-            else if (v1023 > 1023)
-                v1023 = 1023;
-            *dst = v1023;
-        }
-
-    // V. 'nearest'
-    src = in.plane_origin(2);
-    for (int y = 0; y < h; y++, src += in_stride-w)
-        for (int x = 0; x < w; x++, src++, dst++)
-        {
-            int32_t v1023;
-            if constexpr(std::is_same<P, int32_t>::value)
-                v1023 = ((*src)*1023+(1<<(SYN_LAYER_PRECISION-1))) >> SYN_LAYER_PRECISION;
-            else
-                v1023 = (int)((*src)*1023 + 0.5);
-            if (v1023 < 0)
-                v1023 = 0;
-            else if (v1023 > 1023)
-                v1023 = 1023;
-            *dst = v1023;
-        }
-}
-
 // incoming 420 is planar, outgoing 444 is planar.
-template <typename P>
-void convert_420_444_8b(frame_memory<P> &out, unsigned char const *in, int h, int w)
+template <typename P, typename PIN, int max_val>
+void convert_420_444_xb(frame_memory<P> &out, PIN const *in, int h, int w)
 {
     out.update_to(h, w, 0, 3);
 
-    unsigned char const *src = in;
+    PIN const *src = in;
     P *dst = out.plane_origin(0);
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++, src++, dst++)
             if constexpr(std::is_same<P, int32_t>::value)
-                *dst = ((*src) << SYN_LAYER_PRECISION)/255;
+                *dst = ((*src) << SYN_LAYER_PRECISION)/max_val;
             else
-                *dst = *src/255.0;
+                *dst = ((P)*src)/max_val;
 
     // two output lines per input.
     P *dst0 = dst;
@@ -441,9 +312,9 @@ void convert_420_444_8b(frame_memory<P> &out, unsigned char const *in, int h, in
         {
             P v;
             if constexpr(std::is_same<P, int32_t>::value)
-                v = ((*src) << SYN_LAYER_PRECISION)/255;
+                v = ((*src) << SYN_LAYER_PRECISION)/max_val;
             else
-                v = *src/255.0;
+                v = ((P)*src)/max_val;
             *dst0++ = v;
             *dst0++ = v;
             *dst1++ = v;
@@ -455,75 +326,27 @@ void convert_420_444_8b(frame_memory<P> &out, unsigned char const *in, int h, in
         {
             P v;
             if constexpr(std::is_same<P, int32_t>::value)
-                v = ((*src) << SYN_LAYER_PRECISION)/255;
+                v = ((*src) << SYN_LAYER_PRECISION)/max_val;
             else
-                v = *src/255.0;
+                v = ((P)*src)/max_val;
             *dst0++ = v;
             *dst0++ = v;
             *dst1++ = v;
             *dst1++ = v;
         }
 }
-
-// incoming 420 is planar, outgoing 444 is planar.
-template <typename P>
-void convert_420_444_10b(frame_memory<P> &out, unsigned short const *in, int h, int w)
-{
-    out.update_to(h, w, 0, 3);
-
-    unsigned short const *src = in;
-    P *dst = out.plane_origin(0);
-    for (int y = 0; y < h; y++)
-        for (int x = 0; x < w; x++, src++, dst++)
-            if constexpr(std::is_same<P, int32_t>::value)
-                *dst = ((*src) << SYN_LAYER_PRECISION)/1023;
-            else
-                *dst = *src/1023.0;
-
-    // two output lines per input.
-    P *dst0 = dst;
-    P *dst1 = dst+w;
-    for (int y = 0; y < h/2; y++, dst0 += w, dst1 += w)
-        for (int x = 0; x < w/2; x++, src++)
-        {
-            P v;
-            if constexpr(std::is_same<P, int32_t>::value)
-                v = ((*src) << SYN_LAYER_PRECISION)/1023;
-            else
-                v = *src/1023.0;
-            *dst0++ = v;
-            *dst0++ = v;
-            *dst1++ = v;
-            *dst1++ = v;
-        }
-
-    for (int y = 0; y < h/2; y++, dst0 += w, dst1 += w)
-        for (int x = 0; x < w/2; x++, src++)
-        {
-            P v;
-            if constexpr(std::is_same<P, int32_t>::value)
-                v = ((*src) << SYN_LAYER_PRECISION)/1023;
-            else
-                v = *src/1023.0;
-            *dst0++ = v;
-            *dst0++ = v;
-            *dst1++ = v;
-            *dst1++ = v;
-        }
-}
-
 
 // frame_420: byte, planar, seeks to frame position.
 void dump_yuv420_8b(unsigned char *frame_420, int h, int w, FILE *fout, int frame_idx)
 {
-    fseek(fout, frame_idx*h*w*3/2, SEEK_SET);
+    fseek(fout, frame_idx*h*w*3*sizeof(frame_420[0])/2, SEEK_SET);
     fwrite(frame_420, sizeof(frame_420[0]), h*w*3/2, fout);
     fflush(fout);
 }
 
 void dump_yuv420_10b(unsigned short *frame_420, int h, int w, FILE *fout, int frame_idx)
 {
-    fseek(fout, frame_idx*h*w*3/2, SEEK_SET);
+    fseek(fout, frame_idx*h*w*3*sizeof(frame_420[0])/2, SEEK_SET);
     fwrite(frame_420, sizeof(frame_420[0]), h*w*3/2, fout);
     fflush(fout);
 }
@@ -531,7 +354,7 @@ void dump_yuv420_10b(unsigned short *frame_420, int h, int w, FILE *fout, int fr
 // frame_444: byte, planar, seeks to frame position.
 void dump_yuv444_8b(unsigned char *frame_444, int h, int w, FILE *fout, int frame_idx)
 {
-    fseek(fout, frame_idx*h*w*3, SEEK_SET);
+    fseek(fout, frame_idx*h*w*3*sizeof(frame_444[0]), SEEK_SET);
     fwrite(frame_444, sizeof(frame_444[0]), h*w*3, fout);
     fflush(fout);
 }
@@ -539,331 +362,44 @@ void dump_yuv444_8b(unsigned char *frame_444, int h, int w, FILE *fout, int fram
 // frame_444: byte, planar, seeks to frame position.
 void dump_yuv444_10b(unsigned short *frame_444, int h, int w, FILE *fout, int frame_idx)
 {
-    fseek(fout, frame_idx*h*w*3, SEEK_SET);
+    fseek(fout, frame_idx*h*w*3*sizeof(frame_444[0]), SEEK_SET);
     fwrite(frame_444, sizeof(frame_444[0]), h*w*3, fout);
     fflush(fout);
 }
 
 
 // incoming 444 is planar, outgoing 444 is planar.
-template <typename P>
-void store_444_8b(frame_memory<P> &out, unsigned char *in, int h, int w)
+template <typename P, typename PIN, int max_val>
+void store_444_xb(frame_memory<P> &out, PIN *in, int h, int w)
 {
     out.update_to(h, w, 0, 3);
 
-    unsigned char *src = in;
+    PIN *src = in;
     P *dst = out.plane_origin(0);
     // Y
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++, src++, dst++)
             if constexpr(std::is_same<P, int32_t>::value)
-                *dst = ((*src) << SYN_LAYER_PRECISION)/255;
+                *dst = ((*src) << SYN_LAYER_PRECISION)/max_val;
             else
-                *dst = *src/255.0;
+                *dst = ((P)*src)/max_val;
 
     // U
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++, src++, dst++)
             if constexpr(std::is_same<P, int32_t>::value)
-                *dst = ((*src) << SYN_LAYER_PRECISION)/255;
+                *dst = ((*src) << SYN_LAYER_PRECISION)/max_val;
             else
-                *dst = *src/255.0;
+                *dst = ((P)*src)/max_val;
 
     // V
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++, src++, dst++)
             if constexpr(std::is_same<P, int32_t>::value)
-                *dst = ((*src) << SYN_LAYER_PRECISION)/255;
+                *dst = ((*src) << SYN_LAYER_PRECISION)/max_val;
             else
-                *dst = *src/255.0;
+                *dst = ((P)*src)/max_val;
 
-}
-
-// incoming 444 is planar, outgoing 444 is planar.
-template <typename P>
-void store_444_10b(frame_memory<P> &out, unsigned short *in, int h, int w)
-{
-    out.update_to(h, w, 0, 3);
-
-    unsigned short *src = in;
-    P *dst = out.plane_origin(0);
-    // Y
-    for (int y = 0; y < h; y++)
-        for (int x = 0; x < w; x++, src++, dst++)
-            if constexpr(std::is_same<P, int32_t>::value)
-                *dst = ((*src) << SYN_LAYER_PRECISION)/1023;
-            else
-                *dst = *src/255.0;
-
-    // U
-    for (int y = 0; y < h; y++)
-        for (int x = 0; x < w; x++, src++, dst++)
-            if constexpr(std::is_same<P, int32_t>::value)
-                *dst = ((*src) << SYN_LAYER_PRECISION)/1023;
-            else
-                *dst = *src/255.0;
-
-    // V
-    for (int y = 0; y < h; y++)
-        for (int x = 0; x < w; x++, src++, dst++)
-            if constexpr(std::is_same<P, int32_t>::value)
-                *dst = ((*src) << SYN_LAYER_PRECISION)/1023;
-            else
-                *dst = *src/255.0;
-}
-
-
-// returns a yuv444 SYN_LAYER_PRECISION precision, warping a reference, apply a gain
-// bilinear sampling.
-// ref: float, planar.
-// raw_xyidx: where to get xy from motion
-// raw_gain_idx: where to get alpha in residual if add_residue (P processing)
-// raw_gain_idx: where to get beta (+ve) or 1-beta (-ve) in motion if !add_residue (B processing)
-template <typename P>
-void warp(struct frame_memory<P> &warp_result,
-          struct frame_memory<P> const &frame_residual, struct frame_memory<P> const &frame_motion, struct frame_memory<P> const &ref, int global_flow[2],
-          int raw_xyidx, int raw_gainidx, bool add_residue)
-{
-    const auto time_warp_start = std::chrono::steady_clock::now();
-
-    warp_result.update_to(ref.h, ref.w, 0, 3);
-
-#define ADJUSTREF
-#ifndef ADJUSTREF
-    //We probably do not have to do this.  Just reduce the ref frame size, and place
-    //it's origin appropriately, then do the 'final' warp.
-    // tmp: global flow.
-    frame_memory<P> tmp;
-    int tmp_pad = std::max(abs(global_flow[0]), abs(global_flow[1]));
-    tmp.update_to(ref.h, ref.w, tmp_pad, 3);
-
-    for (int p = 0; p < 3; p++)
-        for (int y = 0; y < ref.h; y++)
-            memcpy(tmp.plane_pixel(p, y, 0), ref.const_plane_pixel(p, y, 0), ref.w*sizeof(P));
-    if (tmp_pad > 0)
-        for (int p = 0; p < 3; p++)
-            tmp.custom_pad_replicate_plane_in_place_i(p, tmp_pad);
-
-    printf("warp global %d,%d\n", global_flow[0], global_flow[1]);
-
-    P const *src = tmp.const_origin()+((global_flow[1] < 0 ? global_flow[1] : global_flow[1])*tmp.stride + (global_flow[0] < 0 ? global_flow[0] : global_flow[0])); // ref.const_origin();
-    int const src_stride = tmp.stride; // ref.stride;
-    int const src_plane_stride = tmp.plane_stride; // ref.plane_stride;
-#else
-    //// Shift the reference origin point appropriately.
-    // P const *src = ref.const_origin()+((global_flow[1] < 0 ? 0 : global_flow[1])*ref.stride + (global_flow[0] < 0 ? 0 : global_flow[0])); // ref.const_origin();
-    P const *src = ref.const_origin();
-    // We reduce the dimensions of the reference with global_flow. Accessing outside will pad correctly.
-    // a couple of virtual tests.
-    int const v_start_x = global_flow[0] < 0 ? 0 : global_flow[0];
-    int const v_limit_x = global_flow[0] < 0 ? ref.w+global_flow[0] : ref.w;
-    int const v_start_y = global_flow[1] < 0 ? 0 : global_flow[1];
-    int const v_limit_y = global_flow[1] < 0 ? ref.h+global_flow[1] : ref.h;
-
-    //int const src_w = ref.w - std::abs(global_flow[0]);
-    //int const src_h = ref.h - std::abs(global_flow[1]);
-    int const src_stride = ref.stride; // ref.stride;
-    int const src_plane_stride = ref.plane_stride; // ref.plane_stride;
-#endif
-
-    P const *residual = frame_residual.const_origin();
-    P const *motion = frame_motion.const_origin();
-    int const h = frame_residual.h;
-    int const w = frame_residual.w;
-
-    P *dst = warp_result.origin(); // scans through first plane.
-
-    for (int y = 0; y < h; y++, motion += frame_motion.stride-w, residual += frame_residual.stride-w)
-    for (int x = 0; x < w; x++, motion++, residual++, dst++)
-    {
-        P px;
-        P py;
-        int32_t basex0;
-        int32_t basex1;
-        int32_t basey0;
-        int32_t basey1;
-        P dx;
-        P dy;
-
-        if constexpr(std::is_same<P, int32_t>::value)
-        {
-            px = (motion[(raw_xyidx+0)*frame_motion.plane_stride])+(x<<SYN_LAYER_PRECISION);
-            py = (motion[(raw_xyidx+1)*frame_motion.plane_stride])+(y<<SYN_LAYER_PRECISION);
-            basex0 = px < 0 ? ((px-((1<<SYN_LAYER_PRECISION)-1)) >> SYN_LAYER_PRECISION) : (px >> SYN_LAYER_PRECISION);
-            dx = px-(basex0<<SYN_LAYER_PRECISION);
-
-            basey0 = py < 0 ? ((py-((1<<SYN_LAYER_PRECISION)-1)) >> SYN_LAYER_PRECISION) : (py >> SYN_LAYER_PRECISION);
-            dy = py-(basey0<<SYN_LAYER_PRECISION);
-        }
-        else
-        {
-            px = (motion[(raw_xyidx+0)*frame_motion.plane_stride])+x;
-            py = (motion[(raw_xyidx+1)*frame_motion.plane_stride])+y;
-            basex0 = (int32_t)floor(px);
-            dx = px-basex0;
-
-            basey0 = (int32_t)floor(py);
-            dy = py-basey0;
-        }
-
-#ifdef ADJUSTREF
-        basex0 += global_flow[0];
-        if (basex0 < v_start_x)
-        {
-            basex0 = basex1 = v_start_x;
-            dx = 0;
-        }
-        else if (basex0 >= v_limit_x-1)
-        {
-            basex0 = basex1 = v_limit_x-1;
-            dx = 0;
-        }
-#else
-        if (basex0 < 0)
-        {
-            basex0 = basex1 = 0;
-            dx = 0;
-        }
-        else if (basex0 >= w-1)
-        {
-            basex0 = basex1 = w-1;
-            dx = 0;
-        }
-#endif
-        else
-        {
-            basex1 = basex0+1;
-        }
-
-#ifdef ADJUSTREF
-        basey0 += global_flow[1];
-        if (basey0 < v_start_y)
-        {
-            basey0 = basey1 = v_start_y;
-            dy = 0;
-        }
-        else if (basey0 >= v_limit_y-1)
-        {
-            basey0 = basey1 = v_limit_y-1;
-            dy = 0;
-        }
-#else
-        if (basey0 < 0)
-        {
-            basey0 = basey1 = 0;
-            dy = 0;
-        }
-        else if (basey0 >= h-1)
-        {
-            basey0 = basey1 = h-1;
-            dy = 0;
-        }
-#endif
-        else
-        {
-            basey1 = basey0+1;
-        }
-
-        P gain;
-        if constexpr(std::is_same<P, int32_t>::value)
-        {
-            if (add_residue)
-            {
-                gain = residual[raw_gainidx*frame_residual.plane_stride]+(1<<(SYN_LAYER_PRECISION-1));
-            }
-            else
-            {
-                gain = motion[(raw_gainidx < 0 ? -raw_gainidx : raw_gainidx)*frame_motion.plane_stride]+(1<<(SYN_LAYER_PRECISION-1));
-                if (raw_gainidx < 0)
-                    gain = (1<<SYN_LAYER_PRECISION)-gain;
-            }
-            if (gain < 0)
-                gain = 0;
-            else if (gain > (1<<SYN_LAYER_PRECISION))
-                gain = (1<<SYN_LAYER_PRECISION);
-        }
-        else
-        {
-            if (add_residue)
-            {
-                gain = residual[raw_gainidx*frame_residual.plane_stride]+0.5;
-            }
-            else
-            {
-                gain = motion[(raw_gainidx < 0 ? -raw_gainidx : raw_gainidx)*frame_motion.plane_stride]+0.5;
-                if (raw_gainidx < 0)
-                    gain = 1-gain;
-            }
-            if (gain < 0)
-                gain = 0;
-            else if (gain > 1.0)
-                gain = 1.0;
-        }
-
-        P const *A = &src[((basey0)*src_stride+basex0)];
-        P const *B = &src[((basey0)*src_stride+basex1)];
-        P const *C = &src[((basey1)*src_stride+basex0)];
-        P const *D = &src[((basey1)*src_stride+basex1)];
-
-        if constexpr(std::is_same<P, int32_t>::value)
-        {
-            P h0 = A[0*src_plane_stride]+(((B[0*src_plane_stride]-A[0*src_plane_stride])*dx) >> SYN_LAYER_PRECISION);
-            P h1 = C[0*src_plane_stride]+(((D[0*src_plane_stride]-C[0*src_plane_stride])*dx) >> SYN_LAYER_PRECISION);
-            P v = ((h1-h0)*dy) >> SYN_LAYER_PRECISION;
-            dst[0*warp_result.plane_stride] = ((h0+v)*gain) >> SYN_LAYER_PRECISION;
-        }
-        else
-        {
-            P h0 = A[0*src_plane_stride]+((B[0*src_plane_stride]-A[0*src_plane_stride])*dx);
-            P h1 = C[0*src_plane_stride]+((D[0*src_plane_stride]-C[0*src_plane_stride])*dx);
-            P v = ((h1-h0)*dy);
-            dst[0*warp_result.plane_stride] = ((h0+v)*gain);
-        }
-
-        if constexpr(std::is_same<P, int32_t>::value)
-        {
-            P h0 = A[1*src_plane_stride]+(((B[1*src_plane_stride]-A[1*src_plane_stride])*dx) >> SYN_LAYER_PRECISION);
-            P h1 = C[1*src_plane_stride]+(((D[1*src_plane_stride]-C[1*src_plane_stride])*dx) >> SYN_LAYER_PRECISION);
-            P v = ((h1-h0)*dy) >> SYN_LAYER_PRECISION;
-            dst[1*warp_result.plane_stride] = ((h0+v)*gain) >> SYN_LAYER_PRECISION;
-        }
-        else
-        {
-            P h0 = A[1*src_plane_stride]+((B[1*src_plane_stride]-A[1*src_plane_stride])*dx);
-            P h1 = C[1*src_plane_stride]+((D[1*src_plane_stride]-C[1*src_plane_stride])*dx);
-            P v = ((h1-h0)*dy);
-            dst[1*warp_result.plane_stride] = ((h0+v)*gain);
-        }
-
-        if constexpr(std::is_same<P, int32_t>::value)
-        {
-            P h0 = A[2*src_plane_stride]+(((B[2*src_plane_stride]-A[2*src_plane_stride])*dx) >> SYN_LAYER_PRECISION);
-            P h1 = C[2*src_plane_stride]+(((D[2*src_plane_stride]-C[2*src_plane_stride])*dx) >> SYN_LAYER_PRECISION);
-            P v = ((h1-h0)*dy) >> SYN_LAYER_PRECISION;
-            dst[2*warp_result.plane_stride] = ((h0+v)*gain) >> SYN_LAYER_PRECISION;
-        }
-        else
-        {
-            P h0 = A[2*src_plane_stride]+((B[2*src_plane_stride]-A[2*src_plane_stride])*dx);
-            P h1 = C[2*src_plane_stride]+((D[2*src_plane_stride]-C[2*src_plane_stride])*dx);
-            P v = ((h1-h0)*dy);
-            dst[2*warp_result.plane_stride] = ((h0+v)*gain);
-        }
-
-        if (add_residue)
-        {
-            dst[0*warp_result.plane_stride] += residual[0*frame_residual.plane_stride];
-            dst[1*warp_result.plane_stride] += residual[1*frame_residual.plane_stride];
-            dst[2*warp_result.plane_stride] += residual[2*frame_residual.plane_stride];
-            //dst[0*warp_result.plane_stride] = residual[0*frame_residual.plane_stride];
-            //dst[1*warp_result.plane_stride] = residual[1*frame_residual.plane_stride];
-            //dst[2*warp_result.plane_stride] = residual[2*frame_residual.plane_stride];
-        }
-    }
-
-    const auto time_warp_end = std::chrono::steady_clock::now();
-    const std::chrono::duration<double> elapsed_warp = (time_warp_end-time_warp_start);
-    time_warp_seconds += (float)elapsed_warp.count();
 }
 
 // final b-prediction
@@ -899,27 +435,41 @@ void bpred(struct frame_memory<P> &bpred_result, struct frame_memory<P> const &r
     {
         if constexpr(std::is_same<P, int32_t>::value)
         {
-            int32_t gain = raw[raw_gain_offset]+(1<<(SYN_LAYER_PRECISION-1));
+            P gain = raw[raw_gain_offset]+(1<<(SYN_LAYER_PRECISION-1));
             if (gain < 0)
                 gain = 0;
             else if (gain > (1<<SYN_LAYER_PRECISION))
                 gain = (1<<SYN_LAYER_PRECISION);
 
-            dst[0*src_plane_stride] = (((src0[0*src_plane_stride]+src1[0*src_plane_stride])*gain)>>SYN_LAYER_PRECISION) + raw[0*raw_plane_stride];
-            dst[1*src_plane_stride] = (((src0[1*src_plane_stride]+src1[1*src_plane_stride])*gain)>>SYN_LAYER_PRECISION) + raw[1*raw_plane_stride];
-            dst[2*src_plane_stride] = (((src0[2*src_plane_stride]+src1[2*src_plane_stride])*gain)>>SYN_LAYER_PRECISION) + raw[2*raw_plane_stride];
+            // clamp.
+            for (int c = 0; c < 3; c++)
+            {
+                P res = (((src0[c*src_plane_stride]+src1[c*src_plane_stride])*gain)>>SYN_LAYER_PRECISION) + raw[c*raw_plane_stride];
+                if (res < 0)
+                    res = 0;
+                else if (res > (1<<SYN_LAYER_PRECISION))
+                    res = (1<<SYN_LAYER_PRECISION);
+                dst[c*src_plane_stride] = res;
+            }
         }
         else
         {
-            float alpha = raw[raw_gain_offset]+0.5;
+            P alpha = raw[raw_gain_offset]+0.5;
             if (alpha < 0)
                 alpha = 0;
             else if (alpha > 1.0)
                 alpha = 1.0;
 
-            dst[0*src_plane_stride] = (src0[0*src_plane_stride]+src1[0*src_plane_stride])*alpha + raw[0*raw_plane_stride];
-            dst[1*src_plane_stride] = (src0[1*src_plane_stride]+src1[1*src_plane_stride])*alpha + raw[1*raw_plane_stride];
-            dst[2*src_plane_stride] = (src0[2*src_plane_stride]+src1[2*src_plane_stride])*alpha + raw[2*raw_plane_stride];
+            // clamp.
+            for (int c = 0; c < 3; c++)
+            {
+                P res = (src0[c*src_plane_stride]+src1[c*src_plane_stride])*alpha + raw[c*raw_plane_stride];
+                if (res < 0)
+                    res = 0;
+                else if (res > 1.0)
+                    res = 1.0;
+                dst[c*src_plane_stride] = res;
+            }
         }
     }
 
@@ -931,25 +481,26 @@ void bpred(struct frame_memory<P> &bpred_result, struct frame_memory<P> const &r
 // returns a yuv444 float prediction, planar.
 // refx_444: float, planar.
 // residual: rgb + alpha
-// motion:   xy (P) or xy+xy+beta (B)
+// motion:   xy (P) or xy+xy+beta (B) -- CAN BE REDUCED RESOLUTION.
 template <typename P>
-void process_inter(struct frame_memory<P> &pred, struct frame_memory<P> const &residual, frame_memory<P> const &motion, struct frame_memory<P> const *ref0_444, struct frame_memory<P> const *ref1_444,
+void process_inter(struct frame_memory<P> &pred, struct frame_memory<P> const &residual, frame_memory<P> /*const*/ &motion, struct frame_memory<P> const *ref0_444, struct frame_memory<P> const *ref1_444,
                    int global_flow[2][2],
-                   struct frame_memory<P> &warp0, struct frame_memory <P> &warp1)
+                   struct frame_memory<P> &warp0, struct frame_memory <P> &warp1,
+                   int ntaps, int motion_blksz_shift, int motion_q)
 {
+    // work out the 'motion block size'.
     if (ref1_444 == NULL)
     {
         // P
         // multiplies by alpha, adds residue.
-        warp(pred, residual, motion, *ref0_444, global_flow[0], 0, 3, true);
+        warp_ntaps<P, float>(pred, residual, motion, *ref0_444, global_flow[0], 0, 3, true, ntaps, motion_blksz_shift, motion_q);
     }
     else
     {
         // B
         // want to multiply by beta, do not add residue.
-        warp(warp0, residual, motion, *ref0_444, global_flow[0], 0, 4, false);
-        // want to multiply by 1-beta, do not add residue.
-        warp(warp1, residual, motion, *ref1_444, global_flow[1], 2, -4, false);
+        warp_ntaps<P, float>(warp0, residual, motion, *ref0_444, global_flow[0], 0, 4, false, ntaps, motion_blksz_shift, motion_q);
+        warp_ntaps<P, float>(warp1, residual, motion, *ref1_444, global_flow[1], 2, -4, false, ntaps, motion_blksz_shift, motion_q);
 
         // want to add warp0, warp1, multiply by alpha, and add residue.
         bpred(pred, residual, warp0, warp1, 3);
@@ -974,11 +525,11 @@ void put_444_ref_frame(std::vector<struct frame_memory<P> *> &frame_444_buffer, 
 }
 
 #if defined(CCDECAPI_CPU)
-int cc_decode_cpu(std::string &bitstream_filename, std::string &out_filename, int output_bitdepth, int output_chroma_format, int verbosity)
+int cc_decode_cpu(std::string &bitstream_filename, std::string &out_filename, int output_bitdepth, int output_chroma_format, int motion_q, int verbosity)
 #elif defined(CCDECAPI_AVX2_OPTIONAL)
-int cc_decode_avx2_optional(std::string &bitstream_filename, std::string &out_filename, int output_bitdepth, int output_chroma_format, bool use_avx2, int verbosity)
+int cc_decode_avx2_optional(std::string &bitstream_filename, std::string &out_filename, int output_bitdepth, int output_chroma_format, bool use_avx2, int motion_q, int verbosity)
 #elif defined(CCDECAPI_AVX2)
-int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename, int output_bitdepth, int output_chroma_format, int verbosity)
+int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename, int output_bitdepth, int output_chroma_format, int motion_q, int verbosity)
 #else
 #error must have one of CCDECAPI_CPU, CCDECAPI_AVX2 or CCDECAPI_AVX2_OPTIONAL defined.
 #endif
@@ -987,6 +538,16 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename, i
     {
         printf("must specify a bitstream\n");
         return 1;
+    }
+
+    // ensure motion_q is a power of 2. Limit to 2^10.
+    int motion_q_shift = 0;
+    while ((1<<motion_q_shift) < motion_q && motion_q_shift < 10)
+        motion_q_shift += 1;
+    if ((1<<motion_q_shift) != motion_q)
+    {
+        printf("motion_accuracy: must be power of 2, 2^10 max.  Received %d.\n", motion_q);
+        exit(1);
     }
 
     const auto time_all_start = std::chrono::steady_clock::now();
@@ -1107,7 +668,7 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename, i
                     return 1;
                 }
             }
-            process_inter(frame_444, raw_cc_outputs[0], raw_cc_outputs[1], ref_prev, ref_next, frame_header.global_flow, warp0, warp1);
+            process_inter(frame_444, raw_cc_outputs[0], raw_cc_outputs[1], ref_prev, ref_next, frame_header.global_flow, warp0, warp1, frame_header.warp_filter_length, frame_symbols->m_coolchics[1].n_leading_zero_feature_layers, motion_q_shift);
             frame_444p = &frame_444;
         }
 
@@ -1119,17 +680,17 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename, i
             {
                 if (frame_decoder.m_output_bitdepth == 8)
                 {
-                    convert_444_420_8b(&frame_4XX_8b, *frame_444p);
+                    convert_444_420_xb<SYN_INT_FLOAT, unsigned char, 255>(&frame_4XX_8b, *frame_444p);
                     if (out_filename != "")
                         dump_yuv420_8b(frame_4XX_8b, gop_header.img_h, gop_header.img_w, fout, frame_header.display_index);
-                    convert_420_444_8b(*result_444, frame_4XX_8b, gop_header.img_h, gop_header.img_w);
+                    convert_420_444_xb<SYN_INT_FLOAT, unsigned char, 255>(*result_444, frame_4XX_8b, gop_header.img_h, gop_header.img_w);
                 }
                 else if (frame_decoder.m_output_bitdepth == 10)
                 {
-                    convert_444_420_10b(&frame_4XX_10b, *frame_444p);
+                    convert_444_420_xb<SYN_INT_FLOAT, unsigned short, 1023>(&frame_4XX_10b, *frame_444p);
                     if (out_filename != "")
                         dump_yuv420_10b(frame_4XX_10b, gop_header.img_h, gop_header.img_w, fout, frame_header.display_index);
-                    convert_420_444_10b(*result_444, frame_4XX_10b, gop_header.img_h, gop_header.img_w);
+                    convert_420_444_xb<SYN_INT_FLOAT, unsigned short, 1023>(*result_444, frame_4XX_10b, gop_header.img_h, gop_header.img_w);
                 }
                 else
                 {
@@ -1142,17 +703,17 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename, i
             {
                 if (frame_decoder.m_output_bitdepth == 8)
                 {
-                    get_raw_444_8b(&frame_4XX_8b, *frame_444p);
+                    get_raw_444_xb<SYN_INT_FLOAT, unsigned char, 255>(&frame_4XX_8b, *frame_444p);
                     if (out_filename != "")
                         dump_yuv444_8b(frame_4XX_8b, gop_header.img_h, gop_header.img_w, fout, frame_header.display_index);
-                    store_444_8b(*result_444, frame_4XX_8b, gop_header.img_h, gop_header.img_w);
+                    store_444_xb<SYN_INT_FLOAT, unsigned char, 255>(*result_444, frame_4XX_8b, gop_header.img_h, gop_header.img_w);
                 }
                 else if (frame_decoder.m_output_bitdepth == 10)
                 {
-                    get_raw_444_10b(&frame_4XX_10b, *frame_444p);
+                    get_raw_444_xb<SYN_INT_FLOAT, unsigned short, 1023>(&frame_4XX_10b, *frame_444p);
                     if (out_filename != "")
                         dump_yuv444_10b(frame_4XX_10b, gop_header.img_h, gop_header.img_w, fout, frame_header.display_index);
-                    store_444_10b(*result_444, frame_4XX_10b, gop_header.img_h, gop_header.img_w);
+                    store_444_xb<SYN_INT_FLOAT, unsigned short, 1023>(*result_444, frame_4XX_10b, gop_header.img_h, gop_header.img_w);
                 }
                 else
                 {
@@ -1234,8 +795,8 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename, i
         time_all_seconds = (float)elapsed_all.count();
 
         if (verbosity >= 1)
-            printf("time: arm %g ups %g syn %g blend %g warp %g bpred %g all %g\n",
-                    time_arm_seconds, time_ups_seconds, time_syn_seconds, time_blend_seconds, time_warp_seconds, time_bpred_seconds, time_all_seconds);
+            printf("time: arm %g ups %g syn %g blend %g warp %g (coeffgen %g coeffget %g) bpred %g all %g\n",
+                    time_arm_seconds, time_ups_seconds, time_syn_seconds, time_blend_seconds, time_warp_seconds, time_warp_coeffgen_seconds, time_warp_coeffget_seconds, time_bpred_seconds, time_all_seconds);
         fflush(stdout);
     }
 
@@ -1270,6 +831,7 @@ char const *param_chroma    = "--output_chroma_format=";
 char const *param_cpu       = "--cpu";
 char const *param_auto      = "--auto";
 char const *param_avx2      = "--avx2";
+char const *param_motion_q  = "--motion_accuracy=";
 char const *param_v         = "--v=";
 
 void usage(char const *msg = NULL)
@@ -1277,11 +839,12 @@ void usage(char const *msg = NULL)
     if (msg != NULL)
         printf("%s\n", msg);
     printf("Usage:\n");
-    printf("    %s: .hevc to decode\n", param_bitstream);
+    printf("    %s: .bin to decode\n", param_bitstream);
     printf("    [%s]: reconstruction if desired: ppm (image) or yuv420 (video) only\n", param_out);
     printf("    [%s]: output bitdepth 0 => take from bitstream\n", param_bitdepth);
     printf("    [%s]: output chroma subsampling 420 or 444 for yuv; 0 => take from bitstream\n", param_chroma);
     printf("    [%s|%s|%s]: optimized instruction set with which to decode\n", param_cpu, param_avx2, param_auto);
+    printf("    [%s]: motion_accuracy: n for 1/n (default 64)\n", param_motion_q);
     printf("    [%s]: verbosity\n", param_v);
     exit(msg != NULL);
 }
@@ -1296,6 +859,7 @@ int main(int argc, const char* argv[])
     bool explicit_instruction_set = false;
     bool use_avx2 = false;
     bool use_auto = false;
+    int motion_q = 64;
     int  verbosity = 0;
 
     for (int i = 1; i < argc; i++)
@@ -1321,6 +885,10 @@ int main(int argc, const char* argv[])
             use_avx2 = strncmp(argv[i], param_avx2, strlen(param_avx2)) == 0;
             use_auto = strncmp(argv[i], param_auto, strlen(param_auto)) == 0;
         }
+        else if (strncmp(argv[i], param_motion_q, strlen(param_motion_q)) == 0)
+        {
+            motion_q = atoi(argv[i]+strlen(param_motion_q));
+        }
         else if (strncmp(argv[i], param_v, strlen(param_v)) == 0)
         {
             verbosity = atoi(argv[i]+strlen(param_v));
@@ -1345,7 +913,7 @@ int main(int argc, const char* argv[])
             use_avx2 = true;
         }
     }
-    int result = cc_decode_avx2_optional(bitstream_filename, out, output_bitdepth, output_chroma_format, use_avx2, verbosity);
+    int result = cc_decode_avx2_optional(bitstream_filename, out, output_bitdepth, output_chroma_format, use_avx2, motion_q, verbosity);
     return result;
 }
 #endif

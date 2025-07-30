@@ -22,6 +22,7 @@ int cc_decode_avx2(
     std::string &out_ppm_filename,
     int output_bitdepth = 0,
     int output_chroma_format = 0,
+    int motion_q = 64,
     int verbosity = 0);
 
 PYBIND11_MODULE(ccdecapi_avx2, m) {

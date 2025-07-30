@@ -232,3 +232,21 @@ def get_manager_from_args(args: argparse.Namespace) -> Dict[str, Any]:
         "n_itr_pretrain_motion": args.n_itr_pretrain_motion,
     }
     return frame_encoder_manager
+
+def get_warp_param_from_args(args: argparse.Namespace) -> Dict[str, Any]:
+    """Perform some check on the argparse object used to collect the command
+    line parameters. Return a dictionary ready to be plugged into the
+    ``WarpParameter`` constructor.
+
+    Args:
+        args (argparse.Namespace): Command-line argument parser.
+
+    Returns:
+        Dict[str, Any]: Dictionary ready to be plugged into the
+            ``WarpParameter`` constructor.
+    """
+    warp_parameter = {
+        "filter_size": args.warp_filter_size,
+    }
+    return warp_parameter
+

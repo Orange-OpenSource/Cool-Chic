@@ -181,7 +181,7 @@ class UpsamplingSeparableSymmetricConv2d(nn.Module):
 
         .. warning::
 
-            There is a residual connexion in the forward.
+            There is a residual connection in the forward.
 
         Args:
             x: [B, 1, H, W] tensor to be filtered. Must have one
@@ -205,14 +205,14 @@ class UpsamplingSeparableSymmetricConv2d(nn.Module):
             # (k, k) --> (1, 1, k, k).
             kernel_2d = torch.kron(weight, weight.T).view((1, 1, k, k))
 
-            # ! Note the residual connexion!
+            # ! Note the residual connection!
             return F.conv2d(x, kernel_2d, bias=None, stride=1, padding=padding) + x
 
         # Test through separable (less complex, for the flop counter)
         else:
             yw = F.conv2d(x, weight.view((1, 1, 1, k)), padding=(0, padding))
 
-            # ! Note the residual connexion!
+            # ! Note the residual connection!
             return F.conv2d(yw, weight.view((1, 1, k, 1)), padding=(padding, 0)) + x
 
 
@@ -504,6 +504,12 @@ class Upsampling(nn.Module):
         upsampled_latent = latent_reversed[0]  # start from smallest
 
         for idx, target_tensor in enumerate(latent_reversed[1:]):
+
+            # If --n_per_ft_latent = 0,0,1,1,1 return a [1, 3, H/4, W/4] tensor
+            if target_tensor.size()[1] == 0:
+                break
+
+
             # Our goal is to upsample <upsampled_latent> to the same resolution than <target_tensor>
             x = rearrange(upsampled_latent, "b c h w -> (b c) 1 h w")
             x = self.conv_transpose2ds[idx % self.n_ups_kernel](x)

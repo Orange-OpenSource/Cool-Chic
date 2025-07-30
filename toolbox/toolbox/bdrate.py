@@ -70,16 +70,16 @@ def compute_bd_rate(
     ref_log_rate = np.log(ref_rate)
     candidate_log_rate = np.log(candidate_rate)
 
-    # rate method
-    polynom_ref = np.polyfit(ref_quality, ref_log_rate, 3)
-    polynom_candidate = np.polyfit(candidate_quality, candidate_log_rate, 3)
-
     # integration interval
     min_int = max(min(ref_quality), min(candidate_quality))
     max_int = min(max(ref_quality), max(candidate_quality))
 
     # find integral
     if piecewise == 0:
+        # rate method
+        polynom_ref = np.polyfit(ref_quality, ref_log_rate, 3)
+        polynom_candidate = np.polyfit(candidate_quality, candidate_log_rate, 3)
+
         int_polynom_ref = np.polyint(polynom_ref)
         int_polynom_candidate = np.polyint(polynom_candidate)
 
@@ -95,11 +95,12 @@ def compute_bd_rate(
         interval = lin[1]
         samples = lin[0]
         v_ref = interpolate.pchip_interpolate(
-            np.sort(ref_quality), np.sort(ref_log_rate), samples
+            np.sort(ref_quality), ref_log_rate[np.argsort(ref_quality)], samples
         )
         v_candidate = interpolate.pchip_interpolate(
-            np.sort(candidate_quality), np.sort(candidate_log_rate), samples
+            np.sort(candidate_quality), candidate_log_rate[np.argsort(candidate_quality)], samples
         )
+
         # Calculate the integral using the trapezoid method on the samples.
         int_ref = np.trapz(v_ref, dx=interval)
         int_candidate = np.trapz(v_candidate, dx=interval)

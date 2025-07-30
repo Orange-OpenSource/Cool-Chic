@@ -558,16 +558,16 @@ class CodingStructure:
 
         """
 
-        COL_WIDTH = 18
+        COL_WIDTH = 26
 
         s = "Coding configuration:\n"
         s += "---------------------\n"
 
-        s += f"{'n_frames':<26}: {self.n_frames}\n"
-        s += f"{'frame_offset':<26}: {self.frame_offset}\n"
-        s += f"{'seq_name':<26}: {self.seq_name}\n"
-        s += f"{'intra_pos':<26}: {', '.join([str(x) for x in self.intra_pos])}\n"
-        s += f"{'p_pos':<26}: {', '.join([str(x) for x in self.p_pos])}\n\n"
+        s += f"{'n_frames':<{COL_WIDTH}}: {self.n_frames}\n"
+        s += f"{'frame_offset':<{COL_WIDTH}}: {self.frame_offset}\n"
+        s += f"{'seq_name':<{COL_WIDTH}}: {self.seq_name}\n"
+        s += f"{'intra_pos':<{COL_WIDTH}}: {', '.join([str(x) for x in self.intra_pos])}\n"
+        s += f"{'p_pos':<{COL_WIDTH}}: {', '.join([str(x) for x in self.p_pos])}\n\n"
 
         if not print_detailed_struct:
             return s

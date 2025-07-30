@@ -471,10 +471,10 @@ def encode_frame(
             ctr_2d_ft = 0
             # Loop on the different resolutions
             for index_lat_resolution in range(cc_enc.param.latent_n_grids):
-                current_mu = encoder_output.additional_data.get(f'{cc_name}detailed_mu')[index_lat_resolution]
-                current_scale = encoder_output.additional_data.get(f'{cc_name}detailed_scale')[index_lat_resolution]
-                current_log_scale = encoder_output.additional_data.get(f'{cc_name}detailed_log_scale')[index_lat_resolution]
-                current_y = encoder_output.additional_data.get(f'{cc_name}detailed_sent_latent')[index_lat_resolution]
+                current_mu = encoder_output.additional_data.get(f'{cc_name}_detailed_mu')[index_lat_resolution]
+                current_scale = encoder_output.additional_data.get(f'{cc_name}_detailed_scale')[index_lat_resolution]
+                current_log_scale = encoder_output.additional_data.get(f'{cc_name}_detailed_log_scale')[index_lat_resolution]
+                current_y = encoder_output.additional_data.get(f'{cc_name}_detailed_sent_latent')[index_lat_resolution]
 
                 c_i, h_i, w_i = current_y.size()[-3:]
 
@@ -527,19 +527,15 @@ def encode_frame(
 
             if best_stream_size is None \
                 or cur_stream_size < best_stream_size:
-                print(cur_stream_size, "<", best_stream_size, "with", hls_test)
                 best_stream_size = cur_stream_size
                 best_stream_sizes = cur_stream_sizes
                 best_stream_content = cur_stream_content
                 best_stream_names = cur_stream_names
                 best_hls = hls_test
-            else:
-                print("skipping", cur_stream_size, "with", hls_test)
 
         # Use the best.
         hls_blk_sizes.append(best_hls)
         n_bytes_per_latent[cc_name] = best_stream_sizes
-        print("using", best_hls, "perlatent:", n_bytes_per_latent[cc_name])
         for idx in range(len(best_stream_names)):
             if best_stream_content[idx] is None:
                 subprocess.call(f'rm -f {best_stream_names[idx]}', shell=True)
@@ -583,7 +579,6 @@ def encode_frame(
 
     for cc_name, cc_enc in frame_encoder.coolchic_enc.items():
         latents_zero = cc_latents_zero(cc_enc, n_bytes_per_latent[cc_name])
-        print("latents_zero", latents_zero)
         for cur_module_name in ['arm', 'upsampling', 'synthesis']:
             for parameter_type in ['weight', 'bias']:
                 cur_bitstream = f'{bitstream_path}_{cc_name}_{cur_module_name}_{parameter_type}'

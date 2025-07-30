@@ -153,7 +153,7 @@ class FrameEncoderLogs(LossFunctionOutput):
                 # Loop on weight and biases
                 for weight_or_bias in [x.name for x in fields(DescriptorNN)]:
                     # Convert the value to bpp if we have one
-                    if cc_name in self.detailed_rate_nn:
+                    if cc_name in self.detailed_rate_nn and nn_name in self.detailed_rate_nn[cc_name]:
                         self.detailed_rate_nn_bpp[cc_name][nn_name][weight_or_bias] = (
                             self.detailed_rate_nn[cc_name][nn_name][weight_or_bias]
                             / self.n_pixels

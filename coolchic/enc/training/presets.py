@@ -30,7 +30,7 @@ MODULE_TO_OPTIMIZE = Literal[
         [
             f"{cc_name}.{mod_name}"
             for cc_name in list(typing.get_args(NAME_COOLCHIC_ENC)) + ["all"]
-            for mod_name in ["all", "arm", "upsampling", "synthesis", "latent"]
+            for mod_name in ["all", "arm", "upsampling", "synthesis", "latent", "warper"]
         ]
         +
         # Train everything

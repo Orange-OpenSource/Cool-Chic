@@ -41,7 +41,7 @@ class SynthesisConv2d(nn.Module):
             in_channels: Number of input channels :math:`C_{in}`.
             out_channels: Number of output channels :math:`C_{out}`.
             kernel_size: Kernel size (height and width are identical)
-            residual: True to add a residual connexion to the layer.
+            residual: True to add a residual connection to the layer.
                 Default to False.
         """
         super().__init__()
@@ -147,10 +147,10 @@ class Synthesis(nn.Module):
             \\end{cases}
 
     * ``non_linearity``: either ``none`` (no non-linearity) or ``relu``.
-        The non-linearity is applied after the residual connexion if any.
+        The non-linearity is applied after the residual connection if any.
 
     Example of a convolution layer with 40 input features, 3 output features, a
-    residual connexion followed with a relu: ``40-3-residual-relu``
+    residual connection followed with a relu: ``40-3-residual-relu``
 
     """
     possible_non_linearity = {
@@ -216,6 +216,35 @@ class Synthesis(nn.Module):
             Raw output features :math:`[B, C_{out}, H, W]`.
         """
         return self.layers(x)
+
+    def partial_forward(self, x: Tensor, last_layer_idx: int = 1) -> Tensor:
+        """Perform a "partial" forward of the synthesis, i.e. stopping at the
+        <last_layer_idx>-th layer. We do not count non-linearity as actual
+        layer. That is:
+
+        x --> Conv --> ReLU --> Conv --> Conv --> ReLU --> out
+                             ^        ^                 ^
+        last_layer_idx       1        2                 3  
+        
+
+        Args:
+            x: Dense latent representation :math:`[B, C_{in}, H, W]`.
+            last_layer_idx: Last layer index. Defaults to 1.
+
+        Returns:
+            Features [B, C, H, W]`.
+        """
+        i = 0
+        layer_idx = 0
+        while True:
+            if isinstance(self.layers[i], SynthesisConv2d):
+                layer_idx += 1
+
+            if layer_idx > last_layer_idx:
+                return x
+
+            x = self.layers[i](x)
+            i += 1
 
 
     def get_param(self) -> OrderedDict[str, Tensor]:

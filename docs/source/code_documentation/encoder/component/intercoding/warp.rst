@@ -6,4 +6,11 @@ Warping an image with an optical flow
 
 .. currentmodule:: enc.component.intercoding.warp
 
-.. autofunction:: warp_fn
+.. autoclass:: Warper
+       :members:
+
+.. autoclass:: WarpParameter
+    :members:
+    :exclude-members: __init__
+
+.. autofunction:: vanilla_warp_fn

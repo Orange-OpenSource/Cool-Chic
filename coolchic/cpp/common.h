@@ -17,6 +17,7 @@
 #include <vector>
 #include <chrono>
 
+// !!! only use float for current video code.
 #define UPS_INT_FLOAT float // float or int32_t, if float, SYN_INT_FLOAT must be float
 #define SYN_INT_FLOAT float // float or int32_t
 
@@ -60,7 +61,7 @@ private:
     void unuse() { if (data != NULL) {free(data); data = NULL;} }
 };
 using weights_biases = buffer<int32_t>;
-using weights_biases_ups = buffer<UPS_INT_FLOAT>; // !!! temporary -- synthesis.
-using weights_biases_syn = buffer<SYN_INT_FLOAT>; // !!! temporary -- synthesis.
+using weights_biases_ups = buffer<UPS_INT_FLOAT>;
+using weights_biases_syn = buffer<SYN_INT_FLOAT>;
 
 #endif

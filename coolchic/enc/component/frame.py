@@ -25,7 +25,7 @@ from enc.component.core.quantizer import (
     POSSIBLE_QUANTIZATION_NOISE_TYPE,
     POSSIBLE_QUANTIZER_TYPE,
 )
-from enc.component.intercoding.warp import warp_fn
+from enc.component.intercoding.warp import vanilla_warp_fn, Warper, WarpParameter
 from enc.io.types import FRAME_DATA_TYPE, POSSIBLE_BITDEPTH
 from enc.io.format.yuv import DictTensorYUV, convert_444_to_420, yuv_dict_clamp
 from enc.utils.codingstructure import FRAME_TYPE
@@ -64,6 +64,7 @@ class FrameEncoder(nn.Module):
     def __init__(
         self,
         coolchic_enc_param: Dict[NAME_COOLCHIC_ENC, CoolChicEncoderParameter],
+        warp_parameter: Optional[WarpParameter] = None,
         frame_type: FRAME_TYPE = "I",
         frame_data_type: FRAME_DATA_TYPE = "rgb",
         bitdepth: POSSIBLE_BITDEPTH = 8,
@@ -73,6 +74,7 @@ class FrameEncoder(nn.Module):
         """
         Args:
             coolchic_enc_param: Parameters for the underlying CoolChicEncoders
+            warp_parameter: Parameters for the Warper. Can be None for intra frame.
             frame_type: More info in
                 :doc:`coding_structure.py <../utils/codingstructure>`.
                 Defaults to "I".
@@ -90,6 +92,7 @@ class FrameEncoder(nn.Module):
 
         # ----- Copy the parameters
         self.coolchic_enc_param = coolchic_enc_param
+        self.warp_parameter = warp_parameter
         self.frame_type = frame_type
         self.frame_data_type = frame_data_type
         self.bitdepth = bitdepth
@@ -110,6 +113,12 @@ class FrameEncoder(nn.Module):
         for name, cc_enc_param in self.coolchic_enc_param.items():
             self.coolchic_enc[name] = CoolChicEncoder(cc_enc_param)
 
+        if self.frame_type != "I":
+            self.warper = Warper(
+                self.warp_parameter,
+                img_size=self.coolchic_enc_param.get("residue").img_size,
+            )
+
         # Global motion. Only here for saving purposes. Not used in the forward
         # We shift the references instead!
 
@@ -125,7 +134,6 @@ class FrameEncoder(nn.Module):
 
         # self.global_flow_1 = nn.Parameter(torch.zeros(1, 2, 1, 1), requires_grad=True)
         # self.global_flow_2 = nn.Parameter(torch.zeros(1, 2, 1, 1), requires_grad=True)
-
 
     def forward(
         self,
@@ -221,20 +229,27 @@ class FrameEncoder(nn.Module):
             # Apply each global flow on each reference.
             # Upsample the global flow beforehand to obtain a constant [1, 2, H, W] optical flow.
             shifted_ref = []
-            for ref_i, global_flow_i in zip(reference_frames, [self.global_flow_1, self.global_flow_2]):
-                ups_global_flow_i = F.interpolate(global_flow_i, size=ref_i.size()[-2:], mode="nearest")
-                shifted_ref.append(warp_fn(ref_i, ups_global_flow_i))
+            for ref_i, global_flow_i in zip(
+                reference_frames, [self.global_flow_1, self.global_flow_2]
+            ):
+                ups_global_flow_i = F.interpolate(
+                    global_flow_i, size=ref_i.size()[-2:], mode="nearest"
+                )
+                shifted_ref.append(
+                    vanilla_warp_fn(ref_i, ups_global_flow_i, mode="nearest")
+                )
 
             if self.frame_type == "P":
-                pred = warp_fn(shifted_ref[0], flow_1)
+                pred = self.warper(shifted_ref[0], flow_1)
 
             elif self.frame_type == "B":
                 flow_2 = cc_enc_out["motion"].get("raw_out")[:, 2:4, :, :]
                 beta = torch.clamp(
                     cc_enc_out["motion"].get("raw_out")[:, 4:5, :, :] + 0.5, 0.0, 1.0
                 )
-                pred = beta * warp_fn(shifted_ref[0], flow_1) \
-                       + (1 - beta) * warp_fn( shifted_ref[1], flow_2)
+                pred = beta * self.warper(shifted_ref[0], flow_1) + (
+                    1 - beta
+                ) * self.warper(shifted_ref[1], flow_2)
 
             decoded_image = alpha * pred + residue
 
@@ -256,7 +271,7 @@ class FrameEncoder(nn.Module):
                 additional_data.update(
                     {
                         # Append the cc_name (e.g. residue) in front of the key
-                        f"{cc_name}{k}": v
+                        f"{cc_name}_{k}": v
                         for k, v in cc_enc_out_i.get("additional_data").items()
                     }
                 )
@@ -325,12 +340,22 @@ class FrameEncoder(nn.Module):
             cc_enc._store_full_precision_param()
 
     def set_to_train(self) -> None:
-        """Set the current model to training mode, in place. This only
-        affects the quantization.
-        """
+        """Set the current model to training mode, in place."""
         self = self.train()
         for _, cc_enc in self.coolchic_enc.items():
             cc_enc.train()
+
+    def set_to_eval(self) -> None:
+        """
+        Set the current model to test mode, in place. This affects latent
+        quantization, forcing it to mode="hardround" in eval mode.
+        For video coding, it also affects the optical flows value,
+        quantizing them at a given subpixel accuracy, defined in
+        self.warp_parameter.fractional_accuracy.
+        """
+        self = self.eval()
+        for _, cc_enc in self.coolchic_enc.items():
+            cc_enc.eval()
 
     def set_global_flow(self, global_flow_1: Tensor, global_flow_2: Tensor) -> None:
         """Set the value of the global flows.
@@ -356,7 +381,9 @@ class FrameEncoder(nn.Module):
         self.global_flow_1 = global_flow_1.view(self.global_flow_1.size())
         self.global_flow_2 = global_flow_2.view(self.global_flow_2.size())
 
-    def get_network_rate(self) -> Tuple[Dict[NAME_COOLCHIC_ENC, DescriptorCoolChic], int]:
+    def get_network_rate(
+        self,
+    ) -> Tuple[Dict[NAME_COOLCHIC_ENC, DescriptorCoolChic], int]:
         """Return the rate (in bits) associated to the parameters
         (weights and biases) of the different modules
 
@@ -423,20 +450,44 @@ class FrameEncoder(nn.Module):
         Returns:
             float: number of floating point operations per decoded pixel.
         """
-
         mac_per_pixel = 0
         for cc_name, cc_enc in self.coolchic_enc.items():
             mac_per_pixel += cc_enc.get_total_mac_per_pixel()
 
+        mac_per_pixel += self.get_warp_mac_per_pixel()
+
         return mac_per_pixel
 
-    def set_to_eval(self) -> None:
-        """Set the current model to test mode, in place. This only
-        affects the quantization.
+    def get_warp_mac_per_pixel(self) -> float:
+        """Compute the mac per pixel of a warping. The formula is derived from
+        the paper "Efficient Sub-pixel Motion Compensation in Learned Video
+        Codecs" from Ladune et al.
+
+        Coefficient are supposed pre-computed. Warping is applyed on blocks
+
+        Returns:
+            float: Mac per pixel of the warping
         """
-        self = self.eval()
-        for _, cc_enc in self.coolchic_enc.items():
-            cc_enc.eval()
+        # No warping for intra frame
+        if self.frame_type == "I":
+            return 0.0
+
+        # if motion n_ft_per_res is 0,0,0,1,1 then idx_first_lat = 3
+        # This corresponds to motion block size of 2 ** 3 = 8 since
+        # the motion is decoded at 1/8 of the resolution (corresponding
+        # to the biggest latent resolution)
+        idx_first_lat = self.coolchic_enc_param["motion"].n_ft_per_res.index(1)
+        b = 2**idx_first_lat
+        n = self.warp_parameter.filter_size
+
+        warp_single_channel = (n**2 - n) / b + 2 * n
+        warp_single_ref = 3 * warp_single_channel
+
+        if self.frame_type == "P":
+            return warp_single_ref
+        # Two references for B-frame
+        elif self.frame_type == "B":
+            return 2 * warp_single_ref
 
     def to_device(self, device: POSSIBLE_DEVICE) -> None:
         """Push a model to a given device.
@@ -444,9 +495,9 @@ class FrameEncoder(nn.Module):
         Args:
             device: The device on which the model should run.
         """
-        assert device in typing.get_args(
-            POSSIBLE_DEVICE
-        ), f"Unknown device {device}, should be in {typing.get_args(POSSIBLE_DEVICE)}"
+        assert device in typing.get_args(POSSIBLE_DEVICE), (
+            f"Unknown device {device}, should be in {typing.get_args(POSSIBLE_DEVICE)}"
+        )
 
         self = self.to(device)
         for _, cc_enc in self.coolchic_enc.items():
@@ -477,6 +528,7 @@ class FrameEncoder(nn.Module):
             "frame_data_type": self.frame_data_type,
             "index_references": self.index_references,
             "frame_display_index": self.frame_display_index,
+            "warp_parameter": self.warp_parameter,
             # Name of the different cool-chic encoder
             "keys_cc_enc": list(self.coolchic_enc.keys()),
             "global_flow_1": self.global_flow_1,
@@ -525,6 +577,13 @@ class FrameEncoder(nn.Module):
             )
             s += title
             s += cc_enc.pretty_string(print_detailed_archi=print_detailed_archi) + "\n"
+
+        if self.frame_type != "I":
+            s += (
+                f"Warping:        {self.get_warp_mac_per_pixel():5.0f} MAC / pixel\n"
+                "---------------------------------"
+            )
+
         return s
 
     def pretty_string_param(self) -> str:
@@ -545,6 +604,18 @@ class FrameEncoder(nn.Module):
             )
             s += title
             s += cc_enc_param.pretty_string() + "\n"
+
+        if self.frame_type != "I":
+            title = (
+                "\n\n"
+                + center_str("Warper parameters")
+                + "\n"
+                + center_str(f"{'-' * len(name)})-----------")
+                + "\n\n"
+            )
+            s += title
+            s += self.warper.pretty_string() + "\n"
+
         return s
 
 
@@ -571,9 +642,17 @@ def load_frame_encoder(
     for cc_name in list_cc_name:
         coolchic_enc_param[cc_name] = loaded_data[f"{cc_name}_param"]
 
+    if "warp_parameter" in loaded_data:
+        warp_parameter = loaded_data["warp_parameter"]
+        # Backward compatibility
+        warp_parameter = WarpParameter(filter_size=warp_parameter.filter_size)
+    else:
+        warp_parameter = None
+
     # Create a, empty frame encoder from the stored parameters
     frame_encoder = FrameEncoder(
         coolchic_enc_param=coolchic_enc_param,
+        warp_parameter=warp_parameter,
         frame_type=loaded_data["frame_type"],
         frame_data_type=loaded_data["frame_data_type"],
         bitdepth=loaded_data["bitdepth"],

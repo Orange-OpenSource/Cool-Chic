@@ -6,7 +6,7 @@ from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import setup
 from sys import platform
 
-__version__ = "4.0.0"
+__version__ = "4.1.0"
 
 CCLIB_PATH = "coolchic/CCLIB"
 
@@ -49,6 +49,7 @@ ext_modules = [
             "coolchic/cpp/arm_cpu.cpp",
             "coolchic/cpp/ups_cpu.cpp",
             "coolchic/cpp/syn_cpu.cpp",
+            "coolchic/cpp/warp.cpp",
             "coolchic/cpp/BitStream.cpp",
             "coolchic/cpp/TDecBinCoderCABAC.cpp",
             "coolchic/cpp/Contexts.cpp",
@@ -74,6 +75,7 @@ if platform != "darwin":
                 "coolchic/cpp/ups_cpu.cpp",
                 "coolchic/cpp/ups_avx2.cpp",
                 "coolchic/cpp/syn_cpu.cpp",
+                "coolchic/cpp/warp.cpp",
                 "coolchic/cpp/syn_avx2.cpp",
                 "coolchic/cpp/BitStream.cpp",
                 "coolchic/cpp/TDecBinCoderCABAC.cpp",
@@ -102,7 +104,7 @@ setup(
     zip_safe=False,
     python_requires=">=3.10",
     install_requires=[
-        "torch>=2.5.0",
+        "torch>=2.7.1",
         "torchvision",
         "matplotlib",
         "einops",

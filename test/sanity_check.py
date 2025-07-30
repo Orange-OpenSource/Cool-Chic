@@ -155,10 +155,10 @@ if __name__ == '__main__':
     LIST_SEQ = [
         "/data/192x128_kodim15.png",
         "/data/kodim15_192x128_01p_yuv420_8b.yuv",
-        "/data/D-BQSquare-5frames_224x128_60p_yuv420_8b.yuv",
         "/data/kodim15_192x128_01p_yuv420_10b.yuv",
         "/data/kodim15_192x128_01p_yuv444_8b.yuv",
         "/data/kodim15_192x128_01p_yuv444_10b.yuv",
+        "/data/D-BQSquare-5frames_224x128_60p_yuv420_8b.yuv",
     ]
 
     # Absolute path

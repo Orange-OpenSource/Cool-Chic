@@ -27,7 +27,7 @@
     <!-- <br />
     <br /> -->
     .
-    <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/new_stuff.html">What's new in 4.0.0?</a>
+    <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/new_stuff.html">What's new in 4.1.0?</a>
     ·
     <a href="https://orange-opensource.github.io/Cool-Chic/results/image/compression_performance.html">Image coding performance</a>
     .
@@ -51,12 +51,18 @@ a low-complexity neural image codec based on overfitting.
 
 <div align="center">
 
-### 🎥 __Cool-chic 4.0.0: Video is back!__ 🎥
+### 🔮 __Cool-chic 4.1.0: Revisiting temporal prediction!__ 🔮
 
 </div>
 
-- Cool-chic now compresses inter frames with two cool-chic modules: one for the motion and one for the residue
-- The motion module training is guided through a RAFT optical flow estimator for more accurate motion.
+Cool-chic 4.1 focuses on video coding, improving particularly the temporal
+prediction through better and lighter sub-pixel motion compensation. This
+release is linked to the following paper: [_Efficient Sub-pixel Motion Compensation in Learned Video Codecs_, Ladune et al.](https://arxiv.org/pdf/2507.21926).
+
+- Replace 2-tap bilinear filtering with sinc-based 8-tap filters
+- Decode motion fields at 1/4 of the frame resolution for lighter decoding complexity
+- Improved video compression performance: **-23.6% rate** versus Cool-chic 4.0
+- Decrease motion-related complexity by 30%, **from 391 to 214 MAC / decoded pixel** 
 
 Check-out the [release history](https://github.com/Orange-OpenSource/Cool-Chic/releases) to see previous versions of Cool-chic.
 
@@ -86,12 +92,10 @@ You're good to go!
 
 ## Image compression performance
 
-The Cool-chic page provides [comprehensive image rate-distortion results](https://orange-opensource.github.io/Cool-Chic/results/image/compression_performance.html).
-
 <table class="tg"><thead>
   <tr>
     <th class="tg-86ol" rowspan="2"></th>
-    <th class="tg-86ol" colspan="5">BD-rate of Cool-chic 4.0 vs. [%]</th>
+    <th class="tg-86ol" colspan="5">BD-rate of Cool-chic 4.1 vs. [%]</th>
     <th class="tg-86ol" colspan="2">Avg. decoder complexity</th>
   </tr>
   <tr>
@@ -190,17 +194,20 @@ The Cool-chic page provides [comprehensive image rate-distortion results](https:
 
 ## Compression performance and decoding time
 
-_Decoding time are obtained on a single CPU core of an an AMD EPYC 7282 16-Core Processor_
-
-_PSNR is computed in the RGB domain for kodak and CLIC20, in the YUV420 domain for jvet_
+The Cool-chic page provides [comprehensive video rate-distortion results](https://orange-opensource.github.io/Cool-Chic/results/video/compression_performance.html).
 
 
-### Kodak
+<!-- _Decoding time are obtained on a single CPU core of an an AMD EPYC 7282 16-Core Processor_
+
+_PSNR is computed in the RGB domain for kodak and CLIC20, in the YUV420 domain for jvet_ -->
+
+
+<!-- ### Kodak
 
 <div style="text-align: center;">
     <img src="./docs/source/assets/kodak/concat_img.png" alt="Kodak rd results" width="90%" style="centered"/>
 </div>
-<br/>
+<br/> -->
 
 ### CLIC20 Pro Valid
 
@@ -209,12 +216,12 @@ _PSNR is computed in the RGB domain for kodak and CLIC20, in the YUV420 domain f
 </div>
 <br/>
 
-### JVET Class B
+<!-- ### JVET Class B
 
 <div style="text-align: center;">
     <img src="./docs/source/assets/jvet/concat_img_classB.png" alt="JVET class B rd results" width="90%" style="centered"/>
 </div>
-<br/>
+<br/> -->
 
 </br>
 
@@ -228,63 +235,69 @@ The Cool-chic page provides [comprehensive video rate-distortion results](https:
   <table class="tg"><thead>
   <tr>
       <th class="tg-86ol" rowspan="2">Sequence</th>
-      <th class="tg-86ol" colspan="3">BD-rate of Cool-chic 4.0.0 against [%]</th>
+      <th class="tg-86ol" colspan="4">BD-rate of Cool-chic 4.1.0 against [%]</th>
       <th class="tg-86ol" colspan="2">Decoding complexity</th>
   </tr>
   <tr>
       <th class="tg-86ol">HEVC (HM 16)</th>
       <th class="tg-86ol">HEVC (x265-medium)</th>
       <th class="tg-86ol">AVC (x264-medium)</th>
+      <th class="tg-86ol">Cool-chic 4.0</th>
       <th class="tg-86ol">MAC / pixel</th>
       <th class="tg-86ol">Frame rate [fps]</th>
   </tr></thead>
   <tbody>
   <tr>
       <td class="tg-9mze">C-BasketballDrill</td>
-      <td class="tg-xd3r">+59.6</td>
-      <td class="tg-xd3r">+15.2</td>
-      <td class="tg-qch7">-11.5</td>
-      <td class="tg-dfl2">946</td>
-      <td class="tg-dfl2">18.3</td>
+      <td class="tg-xd3r">+30.8</td>
+      <td class="tg-qch7">-5.2</td>
+      <td class="tg-qch7">-29.5</td>
+      <td class="tg-qch7">-17.5</td>
+      <td class="tg-dfl2">639</td>
+      <td class="tg-dfl2">11.2</td>
   </tr>
   <tr>
       <td class="tg-9mze">C-BQMall</td>
-      <td class="tg-xd3r">+128.7</td>
-      <td class="tg-xd3r">+49.3</td>
-      <td class="tg-xd3r">+20.6</td>
-      <td class="tg-dfl2">945</td>
-      <td class="tg-dfl2">16.7</td>
+      <td class="tg-xd3r">+77.1</td>
+      <td class="tg-xd3r">+16.6</td>
+      <td class="tg-qch7">-6.0</td>
+      <td class="tg-qch7">-21.1</td>
+      <td class="tg-dfl2">639</td>
+      <td class="tg-dfl2">11.3</td>
   </tr>
   <tr>
       <td class="tg-9mze">C-PartyScene</td>
-      <td class="tg-xd3r">+113.0</td>
-      <td class="tg-xd3r">+37.9</td>
-      <td class="tg-xd3r">+20.3</td>
-      <td class="tg-dfl2">946</td>
-      <td class="tg-dfl2">17.5</td>
+      <td class="tg-xd3r">+28.3</td>
+      <td class="tg-qch7">-15.1</td>
+      <td class="tg-qch7">-39.2</td>
+      <td class="tg-qch7">-39.1</td>
+      <td class="tg-dfl2">639</td>
+      <td class="tg-dfl2">10.8</td>
   </tr>
   <tr>
       <td class="tg-9mze">C-RaceHorses</td>
-      <td class="tg-xd3r">+118.7</td>
-      <td class="tg-xd3r">+41.0</td>
-      <td class="tg-xd3r">+19.3</td>
-      <td class="tg-dfl2">950</td>
-      <td class="tg-dfl2">16.5</td>
+      <td class="tg-xd3r">+79.6</td>
+      <td class="tg-xd3r">+17.4</td>
+      <td class="tg-xd3r">+8.6</td>
+      <td class="tg-qch7">-16.8</td>
+      <td class="tg-dfl2">639</td>
+      <td class="tg-dfl2">9.9</td>
   </tr>
   <tr>
       <td class="tg-u3ui">Average</td>
-      <td class="tg-aaaa">+105.0</td>
-      <td class="tg-aaaa">+35.9</td>
-      <td class="tg-aaaa">+12.2</td>
-      <td class="tg-u3ui">947</td>
-      <td class="tg-u3ui">17.3</td>
+      <td class="tg-aaaa">+54.0</td>
+      <td class="tg-aaaa">+3.4</td>
+      <td class="tg-qch7">-14.0</td>
+      <td class="tg-qch7">-23.6</td>
+      <td class="tg-u3ui">639</td>
+      <td class="tg-u3ui">10.8</td>
   </tr>
   </tbody></table>
 
-### C-BasketballDrill
+### C-PartyScene
 
 <div style="text-align: center;">
-    <img src="./docs/source/assets/video-ra-jvet-c/rd-C-BasketballDrill_832x480_50p_yuv420_8b.png" alt="BasketballDrill rd results" width="90%" style="centered"/>
+    <img src="./docs/source/assets/video-ra-jvet-c/rd-C-PartyScene_832x480_50p_yuv420_8b.png" alt="PartyScene rd results" width="90%" style="centered"/>
 </div>
 <br/>
 

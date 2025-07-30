@@ -11,8 +11,10 @@ import os
 import sys
 
 import configargparse
+import torch
 from enc.component.coolchic import CoolChicEncoderParameter
 from enc.component.frame import load_frame_encoder
+from enc.component.intercoding.warp import WarpParameter
 from enc.component.video import (
     FrameEncoderManager,
     _get_frame_path_prefix,
@@ -23,8 +25,8 @@ from enc.utils.parsecli import (
     get_coding_structure_from_args,
     get_coolchic_param_from_args,
     get_manager_from_args,
+    get_warp_param_from_args,
 )
-import torch
 
 if __name__ == "__main__":
     # =========================== Parse arguments =========================== #
@@ -174,7 +176,7 @@ if __name__ == "__main__":
         "<kernel_size> is the spatial dimension of the kernel. Use 1 to mimic an MLP. "
         " "
         "<type> is either 'linear' for a standard conv or 'residual' for a convolution "
-        "with a residual connexion block i.e. layer(x) = x + conv(x). "
+        "with a residual connection block i.e. layer(x) = x + conv(x). "
         " "
         "<non_linearity> Can be 'none' for no non-linearity, 'relu' for a ReLU "
         "non-linearity. "
@@ -215,7 +217,7 @@ if __name__ == "__main__":
     parser.add(
         "--n_ft_per_res_motion",
         type=str,
-        default="1,1,1,1,1,1,1",
+        default="0,0,1,1,1,1,1",
         help="Identical to --n_ft_per_res_residue but for the motion decoder.",
     )
 
@@ -248,13 +250,10 @@ if __name__ == "__main__":
     )
 
     parser.add(
-        "--n_ft_per_res",
-        type=str,
-        default="1,1,1,1,1,1,1",
-        help="Number of feature for each latent resolution. e.g. "
-        " --n_ft_per_res_residue=1,1,1,1,1,1,1 "
-        " for 7 latent grids with variable resolutions. "
-        " Parameterize the residue decoder.",
+        "--warp_filter_size",
+        type=int,
+        default=8,
+        help="Number of taps for the warping interpolation filter. "
     )
 
     args = parser.parse_args()
@@ -279,6 +278,7 @@ if __name__ == "__main__":
     if os.path.exists(path_frame_encoder):
         frame_encoder, frame_encoder_manager = load_frame_encoder(path_frame_encoder)
         coolchic_enc_param = frame_encoder.coolchic_enc_param
+        warp_parameter = frame_encoder.warp_parameter
 
     else:
         start_print = (
@@ -298,7 +298,7 @@ if __name__ == "__main__":
             '|    `"Y8888888 P"Y8888P"    P"Y8888P"    8P\'"Y88                  P""Y8888PP88P     `Y88P""Y8P""Y8888PP   |\n'
             "|                                                                                                          |\n"
             "|                                                                                                          |\n"
-            "| version 4.0.0, March 2025                                                             © 2023-2025 Orange |\n"
+            "| version 4.1.0, July 2025                                                              © 2023-2025 Orange |\n"
             "*----------------------------------------------------------------------------------------------------------*\n"
         )
         print(start_print)
@@ -321,6 +321,7 @@ if __name__ == "__main__":
             for cc_name in ["residue", "motion"]
         }
         frame_encoder_manager = FrameEncoderManager(**get_manager_from_args(args))
+        warp_parameter = WarpParameter(**get_warp_param_from_args(args))
 
     # Automatic device detection
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -335,6 +336,7 @@ if __name__ == "__main__":
         coding_structure=coding_structure,
         coolchic_enc_param=coolchic_enc_param,
         frame_encoder_manager=frame_encoder_manager,
+        warp_parameter=warp_parameter,
         coding_index=args.coding_idx,
         job_duration_min=args.job_duration_min,
         device=device,

@@ -129,8 +129,7 @@ void frame_memory<P>::custom_pad_zero_plane_in_place_i(int plane, int padlr, int
 template <typename P>
 void frame_memory<P>::zero_pad(int plane, int pad)
 {
-    // !!! just the padding.
-    memset(raw()+plane*plane_stride, 0, plane_stride*sizeof(P));
+    custom_pad_zero_plane_in_place_i(plane, pad, pad);
 }
 
 template <typename P>

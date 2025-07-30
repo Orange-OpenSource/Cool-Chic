@@ -8,29 +8,31 @@
 
 
 import copy
-from enum import Enum
 import os
 import time
+from enum import Enum
 from typing import Dict, List
-from enc.component.intercoding.globalmotion import get_global_translation
-from enc.component.intercoding.raft import get_raft_optical_flow
-from enc.nnquant.quantizemodel import quantize_model
+
 import torch
 from enc.component.coolchic import CoolChicEncoder, CoolChicEncoderParameter
-from enc.component.frame import FrameEncoder, NAME_COOLCHIC_ENC, load_frame_encoder
+from enc.component.frame import NAME_COOLCHIC_ENC, FrameEncoder, load_frame_encoder
+from enc.component.intercoding.globalmotion import get_global_translation
+from enc.component.intercoding.raft import get_raft_optical_flow
+from enc.component.intercoding.warp import WarpParameter
 from enc.io.format.png import write_png
 from enc.io.format.ppm import write_ppm
 from enc.io.format.yuv import write_yuv
+from enc.io.framedata import FrameData
 from enc.io.io import load_frame_data_from_file
+from enc.nnquant.quantizemodel import quantize_model
+from enc.training.manager import FrameEncoderManager
 from enc.training.test import test
 from enc.training.train import train
 from enc.training.warmup import warmup
 from enc.utils.codingstructure import CodingStructure, Frame
-from enc.training.manager import FrameEncoderManager
 from enc.utils.device import POSSIBLE_DEVICE
 from enc.utils.misc import mem_info
 from torch import Tensor
-from enc.io.framedata import FrameData
 
 
 # =========================== Job management ============================ #
@@ -68,6 +70,7 @@ def encode_one_frame(
     coding_structure: CodingStructure,
     coolchic_enc_param: Dict[NAME_COOLCHIC_ENC, CoolChicEncoderParameter],
     frame_encoder_manager: FrameEncoderManager,
+    warp_parameter: WarpParameter,
     coding_index: int,
     job_duration_min: int = -1,
     device: POSSIBLE_DEVICE = "cpu",
@@ -190,6 +193,15 @@ def encode_one_frame(
                 )
                 tmp_str += title
                 tmp_str += cc_enc_param.pretty_string() + "\n"
+
+            if frame.frame_type != "I":
+                title = (
+                    "Warper parameters\n"
+                    "-----------------\n"
+                )
+                tmp_str += title
+                tmp_str += warp_parameter.pretty_string() + "\n"
+
             print(tmp_str)
 
         frame = frame_to_device(frame, device)
@@ -240,6 +252,7 @@ def encode_one_frame(
         for idx_candidate in range(n_candidates):
             cur_frame_encoder = FrameEncoder(
                 coolchic_enc_param=coolchic_enc_param,
+                warp_parameter=warp_parameter,
                 frame_type=frame.frame_type,
                 frame_data_type=frame.data.frame_data_type,
                 bitdepth=frame.data.bitdepth,
@@ -580,6 +593,7 @@ def guided_motion_pretraining(
     frame_encoder_motion = FrameEncoder(
         # A single "residue" (i.e. all intra) encoder to learn this motion
         coolchic_enc_param={"residue": motion_enc_param},
+        warp_parameter=None,
         frame_type=target_flow_frame.frame_type,
         frame_data_type=target_flow_frame.data.frame_data_type,
         bitdepth=target_flow_frame.data.bitdepth,

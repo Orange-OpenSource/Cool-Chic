@@ -49,7 +49,7 @@ rate required for Cool-chic to obtain the same quality than some other codec.
   <table class="tg"><thead>
     <tr>
       <th class="tg-86ol" rowspan="2"></th>
-      <th class="tg-86ol" colspan="5">BD-rate of Cool-chic 4.0.0 vs. [%]</th>
+      <th class="tg-86ol" colspan="5">BD-rate of Cool-chic 4.1.0 vs. [%]</th>
       <th class="tg-86ol" colspan="2">Avg. decoder complexity</th>
     </tr>
     <tr>
