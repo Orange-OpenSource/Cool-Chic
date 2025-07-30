@@ -92,6 +92,9 @@ You're good to go!
 
 ## Image compression performance
 
+The Cool-chic page provides [comprehensive image rate-distortion results](https://orange-opensource.github.io/Cool-Chic/results/image/compression_performance.html).
+
+
 <table class="tg"><thead>
   <tr>
     <th class="tg-86ol" rowspan="2"></th>
@@ -194,8 +197,6 @@ You're good to go!
 
 ## Compression performance and decoding time
 
-The Cool-chic page provides [comprehensive video rate-distortion results](https://orange-opensource.github.io/Cool-Chic/results/video/compression_performance.html).
-
 
 <!-- _Decoding time are obtained on a single CPU core of an an AMD EPYC 7282 16-Core Processor_
 
@@ -254,7 +255,7 @@ The Cool-chic page provides [comprehensive video rate-distortion results](https:
       <td class="tg-qch7">-29.5</td>
       <td class="tg-qch7">-17.5</td>
       <td class="tg-dfl2">639</td>
-      <td class="tg-dfl2">11.2</td>
+      <td class="tg-dfl2">13.3</td>
   </tr>
   <tr>
       <td class="tg-9mze">C-BQMall</td>
@@ -263,7 +264,7 @@ The Cool-chic page provides [comprehensive video rate-distortion results](https:
       <td class="tg-qch7">-6.0</td>
       <td class="tg-qch7">-21.1</td>
       <td class="tg-dfl2">639</td>
-      <td class="tg-dfl2">11.3</td>
+      <td class="tg-dfl2">13.2</td>
   </tr>
   <tr>
       <td class="tg-9mze">C-PartyScene</td>
@@ -272,7 +273,7 @@ The Cool-chic page provides [comprehensive video rate-distortion results](https:
       <td class="tg-qch7">-39.2</td>
       <td class="tg-qch7">-39.1</td>
       <td class="tg-dfl2">639</td>
-      <td class="tg-dfl2">10.8</td>
+      <td class="tg-dfl2">12.9</td>
   </tr>
   <tr>
       <td class="tg-9mze">C-RaceHorses</td>
@@ -281,7 +282,7 @@ The Cool-chic page provides [comprehensive video rate-distortion results](https:
       <td class="tg-xd3r">+8.6</td>
       <td class="tg-qch7">-16.8</td>
       <td class="tg-dfl2">639</td>
-      <td class="tg-dfl2">9.9</td>
+      <td class="tg-dfl2">12.1</td>
   </tr>
   <tr>
       <td class="tg-u3ui">Average</td>
@@ -290,7 +291,7 @@ The Cool-chic page provides [comprehensive video rate-distortion results](https:
       <td class="tg-qch7">-14.0</td>
       <td class="tg-qch7">-23.6</td>
       <td class="tg-u3ui">639</td>
-      <td class="tg-u3ui">10.8</td>
+      <td class="tg-u3ui">12.9</td>
   </tr>
   </tbody></table>
 
