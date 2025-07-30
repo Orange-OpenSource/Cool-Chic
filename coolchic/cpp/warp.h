@@ -1,3 +1,11 @@
+/*
+    Software Name: Cool-Chic
+    SPDX-FileCopyrightText: Copyright (c) 2023-2025 Orange
+    SPDX-License-Identifier: BSD 3-Clause "New"
+
+    This software is distributed under the BSD-3-Clause license.
+    Authors: see CONTRIBUTORS.md
+*/
 
 template <typename P, typename PACC>
 void warp_ntaps(struct frame_memory<P> &warp_result,
