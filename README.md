@@ -62,7 +62,7 @@ release is linked to the following paper: [_Efficient Sub-pixel Motion Compensat
 - Replace 2-tap bilinear filtering with sinc-based 8-tap filters
 - Decode motion fields at 1/4 of the frame resolution for lighter decoding complexity
 - Improved video compression performance: **-23.6% rate** versus Cool-chic 4.0
-- Decrease motion-related complexity by 30%, **from 391 to 214 MAC / decoded pixel** 
+- Decrease motion-related complexity by 45%, **from 391 to 214 MAC / decoded pixel** 
 
 Check-out the [release history](https://github.com/Orange-OpenSource/Cool-Chic/releases) to see previous versions of Cool-chic.
 
