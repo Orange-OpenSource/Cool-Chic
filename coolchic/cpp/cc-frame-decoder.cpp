@@ -3,6 +3,7 @@
 #define CCDECAPI_AVX2
 #endif
 
+
 #include "common.h"
 #include "TDecBinCoderCABAC.h"
 #include "cc-contexts.h"
@@ -119,6 +120,14 @@ int32_t *get_context_indicies(int n_contexts, int stride)
                               -0*stride-3, -0*stride-2, -0*stride-1 };
         memcpy(indicies_constant, indicies, n_contexts*sizeof(indicies[0]));
     }
+    else if (n_contexts == 12)
+    {
+        int32_t indicies[] = {                                       -3*stride+0,
+                                                        -2*stride-1, -2*stride+0, -2*stride+1,
+                                           -1*stride-2, -1*stride-1, -1*stride+0, -1*stride+1, -1*stride+2,
+                              -0*stride-3, -0*stride-2, -0*stride-1 };
+        memcpy(indicies_constant, indicies, n_contexts*sizeof(indicies[0]));
+    }
     else if (n_contexts == 16)
     {
         int32_t indicies[] = {                                       -3*stride+0, -3*stride+1,
@@ -147,7 +156,7 @@ int32_t *get_context_indicies(int n_contexts, int stride)
     }
     else
     {
-        printf("n_context_pixels: can only be 8, 16, 24, 32, not %d\n", n_contexts);
+        printf("n_context_pixels: can only be 8, 12, 16, 24, 32, not %d\n", n_contexts);
         exit(1);
     }
     return indicies_constant;
@@ -357,7 +366,7 @@ void cc_frame_decoder::read_syn(struct cc_bs_frame_coolchic &frame_symbols)
     // layer weights.
     for (int bidx = 0; bidx < 1; bidx++) // no more branches.
     {
-        int n_in_ft = frame_symbols.latent_n_2d_grid;
+        int n_in_ft = frame_symbols.latent_n_2d_grid+frame_symbols.noise_n_2d_grid;
         for (int lidx = 0; lidx < frame_symbols.n_syn_layers; lidx++)
         {
             struct cc_bs_syn_layer &syn = frame_symbols.layers_synthesis[lidx];
@@ -390,7 +399,7 @@ void cc_frame_decoder::check_allocations(struct cc_bs_frame_coolchic &frame_symb
 {
     int const latent_n_resolutions = frame_symbols.latent_n_2d_grid;
 
-    int n_max_planes = latent_n_resolutions;
+    int n_max_planes = latent_n_resolutions+frame_symbols.noise_n_2d_grid;
     m_arm_pad = 4; // by how much the arm frame is padded.
     m_ups_pad = (std::max(frame_symbols.ups_k_size, frame_symbols.ups_preconcat_k_size)+1)/2;
 
@@ -429,7 +438,7 @@ void cc_frame_decoder::check_allocations(struct cc_bs_frame_coolchic &frame_symb
     m_h_pyramid.resize(frame_symbols.n_latent_n_resolutions);
     m_w_pyramid.resize(frame_symbols.n_latent_n_resolutions);
 
-    // pyramid storage -- enough pad for arm and ups.  includes highest res layer.
+    // latent pyramid storage -- enough pad for arm and ups.  includes highest res layer.
     m_plane_pyramid.resize(frame_symbols.n_latent_n_resolutions);
     // !!! ups float temporary
     m_plane_pyramid_for_ups.resize(frame_symbols.n_latent_n_resolutions);
@@ -620,6 +629,287 @@ std::vector<frame_memory<int32_t>> *hoop2(std::vector<frame_memory<int32_t>> *pl
     return plane_pyramid;
 }
 
+
+//{{NOISE
+inline float cubic_conv_near(float x, float A)
+{
+    return ((A+2)*x - (A+3))*x*x + 1;
+}
+
+inline int32_t cubic_conv_near(int32_t x, int32_t A)
+{
+    int32_t result = 0;
+    result = (A+(2<<UPS_PRECISION))*x - (A+(3<<UPS_PRECISION));
+    result >>= UPS_PRECISION;
+    result *= x;
+    result >>= UPS_PRECISION;
+    result *= x;
+    result >>= UPS_PRECISION;
+    result += (1<<UPS_PRECISION);
+
+    result >>= UPS_PRECISION;
+    return result;
+}
+
+inline float cubic_conv_far(float x, float A)
+{
+    return ((A*x - 5*A)*x + 8*A)*x - 4*A;
+}
+
+inline int32_t cubic_conv_far(int32_t x, int32_t A)
+{
+    int32_t result = 0;
+    result = A*x - (5<<UPS_PRECISION)*A;
+    result >>= UPS_PRECISION;
+    result = result*x + (8<<UPS_PRECISION)*A;
+    result >>= UPS_PRECISION;
+    result = result*x  - (4<<UPS_PRECISION)*A;
+    result >>= UPS_PRECISION;
+    return result;
+}
+
+// this function should never be called
+// only the (P coeffs, P t) should be used,
+// the float coeffs, int32_t is a compilation artifact that
+// is optimized out with constexpr use.
+inline void bicubic_get_coeffs(float coeffs[4], int32_t t)
+{
+    printf("internal error:\n");
+    printf("bicubic_get_coeffs called with float and int32!\n");
+    exit(1);
+}
+inline void bicubic_get_coeffs(int32_t coeffs[4], float t)
+{
+    printf("internal error:\n");
+    printf("bicubic_get_coeffs called with int32_t and float!\n");
+    exit(1);
+}
+
+template <typename P>
+inline void bicubic_get_coeffs(P coeffs[4], P t)
+{
+    P tleft = t;
+    P A;
+    P one;
+
+    if constexpr(std::is_same<UPS_INT_FLOAT, float>::value)
+    {
+        A = -0.75;
+        one = 1.0;
+    }
+    else
+    {
+        A = -(1<<UPS_PRECISION)*3/4; // -0.75
+        one = 1<<UPS_PRECISION;
+    }
+    coeffs[0] = cubic_conv_far(tleft+one, A);
+    coeffs[1] = cubic_conv_near(tleft, A);
+    P tright = one-t;
+    coeffs[2] = cubic_conv_near(tright, A);
+    coeffs[3] = cubic_conv_far(tright+one, A);
+}
+
+template <typename P>
+inline P bicubic_interpolate(P const coeffs[4], P const vals[4])
+{
+    P result = 0;
+    for (int i = 0; i < 4; i++)
+        result += coeffs[i]*vals[i];
+
+    if constexpr(!std::is_same<UPS_INT_FLOAT, float>::value)
+    {
+        result >>= UPS_PRECISION;
+    }
+
+    return result;
+}
+
+// upsample from frame_src to frame_dst via frame_tmp.
+// will apply padding to frame_src.
+// will resize frame_tmp
+// will resize frame_dst if !dst_ready, otherwise assumed final size.
+void cc_frame_decoder::ups_bicubic(frame_memory<UPS_INT_FLOAT> &frame_src, frame_memory<UPS_INT_FLOAT> &frame_dst, int dst_plane, int h_dst, int w_dst, bool dst_ready, frame_memory<UPS_INT_FLOAT> &frame_tmp)
+{
+    UPS_INT_FLOAT coeffs_25[4];
+    UPS_INT_FLOAT coeffs_75[4];
+    if constexpr(std::is_same<UPS_INT_FLOAT, float>::value)
+    {
+        bicubic_get_coeffs(coeffs_25, 0.25f);
+        bicubic_get_coeffs(coeffs_75, 0.75f);
+    }
+    else
+    {
+        bicubic_get_coeffs(coeffs_25, (1<<UPS_PRECISION)*1/4); // 0.25f);
+        bicubic_get_coeffs(coeffs_75, (1<<UPS_PRECISION)*3/4); // 0.75f);
+    }
+
+    int h = frame_src.h;
+    int w = frame_src.w;
+
+    frame_src.custom_pad_replicate_plane_in_place_i(0, NOISE_UPS_PAD, 0);
+
+    // expand horizontally into tmp.
+    frame_tmp.update_to(h, w_dst, frame_tmp.pad, 1);
+    SYN_INT_FLOAT *src = frame_src.origin();
+    int src_stride = frame_src.stride;
+
+    SYN_INT_FLOAT *dst = frame_tmp.origin();
+    int dst_stride = frame_tmp.stride;
+
+    bool trim_output = 2*w > w_dst; // trim last output.
+    for (int y = 0; y < h; y++, src += src_stride, dst += dst_stride-w_dst)
+    {
+        // leading interp.
+        *dst++   = bicubic_interpolate(coeffs_75, &src[0-2]);
+        // internal interps.
+        for (int x = 0; x < w-1; x++)
+        {
+            *dst++   = bicubic_interpolate(coeffs_25, &src[x-1]);
+            *dst++   = bicubic_interpolate(coeffs_75, &src[x-1]);
+        }
+        // final interp unless shortened.
+        if (!trim_output)
+            *dst++   = bicubic_interpolate(coeffs_25, &src[w-1-1]);
+    }
+
+    // expand tmp vertically into dst.
+    frame_tmp.custom_pad_replicate_plane_in_place_i(0, 0, NOISE_UPS_PAD);
+    if (!dst_ready)
+    {
+        frame_dst.update_to(h_dst, w_dst, frame_dst.pad, 1);
+    }
+
+    src = frame_tmp.origin();
+    src_stride = frame_tmp.stride;
+
+    dst = frame_dst.plane_origin(dst_plane);
+    dst_stride = frame_dst.stride;
+
+    trim_output = 2*h > h_dst; // trim last output.
+    for (int x = 0; x < w_dst; x++)
+    {
+        SYN_INT_FLOAT vals[4];
+        src = frame_tmp.origin()+x;
+        dst = frame_dst.plane_origin(dst_plane)+x;
+
+        // leading interp.
+        vals[0] = src[-2*src_stride];
+        vals[1] = src[-1*src_stride];
+        vals[2] = src[ 0*src_stride];
+        vals[3] = src[ 1*src_stride];
+        *dst = bicubic_interpolate(coeffs_75, vals);
+        dst += dst_stride;
+        src += src_stride;
+
+        // internal interps.
+        for (int y = 0; y < h-1; y++, src += src_stride)
+        {
+            vals[0] = src[-2*src_stride];
+            vals[1] = src[-1*src_stride];
+            vals[2] = src[ 0*src_stride];
+            vals[3] = src[ 1*src_stride];
+            *dst = bicubic_interpolate(coeffs_25, vals);
+            dst += dst_stride;
+            *dst = bicubic_interpolate(coeffs_75, vals);
+            dst += dst_stride;
+        }
+
+        // final interp.
+        if (!trim_output)
+        {
+            vals[0] = src[-2*src_stride];
+            vals[1] = src[-1*src_stride];
+            vals[2] = src[ 0*src_stride];
+            vals[3] = src[ 1*src_stride];
+            *dst = bicubic_interpolate(coeffs_25, vals);
+            dst += dst_stride;
+        }
+    }
+}
+
+//NOISE}}
+
+
+
+
+// fill m_noise_single_source buffer with random values.
+// the initial resolution is determined by start_layer_number
+// the final placement (after upsampling) in m_syn_1 is dst_plane
+// upsample x2 through m_ups_hw (horizontal) to final m_noise_upsampled_block, multiple times depending on layer number.
+// !!! now m_syn_1 directly.
+void cc_frame_decoder::noise_fill_and_upsample_from_layer(int start_layer_number, int &noise_val_idx_base, int dst_plane)
+{
+    // fill
+    int h = m_h_pyramid[start_layer_number];
+    int w = m_w_pyramid[start_layer_number];
+
+//     int16_t const *src = &g_noise_vals[noise_val_idx_base];
+//     int16_t const *src_limit = &g_noise_vals[(sizeof(g_noise_vals)/sizeof(g_noise_vals[0]))];
+
+    // either direct full res output (no ups) or the 1/4 sized source (will ups).
+    UPS_INT_FLOAT *dst;
+    int32_t dst_stride;
+    if (start_layer_number == 0)
+    {
+        dst =  m_syn_1.plane_origin(dst_plane);
+        dst_stride = m_syn_1.stride;
+    }
+    else
+    {
+        // we update the frame size for later pad work.
+        m_ups_h2w2.update_to(h, w, NOISE_UPS_PAD, 1);
+
+        dst =  m_ups_h2w2.origin();
+        dst_stride = m_ups_h2w2.stride;
+
+    }
+
+    if constexpr(std::is_same<UPS_INT_FLOAT, float>::value)
+    {
+        for (int y = 0; y < h; y++, dst += dst_stride-w)
+        {
+            for (int x = 0; x < w; x++)
+                *dst++ = (float)this->cr.grand16() / ( 1<<ARM_PRECISION );
+        }
+    }
+    else
+    {
+        for (int y = 0; y < h; y++, dst += dst_stride-w)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                // noise in table stored at ARM_PRECISION
+                // move to UPS_PRECISION which can be higher.
+    //             *dst++ = (*src++) << (UPS_PRECISION-ARM_PRECISION);
+    //             if (src == src_limit)
+    //                 src = &g_noise_vals[0];
+                *dst++ = this->cr.grand16() << ( UPS_PRECISION - ARM_PRECISION );
+            }
+        }
+    }
+//     noise_val_idx_base = (int32_t)(src - &g_noise_vals[0]);
+    if (start_layer_number == 0)
+        return; // done.
+
+    // continually upsample to final dest, flipping through m_ups_h2w2 and m_ups_hw,
+    // finally ending up at the dest.
+    for (int layer_number = start_layer_number; layer_number > 0; layer_number--)
+    {
+        if (layer_number == 1)
+        {
+            // final full-resolution upsample.
+            // output into m_syn_1 plane, already has correct size.
+            ups_bicubic(m_ups_h2w2, m_syn_1, dst_plane, m_h_pyramid[layer_number-1], m_w_pyramid[layer_number-1], true, m_ups_hw);
+        }
+        else
+        {
+            // output into h2w2, reset the size as appropriate.
+            ups_bicubic(m_ups_h2w2, m_ups_h2w2, 0, m_h_pyramid[layer_number-1], m_w_pyramid[layer_number-1], false, m_ups_hw);
+        }
+    }
+}
+
+
 void cc_frame_decoder::run_ups(struct cc_bs_frame_coolchic &frame_symbols)
 {
     const auto time_ups_start = std::chrono::steady_clock::now();
@@ -780,9 +1070,29 @@ void cc_frame_decoder::run_ups(struct cc_bs_frame_coolchic &frame_symbols)
         global_dst_plane += 1;
     }
 
+    // {{NOISE
+    /// fill upsampled noise
+    int noise_val_idx = 0; // scans through global randomness per pixel.
+    for (int layer_number = 0; layer_number < frame_symbols.n_latent_n_resolutions; layer_number++)
+    {
+        // int and float versions.
+        // fill buffer
+        // pad buffer
+        // bicubic up buffer
+        if (frame_symbols.n_ft_per_noise[layer_number] > 0)
+        {
+            noise_fill_and_upsample_from_layer(layer_number, noise_val_idx, global_dst_plane);
+            global_dst_plane += 1;
+        }
+    }
+    // NOISE}}
+
     if constexpr(std::is_same<UPS_INT_FLOAT, int32_t>::value && std::is_same<SYN_INT_FLOAT, float>::value)
     {
         printf("!!! migrating int ups out to float syn in\n");
+        printf("invalid for the moment with noise -- incorrect buffers are filled\n");
+        printf("use both int or both float\n");
+        exit(1);
         // !!! temporary -- migrate int32_t m_pre_syn_1 to <SYN_INT_FLOAT> m_syn_1.
         // !!! eventually use templated upsample<float> to perform post process conversion.
         for (int p = 0; p < m_syn_1.planes; p++)
@@ -892,7 +1202,7 @@ frame_memory<SYN_INT_FLOAT> *cc_frame_decoder::run_syn_blend2(struct cc_bs_frame
 //     return value is either syn_in or syn_tmp.
 frame_memory<SYN_INT_FLOAT> *cc_frame_decoder::run_syn_branch(struct cc_bs_frame_coolchic &frame_symbols, int branch_no, frame_memory<SYN_INT_FLOAT> *syn_in, frame_memory<SYN_INT_FLOAT> *syn_out, frame_memory<SYN_INT_FLOAT> *syn_tmp)
 {
-    int    n_syn_in = frame_symbols.latent_n_2d_grid;
+    int    n_syn_in = frame_symbols.noise_n_2d_grid + frame_symbols.latent_n_2d_grid; // activate layers.
     frame_memory<SYN_INT_FLOAT> *syn_in_i = NULL; // internal in/out
     frame_memory<SYN_INT_FLOAT> *syn_out_i = NULL; // internal in/out
     if (syn_out == syn_in)
@@ -1186,7 +1496,7 @@ frame_memory<SYN_INT_FLOAT> *cc_frame_decoder::run_syn_branch(struct cc_bs_frame
 
         if (m_verbosity >= 100)
         {
-            printf("SYNOUTPLANE0\n");
+            printf("SYNOUTPLANE[just0]\n");
             syn_in_i->print_start(0, "SYNOUT0", 10, UPS_PRECISION);
         }
     }
@@ -1236,8 +1546,8 @@ frame_memory<SYN_INT_FLOAT> *cc_frame_decoder::run_syn(struct cc_bs_frame_coolch
 
     if (m_verbosity >= 100)
     {
-        printf("SYNTHESIS INPUTS (%d)\n", frame_symbols.latent_n_2d_grid);
-        for (int p = 0; p < frame_symbols.latent_n_2d_grid; p++)
+        printf("SYNTHESIS INPUTS\n");
+        for (int p = 0; p < frame_symbols.noise_n_2d_grid + frame_symbols.latent_n_2d_grid; p++)
         {
             printf("SYNPLANE %d ", p);
             m_syn_1.print_start(p, "SYNIN", -1, UPS_PRECISION);

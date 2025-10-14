@@ -10,7 +10,7 @@ TOOLBOX_PATH = f"{os.path.dirname(__file__)}/../toolbox/toolbox/"
 SAMPLE_PATH = f"{os.path.dirname(__file__)}/../samples/"
 
 # To be launched with python3 -m test.sanity_check from the root of the git repo
-def encode(seq_path: str, bitstream_path: str, workdir: str) -> None:
+def encode(seq_path: str, bitstream_path: str, workdir: str, extra_args: str = "") -> None:
     """Use Cool-chic to encode a sequence into a bitstream."""
 
     subprocess.call(f"mkdir -p {workdir}", shell=True)
@@ -34,6 +34,7 @@ def encode(seq_path: str, bitstream_path: str, workdir: str) -> None:
         f'--output={bitstream_path} '
         f'--workdir={workdir} '
         f'--n_frames={n_frames} '
+        f'--extra_args="{extra_args}" '
         '--debug '
     )
     if n_frames > 1:
@@ -152,27 +153,31 @@ if __name__ == '__main__':
     print("Starting sanity check...\n")
     os.environ["MKL_SERVICE_FORCE_INTEL"] = "1"
 
-    LIST_SEQ = [
-        "/data/192x128_kodim15.png",
-        "/data/kodim15_192x128_01p_yuv420_8b.yuv",
-        "/data/kodim15_192x128_01p_yuv420_10b.yuv",
-        "/data/kodim15_192x128_01p_yuv444_8b.yuv",
-        "/data/kodim15_192x128_01p_yuv444_10b.yuv",
-        "/data/D-BQSquare-5frames_224x128_60p_yuv420_8b.yuv",
+    LIST_SEQ_TO_TEST = [
+        {"path": "/data/192x128_kodim15.png", "extra_args": ""},
+        {"path": "/data/192x128_kodim15.png", "extra_args": "--tune=wasserstein"},
+        {"path": "/data/kodim15_192x128_01p_yuv420_8b.yuv", "extra_args": ""},
+        {"path": "/data/kodim15_192x128_01p_yuv420_10b.yuv", "extra_args": ""},
+        {"path": "/data/kodim15_192x128_01p_yuv444_8b.yuv", "extra_args": ""},
+        {"path": "/data/kodim15_192x128_01p_yuv444_10b.yuv", "extra_args": ""},
+        {"path": "/data/D-BQSquare-5frames_224x128_60p_yuv420_8b.yuv", "extra_args": ""},
     ]
 
     # Absolute path
-    LIST_SEQ = [os.path.dirname(__file__) + seq_path for seq_path in LIST_SEQ]
+    for i, seq_i in enumerate(LIST_SEQ_TO_TEST):
+        LIST_SEQ_TO_TEST[i]["path"] = os.path.dirname(__file__) + LIST_SEQ_TO_TEST[i]["path"]
 
     TEST_WORKDIR = os.path.dirname(__file__) + '/test-workdir/'
-
 
     msg = "Final sanity check results:\n\n'"
     # For each sequence, measure that there is not much deviation between the
     # encoder logs and what we obtain at the decoder side.
-    for seq_path in LIST_SEQ:
+    for seq_to_test in LIST_SEQ_TO_TEST:
         # Clean everything in TEST_WORKDIR
         subprocess.call(f"rm -f {TEST_WORKDIR}/*", shell=True)
+
+        seq_path = seq_to_test.get("path")
+        extra_args = seq_to_test.get("extra_args")
 
         # Get all the path required to encode, decode and evaluate
         seq_name, ext = os.path.splitext(os.path.basename(seq_path))
@@ -180,7 +185,7 @@ if __name__ == '__main__':
         decoded_path = f"{TEST_WORKDIR}decoded-from-bitstream-{seq_name}{decoded_ext}"
         bitstream_path = f'{TEST_WORKDIR}{seq_name}.cool'
 
-        encode(seq_path, bitstream_path, TEST_WORKDIR)
+        encode(seq_path, bitstream_path, TEST_WORKDIR, extra_args=extra_args)
         decode(bitstream_path, decoded_path)
 
         enc_res = parse_encoder_log(
@@ -195,7 +200,7 @@ if __name__ == '__main__':
 
         s = (
             '\n\n'
-            f'Sequence name: {seq_name}\n'
+            f'Sequence name: {seq_name} ; extra_args = {extra_args} \n'
             " " + " " * 12 + "|" + f"{'Encoder estimation':^24}" + "|" + f"{'Actual results':^24}" + "|" + "\n"
             "|" + f"{'PSNR [dB]':^12}" + "|" + f"{f'{enc_psnr_db:5.3f}':^24}" + "|" + f"{f'{dec_psnr_db:5.3f}':^24}" + "|" + "\n"
             "|" + f"{'Rate [bpp]':^12}" + "|" + f"{f'{enc_rate_bpp:5.3f}':^24}" + "|" + f"{f'{dec_rate_bpp:5.3f}':^24}" + "|" + "\n"

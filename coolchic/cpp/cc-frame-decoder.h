@@ -1,6 +1,7 @@
 
 #include "common.h"
 #include "frame-memory.h"
+#include "common_randomness.h"
 
 class cc_frame_decoder
 {
@@ -84,11 +85,15 @@ private:
 #endif
     int             m_verbosity;
 
+    common_randomness   cr;
 private:
     // for arm decode destination, and upsampling.
     std::vector<int> m_h_pyramid;
     std::vector<int> m_w_pyramid;
     std::vector<frame_memory<int32_t>> m_plane_pyramid;
+
+    // frame_memory<UPS_INT_FLOAT> m_noise_single_source; // upsample from here, layer by layer.
+    //frame_memory<UPS_INT_FLOAT> m_noise_upsampled_block; // total upsampled result. !!! now m_syn_1 for image.
 
     // !!! temporary -- when ups is float.
     std::vector<frame_memory<UPS_INT_FLOAT>> m_plane_pyramid_for_ups;
@@ -113,6 +118,12 @@ private:
 private:
     // set by arm to indicate no content, avoid ups for no content.
     std::vector<bool> m_zero_layer;
+
+private:
+    //{{NOISE
+    void            ups_bicubic(frame_memory<UPS_INT_FLOAT> &frame_src, frame_memory<UPS_INT_FLOAT> &frame_dst, int dst_plane, int h_dst, int w_dst, bool dst_ready, frame_memory<UPS_INT_FLOAT> &frame_tmp);
+    void            noise_fill_and_upsample_from_layer(int start_layer_number, int &noise_val_idx_base, int dst_plane);
+    //NOISE}}
 
 private:
     void            read_arm(struct cc_bs_frame_coolchic &frame_symbols);

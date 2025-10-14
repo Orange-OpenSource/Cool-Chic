@@ -10,6 +10,7 @@
 import os
 from typing import Tuple
 
+import numpy as np
 import torch
 from einops import rearrange
 from enc.io.types import POSSIBLE_BITDEPTH
@@ -47,5 +48,14 @@ def write_png(data: Tensor, file_path: str) -> None:
         x: Image to be saved
         file_path: Where to save the PNG files
     """
-    data = rearrange(data, "1 c h w -> c h w", c=3)
-    to_pil_image(data).save(file_path)
+    data = rearrange(data, "1 c h w -> h w c", c=3)
+
+    assert len(data.shape) == 3 and data.shape[-1] == 3, (
+        f"Data shape must be [H, W, 3], found {data.shape}"
+    )
+
+    data = np.clip(data.cpu().detach().numpy(), 0.0, 1.0)
+    data = np.round(data * 255).astype(np.uint8)
+
+    im = Image.fromarray(data, mode="RGB")
+    im.save(file_path)

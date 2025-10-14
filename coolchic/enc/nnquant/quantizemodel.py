@@ -214,6 +214,7 @@ def quantize_model(
                     frame_encoder_out.decoded_image,
                     frame_encoder_out.rate,
                     frame.data.data,
+                    frame_encoder_manager.dist_weight,
                     lmbda=frame_encoder_manager.lmbda,
                     total_rate_nn_bit=total_rate_nn_bit,
                     compute_logs=True,

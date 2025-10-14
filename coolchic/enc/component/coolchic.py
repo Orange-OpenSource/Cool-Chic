@@ -36,6 +36,8 @@ from enc.component.core.upsampling import Upsampling
 
 from enc.utils.device import POSSIBLE_DEVICE
 
+from enc.component.core.upsampling import fixed_upsampling
+
 """A cool-chic encoder is composed of:
     - A set of 2d hierarchical latent grids
     - An auto-regressive probability module
@@ -87,6 +89,8 @@ class CoolChicEncoderParameter:
     encoder_gain: int = 16
     ups_k_size: int = 8
     ups_preconcat_k_size: int = 7
+    n_ft_per_res_cr: List[int] = field(default_factory=lambda: [])
+
 
     # ==================== Not set by the init function ===================== #
     #: Automatically computed, number of different latent resolutions
@@ -94,10 +98,14 @@ class CoolChicEncoderParameter:
     #: Height and width :math:`(H, W)` of the frame to be coded. Must be
     #: set using the ``set_image_size()`` function.
     img_size: Optional[Tuple[int, int]] = field(init=False, default=None)
+    # Set to true if there is at least one feature of common randomness requested
+    common_randomness: bool = field(init=False, default=False)
     # ==================== Not set by the init function ===================== #
 
     def __post_init__(self):
         self.latent_n_grids = len(self.n_ft_per_res)
+        # Flag indicating whether we have at least one common randomness feature
+        self.common_randomness = sum(self.n_ft_per_res_cr) > 0
 
     def set_image_size(self, img_size: Tuple[int, int]) -> None:
         """Register the field self.img_size.
@@ -129,6 +137,22 @@ class CoolChicEncoderParameter:
             s += f"{k.name:<{ATTRIBUTE_WIDTH}}: {str(getattr(self, k.name)):<{VALUE_WIDTH}}\n"
         s += "\n"
         return s
+
+class common_randomness:
+    def grand(self):
+
+        self.seed = ( self.a * self.seed ) % self.m
+        u1 = self.seed / self.m
+        self.seed = ( self.a * self.seed ) % self.m
+        u2 = self.seed / self.m
+
+        return math.sqrt( -2 * math.log( u1 ))*math.cos( 2 * self.pi * u2 )
+
+    seed = 18101995 # nice seed
+    a = 7**5
+    m = 2**31-1
+    pi = 3.14159265359
+
 
 
 class CoolChicEncoderOutput(TypedDict):
@@ -176,7 +200,14 @@ class CoolChicEncoder(nn.Module):
 
         # Populate the successive grids
         self.size_per_latent = []
+
+        if self.param.common_randomness:
+            self.cr = []
+            # 1 noise latent for each resolution
+            self.cr_generator = common_randomness()
+
         self.latent_grids = nn.ParameterList()
+
         for i in range(self.param.latent_n_grids):
             h_grid, w_grid = [int(math.ceil(x / (2**i))) for x in self.param.img_size]
             c_grid = self.param.n_ft_per_res[i]
@@ -190,14 +221,37 @@ class CoolChicEncoder(nn.Module):
                 nn.Parameter(torch.empty(cur_size), requires_grad=True)
             )
 
+            if self.param.common_randomness:
+
+                # No indication about the number of features of common randomness
+                # for this resolution --> continue
+                if i >= len(self.param.n_ft_per_res_cr):
+                    continue
+
+                cur_n_ft_cr = self.param.n_ft_per_res_cr[i]
+
+                # cur_n_ft_cr is either 0, or 1. Even if it is 0 (i.e. no cr
+                # feature for this resolution), we leverage the fact that we
+                # can allocate (1, 0, H, W) tensor.
+                # This makes the code more coherent.
+
+                n_value_feature = cur_n_ft_cr * h_grid * w_grid
+                cr_vector = torch.zeros(n_value_feature)
+                for n in range(n_value_feature):
+                    cr_vector[n] = self.cr_generator.grand()
+
+                self.cr.append(cr_vector.reshape((1, cur_n_ft_cr, h_grid, w_grid)))
+
         self.initialize_latent_grids()
 
         # Instantiate the synthesis MLP with as many inputs as the number
         # of latent channels
-        self.synthesis = Synthesis(
-            sum([latent_size[1] for latent_size in self.size_per_latent]),
-            self.param.layers_synthesis,
-        )
+        n_synth_in = sum([latent_size[1] for latent_size in self.size_per_latent])
+        if self.param.common_randomness:
+            n_ft_cr = sum([tmp for tmp in self.param.n_ft_per_res_cr])
+            n_synth_in += n_ft_cr
+
+        self.synthesis = Synthesis(n_synth_in, self.param.layers_synthesis)
         # ================== Synthesis related stuff ================= #
 
         # ===================== Upsampling stuff ===================== #
@@ -295,6 +349,8 @@ class CoolChicEncoder(nn.Module):
         noise_parameter: Optional[Tensor] = torch.tensor(1.0),
         AC_MAX_VAL: int = -1,
         flag_additional_outputs: bool = False,
+        no_common_randomness: bool = False,
+        only_common_randomness: bool = False,
     ) -> CoolChicEncoderOutput:
         """Perform CoolChicEncoder forward pass, to be used during the training.
         The main step are as follows:
@@ -356,9 +412,7 @@ class CoolChicEncoder(nn.Module):
         # Convert the N [1, C, H_i, W_i] 4d latents with different resolutions
         # to a single flat vector. This allows to call the quantization
         # only once, which is faster
-        encoder_side_flat_latent = torch.cat(
-            [latent_i.view(-1) for latent_i in self.latent_grids]
-        )
+        encoder_side_flat_latent = torch.cat([latent_i.view(-1) for latent_i in self.latent_grids])
 
         flat_decoder_side_latent = quantize(
             encoder_side_flat_latent * self.encoder_gains,
@@ -421,9 +475,30 @@ class CoolChicEncoder(nn.Module):
         )
         flat_rate = -torch.log2(proba)
 
+        ups_latent = self.upsampling(decoder_side_latent)
+
         # Upsampling and synthesis to get the output
-        ups_out = self.upsampling(decoder_side_latent)
-        raw_synth_out = self.synthesis(ups_out)
+        if self.param.common_randomness:
+            # ups_noise is [1, C, H, W] where C = len(self.cr) and H, W is the
+            # spatial resolution of the highest resolution in self.cr e.g.
+            # self.cr[0].size()[-2:].
+            # If needed we interpolate once more to reach the resolution of the
+            # image to be decoded.
+            ups_noise = fixed_upsampling(self.cr)
+            ups_noise = F.interpolate(ups_noise, size=self.param.img_size, mode="bicubic")
+
+
+            if no_common_randomness:
+                ups_noise = ups_noise * 0
+
+            if only_common_randomness:
+                ups_latent = ups_latent * 0
+
+            syn_in = torch.cat([ups_latent, ups_noise], dim=1)
+        else:
+            syn_in = ups_latent
+
+        raw_synth_out = self.synthesis(syn_in)
 
         # Upsample the output of the synthesis with a nearest neighbor if required
         synthesis_output = F.interpolate(raw_synth_out, size=self.param.img_size, mode="nearest")
@@ -438,11 +513,14 @@ class CoolChicEncoder(nn.Module):
             additional_data["detailed_rate_bit"] = []
             additional_data["detailed_centered_latent"] = []
             additional_data["hpfilters"] = []
-            additional_data["upsampled_latent"] = ups_out
-            
+            additional_data["detailed_ups_latent"] = []
+            additional_data["detailed_ups_noise"] = []
+
+
             # "Pointer" for the reading of the 1D scale, mu and rate
             cnt = 0
             # for i, _ in enumerate(filtered_latent):
+            # print(torch.cat([x for x in self.cr], dim=0).view(-1).exp().detach().cpu())
             for index_latent_res, _ in enumerate(self.latent_grids):
                 c_i, h_i, w_i = decoder_side_latent[index_latent_res].size()[-3:]
                 additional_data["detailed_sent_latent"].append(
@@ -466,6 +544,11 @@ class CoolChicEncoder(nn.Module):
                 additional_data["detailed_centered_latent"].append(
                     additional_data["detailed_sent_latent"][-1] - mu_i
                 )
+
+            additional_data["detailed_ups_latent"].append(ups_latent)
+
+            if self.param.common_randomness:
+                additional_data["detailed_ups_noise"].append(ups_noise)
 
         res: CoolChicEncoderOutput = {
             "raw_out": synthesis_output,
@@ -731,6 +814,10 @@ class CoolChicEncoder(nn.Module):
             POSSIBLE_DEVICE
         ), f"Unknown device {device}, should be in {typing.get_args(POSSIBLE_DEVICE)}"
         self = self.to(device)
+
+        if self.param.common_randomness:
+            for i in range(len(self.cr)):
+                self.cr[i] = self.cr[i].to(device)
 
         # Push integerized weights and biases of the mlp (resp qw and qb) to
         # the required device

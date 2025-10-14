@@ -61,7 +61,9 @@ struct cc_bs_frame_coolchic
     int hls_sig_blksize;
 
     int n_latent_n_resolutions;
+    int noise_n_2d_grid;
     int latent_n_2d_grid;
+    std::vector<int> n_ft_per_noise;
     std::vector<int> n_ft_per_latent;
     std::vector<int> n_bytes_per_latent;
     int n_leading_zero_feature_layers;

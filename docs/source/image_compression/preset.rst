@@ -21,10 +21,13 @@ They include the following parameters:
      - ``1e-2``
    * - ``n_itr``
      - Number of training iterations
-     - ``1e4```
+     - ``1e4``
    * - ``n_train_loops``
      - Number of independent encodings
-     - ``1```
+     - ``1``
+   * - ``tune``
+     - Optimize the MSE (``mse``) or the Wasserstein Distance (``wasserstein``)
+     - ``mse``
 
 .. tip::
 
@@ -58,6 +61,24 @@ encoding configurations on :doc:`the encoding complexity page <../results/image/
      - Balance compression performance & training duration
    * - ``slow_100k.cfg``
      - Best performance at the cost of a longer training
+   * - ``perceptive.cfg``
+     - Optimize MSE and Wasserstein Distance for better subjective quality
+
+
+Tuning
+""""""
+
+The tuning parameters ``--tune`` allows to select the distortion metric(s) to be
+optimized. When the mode ``--tune=mse`` is selected, the Mean Squared Error is
+optimized. When ``--tune=wasserstein`` the distortion becomes a combination of
+MSE and Wasserstein Distance, as proposed in `Good, Cheap, and Fast: Overfitted
+Image Compression with Wasserstein Distortion, Ballé et al
+<https://arxiv.org/abs/2412.00505>`_.
+
+.. attention::
+
+    Using ``--tune=wasserstein`` also introduces 7 features of common
+    randomness, as described in the aforementioned Ballé's paper.
 
 Presets
 """""""

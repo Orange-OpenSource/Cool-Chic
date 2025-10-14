@@ -42,7 +42,7 @@
     .. grid-item-card:: :octicon:`trophy` Great coding performance
       :link: https://orange-opensource.github.io/Cool-Chic/results/image/compression_performance.html
 
-      Cool-chic compresses images as well as H.266/VVC
+      Cool-chic offers visual quality similar to H.266/VVC with 30% less rate
 
     .. grid-item-card:: :octicon:`squirrel` Lightweight decoder
       :link: https://orange-opensource.github.io/Cool-Chic/results/image/decoding_complexity.html
@@ -69,18 +69,9 @@
    :align: center
    :alt: Logo Orange
 
-
 |
 
 |
-
-
-
-Special thanks to **Hyunjik Kim, Matthias Bauer, Lucas Theis, Jonathan Richard
-Schwarz and Emilien Dupont** for their great work enhancing Cool-chic: `C3:
-High-performance and low-complexity neural compression from a single image or
-video, Kim et al. <https://arxiv.org/abs/2312.02753>`_
-
 
 .. toctree::
    :maxdepth: 1
@@ -88,7 +79,7 @@ video, Kim et al. <https://arxiv.org/abs/2312.02753>`_
    :hidden:
 
    Quickstart <getting_started/quickstart>
-   What's new in 4.1? <getting_started/new_stuff>
+   What's new in 4.2? <getting_started/new_stuff>
    Example <getting_started/example>
    Literature <getting_started/literature>
 

@@ -6,7 +6,7 @@ from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import setup
 from sys import platform
 
-__version__ = "4.1.0"
+__version__ = "4.2.0"
 
 CCLIB_PATH = "coolchic/CCLIB"
 
@@ -49,10 +49,12 @@ ext_modules = [
             "coolchic/cpp/arm_cpu.cpp",
             "coolchic/cpp/ups_cpu.cpp",
             "coolchic/cpp/syn_cpu.cpp",
-            "coolchic/cpp/warp.cpp",
+            "coolchic/cpp/warp_common.cpp",
+            "coolchic/cpp/warp_cpu.cpp",
             "coolchic/cpp/BitStream.cpp",
             "coolchic/cpp/TDecBinCoderCABAC.cpp",
             "coolchic/cpp/Contexts.cpp",
+            "coolchic/cpp/common_randomness.cpp",
         ],
         # Example: passing in the version to the compiled code
         define_macros=[("VERSION_INFO", __version__), ("CCDECAPI_CPU", "1")],
@@ -75,7 +77,9 @@ if platform != "darwin":
                 "coolchic/cpp/ups_cpu.cpp",
                 "coolchic/cpp/ups_avx2.cpp",
                 "coolchic/cpp/syn_cpu.cpp",
-                "coolchic/cpp/warp.cpp",
+                "coolchic/cpp/warp_common.cpp",
+                "coolchic/cpp/warp_cpu.cpp",
+                "coolchic/cpp/warp_avx2.cpp",
                 "coolchic/cpp/syn_avx2.cpp",
                 "coolchic/cpp/BitStream.cpp",
                 "coolchic/cpp/TDecBinCoderCABAC.cpp",
@@ -83,7 +87,7 @@ if platform != "darwin":
             ],
             # Example: passing in the version to the compiled code
             define_macros=[("VERSION_INFO", __version__), ("CCDECAPI_AVX2", "1")],
-            extra_compile_args=["-g", "-O3", "-mavx2"],
+            extra_compile_args=["-g", "-O3", "-mavx2", "-mfma"],
         )
     )
 

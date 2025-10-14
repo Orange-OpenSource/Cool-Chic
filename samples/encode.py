@@ -21,13 +21,13 @@ def get_frame_config(frame_type: Literal["I", "P", "B"], depth: int, lmbda: floa
     if frame_type == "I":
         config = (
             f"--enc_cfg={PATH_COOL_CHIC_CFG}enc/intra/fast_10k.cfg "
-            f"--dec_cfg_residue={PATH_COOL_CHIC_CFG}dec/intra_residue/hop.cfg "
+            f"--dec_cfg_residue={PATH_COOL_CHIC_CFG}dec/intra/hop.cfg "
             f"--lmbda={lmbda} "
         )
     elif frame_type == "P":
         config = (
             f"--enc_cfg={PATH_COOL_CHIC_CFG}enc/inter/tunable.cfg "
-            f"--dec_cfg_residue={PATH_COOL_CHIC_CFG}dec/intra_residue/mop.cfg "
+            f"--dec_cfg_residue={PATH_COOL_CHIC_CFG}dec/residue/mop.cfg "
             f"--dec_cfg_motion={PATH_COOL_CHIC_CFG}dec/motion/mop.cfg "
             f"--start_lr=5e-3 "
             f"--n_itr_pretrain_motion=3000 "
@@ -50,12 +50,12 @@ def get_frame_config(frame_type: Literal["I", "P", "B"], depth: int, lmbda: floa
 
         if depth == 1:
             config += (
-                f"--dec_cfg_residue={PATH_COOL_CHIC_CFG}dec/intra_residue/mop.cfg "
+                f"--dec_cfg_residue={PATH_COOL_CHIC_CFG}dec/residue/mop.cfg "
                 f"--dec_cfg_motion={PATH_COOL_CHIC_CFG}dec/motion/mop.cfg "
             )
         else:
             config += (
-                f"--dec_cfg_residue={PATH_COOL_CHIC_CFG}dec/intra_residue/lop.cfg "
+                f"--dec_cfg_residue={PATH_COOL_CHIC_CFG}dec/residue/lop.cfg "
                 f"--dec_cfg_motion={PATH_COOL_CHIC_CFG}dec/motion/lop.cfg "
             )
 
@@ -113,6 +113,13 @@ if __name__ == "__main__":
 
     parser.add_argument("--lmbda", help="Rate constraint", type=float, default=1e-3)
     parser.add_argument(
+        "--extra_args",
+        help='Example --extra_args="--tune=wasserstein"',
+        type=str,
+        default=""
+    )
+
+    parser.add_argument(
         "--debug", action="store_true", help="Short encodings only for debugging."
     )
     args = parser.parse_args()
@@ -148,10 +155,15 @@ if __name__ == "__main__":
             + os.path.basename(args.output)
         )
 
+
         if args.debug:
+            if list_frame_by_coding_idx[coding_idx].get("type") == "I":
+                intra_or_residue = "intra"
+            else:
+                intra_or_residue = "residue"
             config = (
                 f"--enc_cfg={PATH_COOL_CHIC_CFG}enc/debug.cfg "
-                f"--dec_cfg_residue={PATH_COOL_CHIC_CFG}dec/intra_residue/vlop.cfg "
+                f"--dec_cfg_residue={PATH_COOL_CHIC_CFG}dec/{intra_or_residue}/vlop.cfg "
                 f"--dec_cfg_motion={PATH_COOL_CHIC_CFG}dec/motion/lop.cfg "
             )
         else:
@@ -160,6 +172,8 @@ if __name__ == "__main__":
                 depth=int(list_frame_by_coding_idx[coding_idx].get("depth")),
                 lmbda=args.lmbda,
             )
+
+        config += f" {args.extra_args} "
 
         cmd = (
             f"python3 {PATH_COOL_CHIC_ENCODE} "

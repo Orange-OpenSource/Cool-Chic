@@ -7,12 +7,12 @@ Encoding your own image is achieved by using the script ``coolchic/encode.py``.
 
 .. code:: bash
 
-    (venv) ~/Cool-Chic$ python coolchic/encode.py       \
-        --input=path_to_my_example                      \
-        --output=bitstream.bin                          \
-        --workdir=./my_temporary_workdir/               \
-        --enc_cfg=cfg/enc/intra/fast_10k.cfg            \
-        --dec_cfg_residue=cfg/dec/intra_residue/mop.cfg \
+    (venv) ~/Cool-Chic$ python coolchic/encode.py \
+        --input=path_to_my_example                \
+        --output=bitstream.bin                    \
+        --workdir=./my_temporary_workdir/         \
+        --enc_cfg=cfg/enc/intra/fast_10k.cfg      \
+        --dec_cfg_residue=cfg/dec/intra/mop.cfg   \
         --lmbda=0.001 # Typical range is 1e-2 (low rate) to 1e-4 (high rate)
 
 Unlike the decoding script which only takes input and output arguments, the

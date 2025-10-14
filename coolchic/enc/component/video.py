@@ -304,7 +304,6 @@ def encode_one_frame(
             device=device,
         )
 
-
         frame_encoder.to_device(device)
 
         # Compile only after the warm-up to compile only once.
@@ -335,6 +334,7 @@ def encode_one_frame(
                 # are not (yet) compatible with compilation. So we can't
                 # capture the full graph for yuv420 frame
                 fullgraph=frame.data.frame_data_type != "yuv420",
+                # disable=True,
             )
 
         for idx_phase, training_phase in enumerate(
@@ -560,6 +560,10 @@ def guided_motion_pretraining(
         f"pre-trained. Found {len(list_target_flow)} optical flows."
     )
 
+    # Always use MSE regardless on the tuning mode chosen
+    previous_dist_weight = of_encoder_manager.dist_weight
+    of_encoder_manager.dist_weight = {"mse": 1.0}
+
     if len(list_target_flow) == 1:
         frame_type = "P"
     elif len(list_target_flow) == 2:
@@ -621,6 +625,9 @@ def guided_motion_pretraining(
             softround_temperature=training_phase.softround_temperature,
             noise_parameter=training_phase.noise_parameter,
         )
+
+    # Restore frame_encoder_manager initial parameters
+    of_encoder_manager.dist_weight = previous_dist_weight
 
     # Return the trained frame_encoder
     # It is stored as the "residue" since it is learned as an image

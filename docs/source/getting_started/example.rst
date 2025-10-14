@@ -27,7 +27,7 @@ Encoding an image or a video frame with CoolChic requires to specify
         -o=./bitstream.cool \
         --workdir=./dummy_workdir \
         --enc_cfg=cfg/enc/intra/fast_10k.cfg \
-        --dec_cfg_residue=cfg/dec/intra_residue/hop.cfg \
+        --dec_cfg_residue=cfg/dec/intra/hop.cfg \
         --lmbda=0.001    # Typical range is 1e-2 (low rate) to 1e-4 (high rate)
 
 More details on encoding images with Cool-chic is available in the :doc:`encoder documentation <./../image_compression/overview>`.
@@ -53,6 +53,8 @@ allowing to easily do video encoding.
         --n_frames=33 \
         --intra_pos=0,-1
 
+
+.. _decoding_example:
 
 Decoding a .cool bitstream
 """"""""""""""""""""""""""

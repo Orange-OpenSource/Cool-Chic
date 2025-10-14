@@ -7,6 +7,9 @@
 # Authors: see CONTRIBUTORS.md
 
 from dataclasses import dataclass, field, fields
+from typing import Dict
+
+from enc.training.loss import DISTORTION_METRIC
 from enc.training.presets import AVAILABLE_PRESETS, Preset
 
 
@@ -24,6 +27,10 @@ class FrameEncoderManager():
     n_itr: int = int(1e4)                               # Number of iterations for the main training stage
     n_loops: int = 1                                    # Number of training loop
     n_itr_pretrain_motion: int = int(1e3)               # Number of iterations for the motion pre-training stage
+
+    dist_weight: Dict[DISTORTION_METRIC, float] = field(
+        default_factory= lambda: {"mse": 1.0}
+    )
 
     # ==================== Not set by the init function ===================== #
     # ----- Actual preset, instantiated from its name

@@ -22,7 +22,7 @@ if __name__ == "__main__":
         "--input", "-i", type=str, default="./bitstream.cool", help="Bitstream path."
     )
     parser.add_argument("--output", "-o", default="", help="output ppm (rgb) or yuv")
-    parser.add_argument("--no_avx2", action="store_true", help="Disable AVX2 usage")
+    # parser.add_argument("--avx2", action="store_true", help="Use AVX2. Some operations might be unavailable")
     parser.add_argument(
         "--verbosity", type=int, default=0,
         help=""
@@ -60,17 +60,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     # =========================== Parse arguments =========================== #
 
-    if not args.no_avx2 and sys.platform == "darwin":
-        print(
-            ""
-            "[WARNING]  AVX2 instructions are not available/supported on MAC. "
-            "Fallback to normal CPU decoding.\n"
-            "You can avoid this Warning by using --no_avx2"
-        )
-
-        use_avx2 = False
-    else:
-        use_avx2 = not args.no_avx2
+    use_avx2 = False  #  args.avx2
 
     if use_avx2:
         from CCLIB.ccdecapi_avx2 import cc_decode_avx2

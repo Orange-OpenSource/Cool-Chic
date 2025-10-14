@@ -186,7 +186,9 @@ void cc_bs_frame_coolchic::copy_archi_from(cc_bs_frame_coolchic const &src, int 
     if (topology_copy_bits&(1<<TOP_COPY_LAT))
     {
         n_latent_n_resolutions = src.n_latent_n_resolutions;
+        noise_n_2d_grid = src.noise_n_2d_grid;
         latent_n_2d_grid = src.latent_n_2d_grid;
+        n_ft_per_noise = src.n_ft_per_noise;
         n_ft_per_latent = src.n_ft_per_latent;
     }
 }
@@ -198,7 +200,7 @@ static bool read_cc_archi(struct cc_bs_frame_coolchic &out, int topology_copy_bi
     if ((topology_copy_bits&(1<<TOP_COPY_ARM)) == 0)
     {
         raw = read_int_1(bs);
-        out.dim_arm = 8*(raw>>4);
+        out.dim_arm = 4*(raw>>4);
         out.n_hidden_layers_arm = raw&0xF;
     }
 
@@ -225,8 +227,23 @@ static bool read_cc_archi(struct cc_bs_frame_coolchic &out, int topology_copy_bi
     if ((topology_copy_bits&(1<<TOP_COPY_LAT)) == 0)
     {
         out.n_latent_n_resolutions = read_int_1(bs);
+        if (out.n_latent_n_resolutions > 8)
+        {
+            printf("n_latent_n_resolutions cannot be greater than 8, found %d\n", out.n_latent_n_resolutions);
+            exit(1);
+        }
 
+        // noise
         int features = read_int_1(bs); // 0 or 1 features per resolution high res is high bit.
+        out.noise_n_2d_grid = 0;
+        out.n_ft_per_noise.resize(out.n_latent_n_resolutions);
+        for (int i = 0; i < out.n_latent_n_resolutions; i++)
+        {
+            out.n_ft_per_noise[i] = (features >> (7-i))&0x01;
+            out.noise_n_2d_grid += out.n_ft_per_noise[i];
+        }
+
+        features = read_int_1(bs); // 0 or 1 features per resolution high res is high bit.
         out.latent_n_2d_grid = 0;
         out.n_ft_per_latent.resize(out.n_latent_n_resolutions);
         for (int i = 0; i < out.n_latent_n_resolutions; i++)
@@ -307,8 +324,13 @@ void cc_bs_frame_coolchic::print()
     print_lqi("syn", syn_lqi);
 
     printf("    latent_n_resolutions: %d\n", n_latent_n_resolutions);
+    printf("    noise_n_2d_grid: %d\n", noise_n_2d_grid);
     printf("    latent_n_2d_grid: %d\n", latent_n_2d_grid);
 
+    printf("    n_ft_per_noise:");
+    for (auto &v: n_ft_per_noise)
+        printf(" %d", v);
+    printf("\n");
     printf("    n_ft_per_latent:");
     for (auto &v: n_ft_per_latent)
         printf(" %d", v);
@@ -468,17 +490,19 @@ struct cc_bs_frame *cc_bs::decode_frame(struct cc_bs_frame const *prev_coded_I_f
         printf("    n_bytes_header: %d\n", result->m_frame_header.n_bytes_header);
         printf("    display_index: %d\n", result->m_frame_header.display_index);
         printf("    frame_type: %c\n", result->m_frame_header.frame_type);
-        printf("    topology_copy [0] 0x%x [1] 0x%x from %d\n",
-                        result->m_frame_header.topology_copy[0], result->m_frame_header.topology_copy[1],
-                        prev_frame_symbols == NULL ? -1 : prev_frame_symbols->m_frame_header.display_index);
-        printf("    latents_zero: %d %d\n", result->m_frame_header.latents_zero[0], result->m_frame_header.latents_zero[1]);
         if (result->m_frame_header.frame_type != 'I')
-        {
+            printf("    topology_copy [0] 0x%x [1] 0x%x from %d\n",
+                            result->m_frame_header.topology_copy[0], result->m_frame_header.topology_copy[1],
+                            prev_frame_symbols == NULL ? -1 : prev_frame_symbols->m_frame_header.display_index);
+        printf("    latents_zero: %d", result->m_frame_header.latents_zero[0]);
+        if (result->m_frame_header.frame_type != 'I')
+            printf(" %d\n", result->m_frame_header.latents_zero[1]);
+        else
+            printf("\n");
+        if (result->m_frame_header.frame_type == 'P' || result->m_frame_header.frame_type == 'B')
             printf("    global_flow_1: %d,%d\n", result->m_frame_header.global_flow[0][0], result->m_frame_header.global_flow[0][1]);
-            if (result->m_frame_header.frame_type == 'B')
-                printf("    global_flow_2: %d,%d\n", result->m_frame_header.global_flow[1][0], result->m_frame_header.global_flow[1][1]);
-            printf("    warp_filter_length: %d\n", result->m_frame_header.warp_filter_length);
-        }
+        if (result->m_frame_header.frame_type == 'B')
+            printf("    global_flow_2: %d,%d\n", result->m_frame_header.global_flow[1][0], result->m_frame_header.global_flow[1][1]);
 
         for (auto &cc: result->m_coolchics)
             cc.print();

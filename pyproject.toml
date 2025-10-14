@@ -1,3 +1,12 @@
 [build-system]
 requires = ["setuptools>=42", "pybind11>=2.6.1"]
 build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "coolchic",
+  "scripts"
+]
+testpaths = [
+    "test"
+]

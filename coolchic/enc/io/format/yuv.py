@@ -82,7 +82,6 @@ def read_yuv(
     # Switch between 8 bit file and 10 bit
     byte_per_value = 1 if bit_depth == 8 else 2
 
-    # We only handle YUV420 for now
     n_val_y = h * w
     n_val_uv = h_uv * w_uv
     n_val_per_frame = n_val_y + 2 * n_val_uv
@@ -98,7 +97,7 @@ def read_yuv(
             mode="r",
             shape=n_val_per_frame,
             offset=n_bytes_per_frame * frame_idx,
-            dtype=np.uint16 if bit_depth == 10 else np.uint8,
+            dtype=np.uint8 if bit_depth <=8 else np.uint16,
         ).astype(np.float32)
     )
 
@@ -159,24 +158,25 @@ def write_yuv(
     # Round the values and cast them to uint8 or uint16 tensor
     raw_data = torch.round(raw_data).cpu().numpy().astype(dtype)
 
-    # # We need to add a p avec yuv444 otherwise YUView thinks its "YUV444 8-bit packed"
-    # file_path = (
-    #     f"{file_path}_{w}x{h}_{DUMMY_FRAMERATE}fps_{frame_data_type}p_{bitdepth}b.yuv"
-    # )
-
     # Write this to the desired file_path
     np.memmap.tofile(raw_data, file_path)
 
+YCBCR_WEIGHTS = {
+    # Spec: (K_r, K_g, K_b) with K_g = 1 - K_r - K_b
+    "ITU-R_BT.709": (0.2126, 0.7152, 0.0722)
+}
+
 
 def rgb2yuv(rgb: Tensor) -> Tensor:
-    """Convert a 4D RGB tensor [1, 3, H, W] into a 4D YUV444 tensor [1, 3, H, W].
-    The RGB and YUV values are in the range [0, 255]
+    """Convert a 4D RGB tensor [1, 3, H, W] into a 4D YUV444 tensor [1, 3, H, W]
+    using ITU-R BT.709 coefficients.
+    The RGB and YUV values are in the range [0., 1.]
 
     Args:
-        rgb: 4D RGB tensor to convert in [0. 255.]
+        rgb: 4D RGB tensor to convert in [0., 1.]
 
     Returns:
-        The resulting YUV444 tensor in [0. 255.]
+        The resulting YUV444 tensor in [0. 1.]
     """
     assert (
         len(rgb.size()) == 4
@@ -185,28 +185,34 @@ def rgb2yuv(rgb: Tensor) -> Tensor:
         rgb.size()[1] == 3
     ), f"rgb2yuv input must have 3 channels. Data size: {rgb.size()}"
 
+    # assert rgb.min() >= 0, "Trying to convert rgb value smaller than 0."
+
+    # assert rgb.max() <= 1, "Trying to convert YUV with data bigger than 1."
+
     # Split the [1, 3, H, W] into 3 [1, 1, H, W] tensors
     r, g, b = rgb.split(1, dim=1)
 
-    # Compute the different channels
-    y = torch.round(0.299 * r + 0.587 * g + 0.114 * b)
-    u = torch.round(-0.1687 * r - 0.3313 * g + 0.5 * b + +128)
-    v = torch.round(0.5 * r - 0.4187 * g - 0.0813 * b + 128)
+    Kr, Kg, Kb = YCBCR_WEIGHTS["ITU-R_BT.709"]
+
+    y = Kr * r + Kg * g + Kb * b
+    cb = 0.5 * (b - y) / (1 - Kb) + 0.5
+    cr = 0.5 * (r - y) / (1 - Kr) + 0.5
 
     # Concatenate them into the resulting yuv 4D tensor.
-    yuv = torch.cat((y, u, v), dim=1)
+    yuv = torch.cat((y, cb, cr), dim=1)
     return yuv
 
 
 def yuv2rgb(yuv: Tensor):
-    """Convert a 4D YUV tensor [1, 3, H, W] into a 4D RGB tensor [1, 3, H, W].
-    The RGB and YUV values are in the range [0, 255]
+    """Convert a 4D YUV tensor [1, 3, H, W] into a 4D RGB tensor [1, 3, H, W]
+    using ITU-R BT.709 coefficients.
+    The RGB and YUV values are in the range [0., 1.]
 
     Args:
-        rgb: 4D YUV444 tensor to convert in [0. 255.]
+        rgb: 4D YUV444 tensor to convert in [0., 1.]
 
     Returns:
-        The resulting RGB tensor in [0. 255.]
+        The resulting RGB tensor in [0., 1.]
     """
     assert (
         len(yuv.size()) == 4
@@ -215,20 +221,17 @@ def yuv2rgb(yuv: Tensor):
         yuv.size()[1] == 3
     ), f"yuv2rgb input must have 3 channels. Data size: {yuv.size()}"
 
-    y, u, v = yuv.split(1, dim=1)
-    r = (
-        1.0 * y
-        + -0.000007154783816076815 * u
-        + 1.4019975662231445 * v
-        - 179.45477266423404
-    )
-    g = 1.0 * y + -0.3441331386566162 * u + -0.7141380310058594 * v + 135.45870971679688
-    b = (
-        1.0 * y
-        + 1.7720025777816772 * u
-        + 0.00001542569043522235 * v
-        - 226.8183044444304
-    )
+    # assert yuv.min() >= 0, "Trying to convert YCrCb value smaller than 0."
+
+    # assert yuv.max() <= 1, "Trying to convert YCrCb with data bigger than 1."
+
+    y, cb, cr = yuv.split(1, dim=1)
+
+    Kr, Kg, Kb = YCBCR_WEIGHTS["ITU-R_BT.709"]
+
+    r = y + (2 - 2 * Kr) * (cr - 0.5)
+    b = y + (2 - 2 * Kb) * (cb - 0.5)
+    g = (y - Kr * r - Kb * b) / Kg
     rgb = torch.cat((r, g, b), dim=1)
     return rgb
 

@@ -7,7 +7,7 @@ Decoder configuration
 
 This section details how to change the architecture of the Cool-chic decoder.
 The decoder settings of Cool-chic are set in a configuration file. Examples of
-such configuration files are located in ``cfg/dec/intra_residue``. They include the following
+such configuration files are located in ``cfg/dec/intra``. They include the following
 parameters:
 
 
@@ -42,15 +42,15 @@ parameters:
     .. code:: bash
 
         (venv) ~/Cool-Chic$ python coolchic/encode.py \
-          --dec_cfg_residue=cfg/dec/intra_residue/lop.cfg # lop.cfg has dim_arm=8,2
-          --arm_residue=16,2                              # This override the value present in lop.cfg
+          --dec_cfg_residue=cfg/dec/intra/lop.cfg # lop.cfg has dim_arm=8,2
+          --arm_residue=16,2                      # This override the value present in lop.cfg
 
 .. _decoder_cfg_files:
 
 Some existing configuration files
 """""""""""""""""""""""""""""""""
 
-Some configuration files are proposed in ``cfg/dec/intra_residue/``:
+Some configuration files are proposed in ``cfg/dec/intra/``:
 
 .. list-table:: Existing decoder configuration files.
    :widths: 20 40 40

@@ -67,9 +67,12 @@ def _parse_n_ft_per_res(n_ft_per_res: str) -> List[int]:
     """
 
     n_ft_per_res = [int(x) for x in n_ft_per_res.split(",") if x != ""]
-    # assert set(n_ft_per_res) == {
-    #     1
-    # }, f"--n_ft_per_res should only contains 1. Found {n_ft_per_res}"
+
+    for x in n_ft_per_res:
+        assert x in [0, 1], (
+            f"--n_ft_per_res should only contains 0 or 1. Found {n_ft_per_res}"
+        )
+
     return n_ft_per_res
 
 
@@ -84,6 +87,7 @@ def get_coolchic_param_from_args(
         getattr(args, f"n_ft_per_res_{coolchic_enc_name}")
     )
 
+
     coolchic_param = {
         "layers_synthesis": layers_synthesis,
         "n_ft_per_res": n_ft_per_res,
@@ -92,6 +96,21 @@ def get_coolchic_param_from_args(
             args, f"ups_preconcat_k_size_{coolchic_enc_name}"
         ),
     }
+
+    # Common randomness only for the residue if we want to optimize
+    # the wasserstein distance.
+    if coolchic_enc_name == "residue" and args.tune == "wasserstein":
+        n_ft_per_res_cr = [1, 1, 1, 1, 1, 1, 1]
+        
+        assert len(n_ft_per_res_cr) <= len(n_ft_per_res), (
+            "It is not possible to have smallest resolutions for the common "
+            "randomness than for the transmitted latent. Found:\n"
+            f"--n_ft_per_res_{coolchic_enc_name}={n_ft_per_res}\n"
+            f"--n_ft_per_res_cr={n_ft_per_res_cr}\n"
+        )
+
+        coolchic_param["n_ft_per_res_cr"] = n_ft_per_res_cr
+
 
     # Add ARM parameters
     coolchic_param.update(_parse_arm_archi(getattr(args, f"arm_{coolchic_enc_name}")))
@@ -223,6 +242,23 @@ def get_manager_from_args(args: argparse.Namespace) -> Dict[str, Any]:
         Dict[str, Any]: Dictionary ready to be plugged into the
             ``FrameEncoderManager`` constructor.
     """
+    if args.tune == "mse":
+        dist_weight = {"mse": 1.0}
+
+    elif args.tune == "wasserstein":
+        if args.input.endswith(".yuv"):
+            raise argparse.ArgumentTypeError(
+                "--tune=wasserstein can not be used with YUV files. Use --tune=mse"
+            )
+
+        # Value determined empirically, see
+        # "Perceptually optimised Cool-chic for CLIC 2025", Philippe et al.
+        dist_weight = {"mse": 0.8, "wasserstein": 0.2}
+
+
+    else:
+        raise argparse.ArgumentTypeError(f"Unknown --tune. Found {args.tune}")
+
     frame_encoder_manager = {
         "preset_name": args.preset,
         "start_lr": args.start_lr,
@@ -230,7 +266,9 @@ def get_manager_from_args(args: argparse.Namespace) -> Dict[str, Any]:
         "n_loops": args.n_train_loops,
         "n_itr": args.n_itr,
         "n_itr_pretrain_motion": args.n_itr_pretrain_motion,
+        "dist_weight": dist_weight,
     }
+
     return frame_encoder_manager
 
 def get_warp_param_from_args(args: argparse.Namespace) -> Dict[str, Any]:

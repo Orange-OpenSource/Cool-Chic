@@ -32,6 +32,9 @@ def warmup(
     them for 400 iterations. Then we keep the best 4 of them for 400 additional
     iterations, while finally keeping the final best one.
 
+    Note that the warm-up always use the MSE as distortion metrics, regardless
+    of the parameters provided by ``--tune``.
+
     .. warning::
 
         The parameter ``frame_encoder_manager`` tracking the encoding time of
@@ -55,6 +58,10 @@ def warmup(
 
     start_time = time.time()
     warmup = frame_encoder_manager.preset.warmup
+
+    # Always do the warm-up in MSE regardless on the tuning mode chosen
+    previous_dist_weight = frame_encoder_manager.dist_weight
+    frame_encoder_manager.dist_weight = {"mse": 1.0}
 
     _col_width = 14
 
@@ -117,9 +124,9 @@ def warmup(
                 quantizer_type=warmup_phase.training_phase.quantizer_type,
                 quantizer_noise_type=warmup_phase.training_phase.quantizer_noise_type,
                 softround_temperature=warmup_phase.training_phase.softround_temperature,
-                noise_parameter=warmup_phase.training_phase.noise_parameter
+                noise_parameter=warmup_phase.training_phase.noise_parameter,
             )
-
+            
             metrics = test(frame_encoder, frame, frame_encoder_manager)
             frame_encoder.to_device("cpu")
 
@@ -143,12 +150,15 @@ def warmup(
             s += f'{candidate.get("id"):^{6}}|'
             s += f'{candidate.get("metrics").loss.item() * 1e3:^{_col_width}.4f}|'
             s += f'{candidate.get("metrics").total_rate_latent_bpp:^{_col_width}.4f}|'
-            s += f'{candidate.get("metrics").psnr_db:^{_col_width}.4f}|'
+            s += f'{candidate.get("metrics").detailed_dist_db.get("psnr_db"):^{_col_width}.4f}|'
             s += "\n"
         print(s)
 
     # Keep only the best model
     frame_encoder = copy.deepcopy(all_candidates[0].get("encoder"))
+
+    # Restore frame_encoder_manager initial parameters
+    frame_encoder_manager.dist_weight = previous_dist_weight
 
     # We've already worked for that many second during warm up
     warmup_duration = time.time() - start_time

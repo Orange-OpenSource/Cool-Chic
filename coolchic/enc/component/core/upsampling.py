@@ -546,3 +546,35 @@ class Upsampling(nn.Module):
             self.conv_transpose2ds[i].initialize_parameters()
         for i in range(len(self.conv2ds)):
             self.conv2ds[i].initialize_parameters()
+
+
+def fixed_upsampling(decoder_side_latent: List[Tensor], mode: str = "bicubic") -> Tensor:
+    """Upsample a list of :math:`L` tensors, where the i-th
+    tensor has a shape :math:`(B, C_i, \\frac{H}{2^i}, \\frac{W}{2^i})`
+    to obtain a dense representation :math:`(B, \\sum_i C_i, H, W)`.
+    This dense representation is ready to be used as the synthesis input.
+
+    Args:
+        decoder_side_latent: list of :math:`L` tensors with
+            various shapes :math:`(B, C_i, \\frac{H}{2^i}, \\frac{W}{2^i})`
+
+    Returns:
+        Tensor: Dense representation :math:`(B, \\sum_i C_i, H, W)`.
+    """
+    # The main idea is to merge the channel dimension with the batch dimension
+    # so that the same convolution is applied independently on the batch dimension.
+    latent_reversed = list(reversed(decoder_side_latent))
+    upsampled_latent = latent_reversed[0]  # start from smallest
+
+    for idx, target_tensor in enumerate(latent_reversed[1:]):
+        # Our goal is to upsample <upsampled_latent> to the same resolution than <target_tensor>
+        x = rearrange(upsampled_latent, "b c h w -> (b c) 1 h w")
+        x = F.interpolate(x, scale_factor=2., mode=mode)
+
+        x = rearrange(x, "(b c) 1 h w -> b c h w", b=upsampled_latent.shape[0])
+        # Crop to comply with higher resolution feature maps size before concatenation
+        x = x[:, :, : target_tensor.shape[-2], : target_tensor.shape[-1]]
+
+        upsampled_latent = torch.cat((target_tensor, x), dim=1)
+
+    return upsampled_latent

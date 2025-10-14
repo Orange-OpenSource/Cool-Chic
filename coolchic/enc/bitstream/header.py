@@ -316,7 +316,7 @@ def utf_code(val, signed = False):
 
     nbytes = 1
     # 7 bits per byte output.  How many bytes to code val?
-    
+
     while (1<<(7*nbytes))-1 < val:
         nbytes += 1
     
@@ -373,6 +373,7 @@ def cc_topologies_equal(cc_enc_1, cc_enc_2):
     if cc_enc_1.param.layers_synthesis == cc_enc_2.param.layers_synthesis:
         result |= (1<<TOPOLOGY_SYN)
     if cc_enc_1.param.latent_n_grids == cc_enc_2.param.latent_n_grids \
+        and cc_enc_1.param.n_ft_per_res_cr == cc_enc_2.param.n_ft_per_res_cr \
         and cc_enc_1.param.n_ft_per_res == cc_enc_2.param.n_ft_per_res: # list comparison
         result |= (1<<TOPOLOGY_LAT)
 
@@ -382,10 +383,10 @@ def code_cc_topology(cc_enc, topologies_equal_bits):
     byte_to_write = b""
 
     # Since the dimension of the hidden layer and of the context is always a multiple of
-    # 8, we can spare 3 bits by dividing it by 8
-    assert cc_enc.param.dim_arm // 8 < 2**4, (
+    # 4, we can spare 3 bits by dividing it by 4
+    assert cc_enc.param.dim_arm // 4 < 2**4, (
         f"Number of context pixels"
-        f" and dimension of the hidden layer for the arm must be inferior to {2 ** 4 * 8}. Found"
+        f" and dimension of the hidden layer for the arm must be inferior to {2 ** 4 * 4}. Found"
         f" {cc_enc.dim_arm} in encoder {cc_name}"
     )
 
@@ -397,7 +398,7 @@ def code_cc_topology(cc_enc, topologies_equal_bits):
 
     if (topologies_equal_bits&(1<<TOPOLOGY_ARM)) == 0:
         byte_to_write += (
-            ((cc_enc.param.dim_arm // 8) << 4) \
+            ((cc_enc.param.dim_arm // 4) << 4) \
             | cc_enc.param.n_hidden_layers_arm
         ).to_bytes(1, byteorder="big", signed=False)
 
@@ -429,8 +430,20 @@ def code_cc_topology(cc_enc, topologies_equal_bits):
             1, byteorder="big", signed=False
         )
 
-        # features                                  
-        n_feature_byte = 0                          
+        # noise
+        n_noise_byte = 0
+        for i, n_noise in enumerate(cc_enc.param.n_ft_per_res_cr):
+            if n_noise > 1:
+                print(f"Number of noise features for layer {i} is too big in {cc_name}!")
+                print(f"Found {n_noise}, should be 0 or 1")
+                print("Exiting!")
+                return
+            n_noise_byte |= n_noise << (7-i)
+
+        byte_to_write += n_noise_byte.to_bytes(1, byteorder="big", signed=False)
+
+        # features
+        n_feature_byte = 0
         for i, latent_i in enumerate(cc_enc.latent_grids):
             n_ft_i = latent_i.size()[1]
             if n_ft_i > 1:
@@ -438,8 +451,8 @@ def code_cc_topology(cc_enc, topologies_equal_bits):
                 print(f"Found {n_ft_i}, should be 0 or 1")
                 print("Exiting!")
                 return
-            n_feature_byte |= n_ft_i << (7-i)       
-    
+            n_feature_byte |= n_ft_i << (7-i)
+
         byte_to_write += n_feature_byte.to_bytes(1, byteorder="big", signed=False)
 
     return byte_to_write

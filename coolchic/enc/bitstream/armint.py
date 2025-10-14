@@ -161,9 +161,9 @@ class ArmInt(nn.Module):
         """
         super().__init__()
 
-        assert dim_arm % 8 == 0, (
+        assert dim_arm % 4 == 0, (
             f"ARM context size and hidden layer dimension must be "
-            f"a multiple of 8. Found {dim_arm}."
+            f"a multiple of 4. Found {dim_arm}."
         )
 
         self.FPFM = fpfm  # fixed-point: multiplication to get int.

@@ -217,36 +217,6 @@ class Synthesis(nn.Module):
         """
         return self.layers(x)
 
-    def partial_forward(self, x: Tensor, last_layer_idx: int = 1) -> Tensor:
-        """Perform a "partial" forward of the synthesis, i.e. stopping at the
-        <last_layer_idx>-th layer. We do not count non-linearity as actual
-        layer. That is:
-
-        x --> Conv --> ReLU --> Conv --> Conv --> ReLU --> out
-                             ^        ^                 ^
-        last_layer_idx       1        2                 3  
-        
-
-        Args:
-            x: Dense latent representation :math:`[B, C_{in}, H, W]`.
-            last_layer_idx: Last layer index. Defaults to 1.
-
-        Returns:
-            Features [B, C, H, W]`.
-        """
-        i = 0
-        layer_idx = 0
-        while True:
-            if isinstance(self.layers[i], SynthesisConv2d):
-                layer_idx += 1
-
-            if layer_idx > last_layer_idx:
-                return x
-
-            x = self.layers[i](x)
-            i += 1
-
-
     def get_param(self) -> OrderedDict[str, Tensor]:
         """Return **a copy** of the weights and biases inside the module.
 

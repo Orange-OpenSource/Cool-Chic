@@ -394,7 +394,7 @@ def encode_frame(
                 )
             elif cur_module_name == 'synthesis':
                 empty_module =  Synthesis(
-                    sum(cc_enc.param.n_ft_per_res),
+                    sum(cc_enc.param.n_ft_per_res)+sum(cc_enc.param.n_ft_per_res_cr),
                     cc_enc.param.layers_synthesis
                 )
             elif cur_module_name == 'upsampling':
@@ -441,12 +441,19 @@ def encode_frame(
     res = frame_encoder.coolchic_enc["residue"].latent_grids[0].shape
     res = (res[0], 3, res[2], res[3])
     ref = torch.zeros(res)
+    # We get the no_common_randomness and only_common_randomness from the first coolchic we find.
+    common_randomness = sum(frame_encoder.coolchic_enc["residue"].param.n_ft_per_res_cr) > 0
+    print("table per res", frame_encoder.coolchic_enc["residue"].param.n_ft_per_res)
+    print("table per res cr", frame_encoder.coolchic_enc["residue"].param.n_ft_per_res_cr)
+    print("cc parameter common_randomness", frame_encoder.coolchic_enc["residue"].param.common_randomness)
     encoder_output = frame_encoder.forward(
         reference_frames=[ref, ref],
         quantizer_noise_type="noise",
         quantizer_type="hardround",
         AC_MAX_VAL=ac_max_val_latent,
         flag_additional_outputs=True,
+        no_common_randomness = not common_randomness,
+        only_common_randomness = False,
     )
 
     # Encode the different 2d latent grids one after the other

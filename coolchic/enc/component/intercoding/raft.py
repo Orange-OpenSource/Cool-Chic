@@ -65,9 +65,9 @@ def get_raft_optical_flow(
 
         # RAFT expects RGB data in [-1., 1.]
         if ref_data_i.frame_data_type != "rgb":
-            raw_ref_data = yuv2rgb(raw_ref_data * 255.0) / 255.0
+            raw_ref_data = yuv2rgb(raw_ref_data)
         if frame_data.frame_data_type != "rgb":
-            raw_target_data = yuv2rgb(raw_target_data * 255.0) / 255.0
+            raw_target_data = yuv2rgb(raw_target_data)
 
         # Convert the data from [0, 1] -> [-1, 1]
         raw_target_data = raw_target_data * 2 - 1
@@ -75,11 +75,7 @@ def get_raft_optical_flow(
 
         # Send from old_device -> _RAFT_DEVICE prior to using raft.
         # After raft, send back from _RAFT_DEVICE -> old_device.
-        raw_target_data = raw_target_data.to(_RAFT_DEVICE)
-        raw_ref_data = raw_ref_data.to(_RAFT_DEVICE)
-        raft_flow = raft(raw_target_data, raw_ref_data)[-1]
-        raw_target_data = raw_target_data.to(old_device)
-        raw_ref_data = raw_ref_data.to(old_device)
+        raft_flow = raft(raw_target_data.to(_RAFT_DEVICE), raw_ref_data.to(_RAFT_DEVICE))[-1]
         raft_flow = raft_flow.to(old_device)
 
         # Send back the data from [-1, 1] -> [0, 1]
@@ -94,8 +90,8 @@ def get_raft_optical_flow(
         # we have a 420 frame.
         raft_pred_psnr = -10 * torch.log10(
             _compute_mse(
-                rgb2yuv(raft_pred * 255.0) / 255.0,
-                rgb2yuv(raw_target_data * 255.0) / 255.0,
+                rgb2yuv(raft_pred),
+                rgb2yuv(raw_target_data),
             )
             + 1e-10
         )
@@ -104,8 +100,8 @@ def get_raft_optical_flow(
         # reference i.e. optical flow = 0.
         dummy_pred_psnr = -10 * torch.log10(
             _compute_mse(
-                rgb2yuv(raw_ref_data * 255.0) / 255.0,
-                rgb2yuv(raw_target_data * 255.0) / 255.0,
+                rgb2yuv(raw_ref_data),
+                rgb2yuv(raw_target_data),
             )
             + 1e-10
         )

@@ -18,6 +18,10 @@ This repository is based on several papers successively enhancing Cool-chic. Che
      - Cool-chic version
      - Paper link
      - Key contributions
+   * - 2025 Sep
+     - ``4.2``
+     - `Philippe et al <https://arxiv.org/abs/2401.02156>`_, `Ballé et al, CVPR <https://arxiv.org/abs/2412.00505>`_
+     - Wasserstein Distance, Common Randomness
    * - 2025 July
      - ``4.1``
      - `Ladune et al, <https://arxiv.org/abs/2507.21926>`_
@@ -73,9 +77,6 @@ have not (yet?) been integrated  in this repository.
    * - 2025 Feb
      - `Ameen et al, <https://arxiv.org/abs/2507.21926>`_
      - Use Cool-chic to code a diffusion model feature space
-   * - 2024 Dec
-     - `Ballé et al, CVPR <https://arxiv.org/abs/2412.00505>`_
-     - Wasserstein Distance, Saliency, Common Randomness
    * - 2024 Oct
      - `Catania et al, ICIP <https://ieeexplore.ieee.org/abstract/document/10647328>`_
      - Evaluate different distortion metrics

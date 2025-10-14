@@ -1,3 +1,11 @@
+/*
+    Software Name: Cool-Chic
+    SPDX-FileCopyrightText: Copyright (c) 2023-2025 Orange
+    SPDX-License-Identifier: BSD 3-Clause "New"
+
+    This software is distributed under the BSD-3-Clause license.
+    Authors: see CONTRIBUTORS.md
+*/
 
 // Used by arm_avx2 and syn_avx2.
 
@@ -28,3 +36,13 @@ static inline float horizontal_add (__m256 a) {
     return _mm_cvtss_f32(t4);
 }
 
+inline void print_ps(__m256 reg, char const *msg = NULL)
+{
+    float store[8];
+    _mm256_storeu_ps(&store[0], reg);
+    if (msg != NULL)
+        printf(" %s", msg);
+    for (int i = 0; i < 8; i++)
+        printf(" %g", store[i]);
+    printf("\n");
+}

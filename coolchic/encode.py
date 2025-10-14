@@ -7,8 +7,10 @@
 # Authors: see CONTRIBUTORS.md
 
 
+import argparse
 import os
 import sys
+import typing
 
 import configargparse
 import torch
@@ -20,6 +22,7 @@ from enc.component.video import (
     _get_frame_path_prefix,
     encode_one_frame,
 )
+from enc.training.loss import DISTORTION_METRIC
 from enc.utils.codingstructure import CodingStructure
 from enc.utils.parsecli import (
     get_coding_structure_from_args,
@@ -49,6 +52,7 @@ if __name__ == "__main__":
         "--input",
         help="Path of the input image. Either .png or .yuv",
         type=str,
+        required=True,
     )
     parser.add(
         "-o",
@@ -60,6 +64,7 @@ if __name__ == "__main__":
 
     parser.add("--workdir", help="Path of the working_directory", type=str, default=".")
     parser.add("--lmbda", help="Rate constraint", type=float, default=1e-3)
+
     parser.add(
         "--job_duration_min",
         type=int,
@@ -150,9 +155,18 @@ if __name__ == "__main__":
     parser.add("--n_train_loops", help="Number of training loops", type=int, default=1)
     parser.add(
         "--preset",
-        help='Recipe type. Either "c3x" or "debug".',
+        help='Recipe type. e.g. "c3x_intra" or "debug".',
         type=str,
-        default="c3x",
+        default="c3x_intra",
+    )
+
+    parser.add(
+        "--tune",
+        help="Preset used to perform subjective tuning. Available: "
+        f"{typing.get_args(DISTORTION_METRIC)}",
+        type=str,
+        default="mse",
+        choices=typing.get_args(DISTORTION_METRIC),
     )
 
     # ==== Decoder-side arguments
@@ -253,7 +267,7 @@ if __name__ == "__main__":
         "--warp_filter_size",
         type=int,
         default=8,
-        help="Number of taps for the warping interpolation filter. "
+        help="Number of taps for the warping interpolation filter. ",
     )
 
     args = parser.parse_args()
@@ -281,7 +295,7 @@ if __name__ == "__main__":
         warp_parameter = frame_encoder.warp_parameter
 
     else:
-        start_print = (
+        print(
             "\n\n"
             "*----------------------------------------------------------------------------------------------------------*\n"
             "|                                                                                                          |\n"
@@ -298,19 +312,13 @@ if __name__ == "__main__":
             '|    `"Y8888888 P"Y8888P"    P"Y8888P"    8P\'"Y88                  P""Y8888PP88P     `Y88P""Y8P""Y8888PP   |\n'
             "|                                                                                                          |\n"
             "|                                                                                                          |\n"
-            "| version 4.1.0, July 2025                                                              © 2023-2025 Orange |\n"
+            "| version 4.2.0, October 2025                                                           © 2023-2025 Orange |\n"
             "*----------------------------------------------------------------------------------------------------------*\n"
         )
-        print(start_print)
 
         # Dump raw parameters into a text file to keep track
         with open(f"{frame_save_prefix}param.txt", "w") as f_out:
-            f_out.write(str(args))
-            f_out.write("\n")
-            f_out.write("----------\n")
-            f_out.write(
-                parser.format_values()
-            )  # useful for logging where different settings came from
+            f_out.write(f"{str(args)}\n\n{parser.format_values()}")
 
         # Successively parse the Cool-chic architectures for the residue
         # and the motion Cool-chic
@@ -320,7 +328,11 @@ if __name__ == "__main__":
             )
             for cc_name in ["residue", "motion"]
         }
-        frame_encoder_manager = FrameEncoderManager(**get_manager_from_args(args))
+        try:
+            frame_encoder_manager = FrameEncoderManager(**get_manager_from_args(args))
+        except argparse.ArgumentTypeError as e:
+            parser.error(str(e))
+
         warp_parameter = WarpParameter(**get_warp_param_from_args(args))
 
     # Automatic device detection

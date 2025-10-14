@@ -12,13 +12,14 @@ import time
 from typing import List, Tuple
 
 import torch
+import numpy as np
 from enc.component.core.quantizer import (
     POSSIBLE_QUANTIZATION_NOISE_TYPE,
     POSSIBLE_QUANTIZER_TYPE,
 )
 from enc.component.frame import FrameEncoder
 from enc.io.format.yuv import convert_420_to_444
-from enc.training.loss import loss_function
+from enc.training.loss import loss_function, DISTORTION_METRIC
 from enc.training.presets import MODULE_TO_OPTIMIZE
 from enc.training.test import test
 from enc.utils.codingstructure import Frame
@@ -76,11 +77,13 @@ def train(
 
     .. math::
 
-        \\mathcal{L} = ||\\mathbf{x} - \hat{\\mathbf{x}}||^2 + \\lambda
+        \\mathcal{L} = \\mathrm{D}(\hat{\\mathbf{x}}, \\mathbf{x}) + \\lambda
         \\mathrm{R}(\hat{\\mathbf{x}}), \\text{ with } \\begin{cases}
             \\mathbf{x} & \\text{the original image}\\\\ \\hat{\\mathbf{x}} &
             \\text{the coded image}\\\\ \\mathrm{R}(\\hat{\\mathbf{x}}) &
-            \\text{A measure of the rate of } \\hat{\\mathbf{x}}
+            \\text{A measure of the rate of } \\hat{\\mathbf{x}}\\\\
+            \\mathrm{D}(\hat{\\mathbf{x}}, \\mathbf{x})  & \\text{A distortion
+            metric specified by \\texttt{--tune} and \\texttt{--alpha}}
         \\end{cases}
 
     .. warning::
@@ -215,10 +218,12 @@ def train(
                                 "so it does not have a warper."
                             )
 
-
-
     optimizer = torch.optim.Adam(parameters_to_optimize, lr=start_lr)
-    best_optimizer_state = copy.deepcopy(optimizer.state_dict())
+
+    for group in optimizer.param_groups:
+        group['lr'] = start_lr
+
+    # best_optimizer_state = copy.deepcopy(optimizer.state_dict())
 
     if cosine_scheduling_lr:
         # TODO: I'd like to use an explicit function for this scheduler
@@ -259,7 +264,7 @@ def train(
             if cosine_scheduling_lr:
                 # reload the best model so far
                 frame_encoder.set_param(best_model)
-                optimizer.load_state_dict(best_optimizer_state)
+                # optimizer.load_state_dict(best_optimizer_state)
 
                 current_lr = learning_rate_scheduler.state_dict()["_last_lr"][0]
                 # actualise the best optimizer lr with current lr
@@ -292,6 +297,7 @@ def train(
             decoded_image=decoded_image,
             rate_latent_bit=out_forward.rate,
             target_image=target_image,
+            dist_weight=frame_encoder_manager.dist_weight,
             lmbda=lmbda,
             total_rate_nn_bit=0.0,
             compute_logs=False,
@@ -304,6 +310,7 @@ def train(
 
         # ------- Validation
         # Each freq_valid iteration or at the end of the phase, compute validation loss and log stuff
+        encoder_logs = None
         if ((cnt + 1) % frequency_validation == 0) or (cnt + 1 == max_iterations):
             #  a. Update iterations counter and training time and test model
             frame_encoder_manager.total_training_time_sec += time.time() - start_time
@@ -312,26 +319,14 @@ def train(
             # b. Test the model and check whether we've beaten our record
             encoder_logs = test(frame_encoder, frame, frame_encoder_manager)
 
-            flag_new_record = False
-
             if encoder_logs.loss < encoder_logs_best.loss:
-                # A record must have at least -0.001 bpp or + 0.001 dB. A smaller improvement
-                # does not matter.
-                delta_psnr = encoder_logs.psnr_db - encoder_logs_best.psnr_db
-                delta_bpp = (
-                    encoder_logs.total_rate_latent_bpp
-                    - encoder_logs_best.total_rate_latent_bpp
-                )
-                flag_new_record = delta_bpp < 0.001 or delta_psnr > 0.001
-
-            if flag_new_record:
                 # Save best model
                 best_model = frame_encoder.get_param()
-                best_optimizer_state = copy.deepcopy(optimizer.state_dict())
+                # best_optimizer_state = copy.deepcopy(optimizer.state_dict())
 
                 # ========================= reporting ========================= #
-                this_phase_psnr_gain = (
-                    encoder_logs.psnr_db - initial_encoder_logs.psnr_db
+                this_phase_dist_gain = (
+                    encoder_logs.dist_db - initial_encoder_logs.dist_db
                 )
                 this_phase_bpp_gain = (
                     encoder_logs.total_rate_latent_bpp
@@ -340,7 +335,7 @@ def train(
 
                 log_new_record = ""
                 log_new_record += f"{this_phase_bpp_gain:+6.3f} bpp "
-                log_new_record += f"{this_phase_psnr_gain:+6.3f} db"
+                log_new_record += f"{this_phase_dist_gain:+6.3f} db"
                 # ========================= reporting ========================= #
 
                 # Update new record
@@ -356,7 +351,7 @@ def train(
                 "patience": (patience - cnt + cnt_record) // frequency_validation,
                 "q_type": f"{quantizer_type:10s}",
                 "sr_temp": f"{cur_softround_temperature:.3f}",
-                "n_type": f"{quantizer_noise_type:12s}",
+                "n_type": f"{quantizer_noise_type[:8]:10s}",
                 "noise": f"{cur_noise_parameter:.2f}",
                 "record": log_new_record,
             }

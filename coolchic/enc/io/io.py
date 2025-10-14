@@ -1,8 +1,10 @@
 from enc.utils.codingstructure import FrameData
 from enc.io.types import FRAME_DATA_TYPE, POSSIBLE_BITDEPTH
-from enc.io.format.ppm import read_ppm
-from enc.io.format.yuv import read_yuv
-from enc.io.format.png import read_png
+from enc.io.format.ppm import read_ppm, write_ppm
+from enc.io.format.yuv import read_yuv, write_yuv
+from enc.io.format.png import read_png, write_png
+
+import os
 
 
 def load_frame_data_from_file(file_path: str, idx_display_order: int) -> FrameData:
@@ -37,3 +39,59 @@ def load_frame_data_from_file(file_path: str, idx_display_order: int) -> FrameDa
         data, bitdepth = read_ppm(file_path)
 
     return FrameData(bitdepth, frame_data_type, data)
+
+def save_frame_data_to_file(frame_data: FrameData, file_path: str) -> None:
+    """Save the data of a FrameData into a PNG, PPM or YUV file.
+    file_path extension must match the FrameData type e.g. PNG or PPM for
+    RGB and YUV for YUV420 or YUV444
+
+    Args:
+        frame_data (FrameData): The data to save
+        file_path (str): Absolute path of the file from which the frame is stored.
+    """
+
+    POSSIBLE_EXT = [".yuv", ".png", ".ppm"]
+
+    cur_extension = os.path.splitext(file_path)[1]
+    assert cur_extension in POSSIBLE_EXT, (
+        "The function save_frame_data_to_file() expects a file ending with "
+        f"{POSSIBLE_EXT}. Found {file_path}"
+    )
+
+    if cur_extension == ".png":
+
+        assert frame_data.frame_data_type == "rgb", (
+            "The function save_frame_data_to_file() can only save a RGB data "
+            f"into a PNG file. Found frame_data_type = {frame_data.frame_data_type}."
+        )
+
+        assert frame_data.bitdepth == 8, (
+            "The function save_frame_data_to_file() can only write 8-bit data "
+            f"into a PNG file. Found bitdepth = {frame_data.bitdepth}."
+        )
+
+        write_png(frame_data.data, file_path)
+
+    elif cur_extension == ".ppm":
+
+        assert frame_data.frame_data_type == "rgb", (
+            "The function save_frame_data_to_file() can only save a RGB data "
+            f"into a PPM file. Found frame_data_type = {frame_data.frame_data_type}."
+        )
+
+        write_ppm(frame_data.data, frame_data.bitdepth, file_path, norm=True)
+
+    elif cur_extension == ".yuv":
+
+        assert frame_data.frame_data_type in ["yuv420", "yuv444"], (
+            "The function save_frame_data_to_file() can only save a YUV data "
+            f"into a YUV file. Found frame_data_type = {frame_data.frame_data_type}."
+        )
+
+        write_yuv(
+            frame_data.data,
+            frame_data.bitdepth,
+            frame_data.frame_data_type,
+            file_path,
+            norm=True,
+        )

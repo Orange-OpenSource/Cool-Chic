@@ -21,7 +21,7 @@ from enc.training.loss import (
     LossFunctionOutput,
     _compute_mse,
     loss_function,
-)
+    )
 from enc.utils.codingstructure import Frame
 from enc.training.manager import FrameEncoderManager
 from torch import Tensor
@@ -40,19 +40,13 @@ class FrameEncoderLogs(LossFunctionOutput):
     This is what is going to be saved to a log file.
     """
 
-    loss_function_output: LossFunctionOutput  # All outputs from the loss function, will be copied is __post_init__
-    frame_encoder_output: FrameEncoderOutput  # Output of frame encoder forward
-    original_frame: Frame  # Non coded frame
+    loss_function_output: LossFunctionOutput    # All outputs from the loss function, will be copied is __post_init__
+    frame_encoder_output: FrameEncoderOutput    # Output of frame encoder forward
+    original_frame: Frame                       # Non coded frame
 
-    detailed_rate_nn: Dict[
-        str, DescriptorCoolChic
-    ]  # Rate for each NN weights & bias   [bit]
-    quantization_param_nn: Dict[
-        str, DescriptorCoolChic
-    ]  # Quantization step for each NN weights & bias [ / ]
-    expgol_count_nn: Dict[
-        str, DescriptorCoolChic
-    ]  # Exp-Golomb count parameter for each NN weights & bias [ / ]
+    detailed_rate_nn: Dict[str, DescriptorCoolChic]         # Rate for each NN weights & bias   [bit]
+    quantization_param_nn: Dict[str, DescriptorCoolChic]    # Quantization step for each NN weights & bias [ / ]
+    expgol_count_nn: Dict[str, DescriptorCoolChic]          # Exp-Golomb count parameter for each NN weights & bias [ / ]
 
     lmbda: float  # Rate constraint in D + lambda * R [ / ]
     encoding_time_second: float  # Duration of the encoding          [sec]
@@ -77,48 +71,30 @@ class FrameEncoderLogs(LossFunctionOutput):
     rate_latent_motion_bpp: float = field(init=False)
 
     # ----- Inter coding module outputs
-    alpha: Optional[Tensor] = field(init=False, default=None)  # Inter / intra switch
-    beta: Optional[Tensor] = field(
-        init=False, default=None
-    )  # Bi-directional prediction weighting
-    residue: Optional[Tensor] = field(init=False, default=None)  # Residue
-    flow_1: Optional[Tensor] = field(
-        init=False, default=None
-    )  # Optical flow for the first reference
-    flow_2: Optional[Tensor] = field(
-        init=False, default=None
-    )  # Optical flow for the second reference
+    alpha: Optional[Tensor] = field(init=False, default=None)   # Inter / intra switch
+    beta: Optional[Tensor] = field(init=False, default=None)    # Bi-directional prediction weighting
+    residue: Optional[Tensor] = field(init=False, default=None) # Residue
+    flow_1: Optional[Tensor] = field(init=False, default=None)  # Optical flow for the first reference
+    flow_2: Optional[Tensor] = field(init=False, default=None)  # Optical flow for the second reference
     pred: Optional[Tensor] = field(init=False, default=None)  # Temporal prediction
-    masked_pred: Optional[Tensor] = field(
-        init=False, default=None
-    )  # Temporal prediction * alpha
+    masked_pred: Optional[Tensor] = field(init=False, default=None)  # Temporal prediction * alpha
 
     # ----- Compute prediction performance
     alpha_mean: Optional[float] = field(init=False, default=None)  # Mean value of alpha
     beta_mean: Optional[float] = field(init=False, default=None)  # Mean value of beta
-    pred_psnr_db: Optional[float] = field(
-        init=False, default=None
-    )  # PSNR of the prediction
-    dummy_pred_psnr_db: Optional[float] = field(
-        init=False, default=None
-    )  # PSNR of a prediction if we had no motion
+    pred_psnr_db: Optional[float] = field(init=False, default=None)  # PSNR of the prediction
+    dummy_pred_psnr_db: Optional[float] = field(init=False, default=None)  # PSNR of a prediction if we had no motion
 
     # ----- Miscellaneous quantities recovered from self.frame
     img_size: Tuple[int, int] = field(init=False)  # [Height, Width]
     n_pixels: int = field(init=False)  # Height x Width
-    display_order: int = field(
-        init=False
-    )  # Index of the current frame in display order
+    display_order: int = field(init=False)  # Index of the current frame in display order
     coding_order: int = field(init=False)  # Index of the current frame in coding order
-    frame_offset: int = field(
-        init=False, default=0
-    )  # Skip the first <frame_offset> frames of the video
+    frame_offset: int = field(init=False, default=0)  # Skip the first <frame_offset> frames of the video
     seq_name: str = field(init=False)  # Name of the sequence to which this frame belong
 
     # ----- Neural network rate in bit per pixels
-    detailed_rate_nn_bpp: DescriptorCoolChic = field(
-        init=False
-    )  # Rate for each NN weights & bias   [bpp]
+    detailed_rate_nn_bpp: DescriptorCoolChic = field(init=False)  # Rate for each NN weights & bias   [bpp]
 
     def __post_init__(self):
         # ----- Copy all the attributes of loss_function_output
@@ -288,6 +264,11 @@ class FrameEncoderLogs(LossFunctionOutput):
                     col_name += f'{k.name + f"_{str(i).zfill(2)}":<{COL_WIDTH}}{INTER_COLUMN_SPACE}'
                     values += f"{self._format_value(val[i], attribute_name=k.name):<{COL_WIDTH}}{INTER_COLUMN_SPACE}"
 
+            elif k.name == "detailed_dist_db":
+                for dist_name, dist_val in self.detailed_dist_db.items():
+                    col_name += f'{dist_name:<{COL_WIDTH}}{INTER_COLUMN_SPACE}'
+                    values += f"{self._format_value(dist_val, attribute_name=k.name):<{COL_WIDTH}}{INTER_COLUMN_SPACE}"
+
             # This concerns the different neural networks composing the
             # different cool-chic encoders.
             elif k.name in [
@@ -360,7 +341,8 @@ class FrameEncoderLogs(LossFunctionOutput):
         ATTRIBUTES = {
             # ----- This is printed in every modes
             "loss": ["short", "all"],
-            "psnr_db": ["short", "all"],
+            "dist_db": ["short", "all"],
+            "detailed_dist_db": ["short", "all"],
             "total_rate_bpp": ["short", "all"],
             "total_rate_latent_bpp": ["short", "all"],
             "total_rate_nn_bpp": ["short", "all"],
@@ -378,8 +360,6 @@ class FrameEncoderLogs(LossFunctionOutput):
             "seq_name": ["all"],
             "feature_rate_bpp": ["all"],
             "detailed_rate_nn_bpp": ["all"],
-            "ms_ssim_db": ["all"],
-            "lpips_db": ["all"],
             "n_pixels": ["all"],
             "img_size": ["all"],
             "mac_decoded_pixel": ["all"],
@@ -453,6 +433,7 @@ class FrameEncoderLogs(LossFunctionOutput):
             "dummy_pred_psnr_db": "dummy_pred",
             "rate_latent_residue_bpp": "residue_bpp",
             "rate_latent_motion_bpp": "motion_bpp",
+            "dist_db": "dist_db",
         }
 
         if col_name not in LONG_TO_SHORT:
@@ -502,9 +483,10 @@ def test(
     )
 
     loss_fn_output = loss_function(
-        frame_encoder_out.decoded_image,
-        frame_encoder_out.rate,
-        frame.data.data,
+        decoded_image=frame_encoder_out.decoded_image,
+        rate_latent_bit=frame_encoder_out.rate,
+        target_image=frame.data.data,
+        dist_weight=frame_encoder_manager.dist_weight,
         lmbda=frame_encoder_manager.lmbda,
         total_rate_nn_bit=total_rate_nn_bit,
         compute_logs=True,

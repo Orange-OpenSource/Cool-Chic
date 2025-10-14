@@ -144,6 +144,8 @@ class FrameEncoder(nn.Module):
         noise_parameter: Optional[Tensor] = torch.tensor(1.0),
         AC_MAX_VAL: int = -1,
         flag_additional_outputs: bool = False,
+        no_common_randomness: bool = False,
+        only_common_randomness: bool = False,
     ) -> FrameEncoderOutput:
         """Perform the entire forward pass of a video frame / image.
 
@@ -203,6 +205,8 @@ class FrameEncoder(nn.Module):
             "noise_parameter": noise_parameter,
             "AC_MAX_VAL": AC_MAX_VAL,
             "flag_additional_outputs": flag_additional_outputs,
+            "no_common_randomness": no_common_randomness,
+            "only_common_randomness": only_common_randomness,
         }
 
         cc_enc_out = {
@@ -641,6 +645,9 @@ def load_frame_encoder(
     coolchic_enc_param = {}
     for cc_name in list_cc_name:
         coolchic_enc_param[cc_name] = loaded_data[f"{cc_name}_param"]
+        # Add backward compatibility
+        if not hasattr(coolchic_enc_param[cc_name], "n_ft_per_res_cr"):
+            coolchic_enc_param[cc_name].n_ft_per_res_cr = []
 
     if "warp_parameter" in loaded_data:
         warp_parameter = loaded_data["warp_parameter"]
@@ -663,6 +670,7 @@ def load_frame_encoder(
     # Load the parameters
     for cc_name in list_cc_name:
         frame_encoder.coolchic_enc[cc_name].set_param(loaded_data[cc_name])
+
         frame_encoder.coolchic_enc[cc_name].nn_q_step = loaded_data[
             f"{cc_name}_nn_q_step"
         ]

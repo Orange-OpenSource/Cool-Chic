@@ -75,8 +75,8 @@ by Cool-chic, based on the the coding index and the coding structure parameters.
         --input=path_to_my_example                      \
         --output=bitstream.bin                          \
         --workdir=./my_temporary_workdir/               \
-        --enc_cfg=cfg/enc/inter/tunable .cfg            \
-        --dec_cfg_residue=cfg/dec/intra_residue/mop.cfg \
+        --enc_cfg=cfg/enc/inter/tunable.cfg             \
+        --dec_cfg_residue=cfg/dec/residue/mop.cfg       \
         --dec_cfg_motion=cfg/dec/motion/lop.cfg         \
         --n_frames=8                                    \
         --intra_pos=0,-1                                \

@@ -29,7 +29,10 @@
 #include "cc-bitstream.h"
 
 #include "cc-frame-decoder.h"
-#include "warp.h"
+#include "warp_cpu.h"
+#ifdef CCDECAPI_AVX2
+#include "warp_avx2.h"
+#endif
 
 float time_bac_seconds = 0.0;
 float time_arm_seconds = 0.0;
@@ -51,11 +54,11 @@ inline unsigned short byteswap(unsigned short x)
 }
 
 // like ends_with in c++20 and onwards.
-inline bool ends_with(const std::string& a, const std::string& b)
+inline bool ends_with(std::string const &str, std::string const &suffix)
 {
-    if (b.size() > a.size())
+    if (suffix.size() > str.size())
         return false;
-    return std::equal(a.begin() + a.size() - b.size(), a.end(), b.begin());
+    return std::equal(str.begin() + str.size() - suffix.size(), str.end(), suffix.begin());
 }
 
 // onoly use nc == 3
@@ -486,21 +489,51 @@ template <typename P>
 void process_inter(struct frame_memory<P> &pred, struct frame_memory<P> const &residual, frame_memory<P> /*const*/ &motion, struct frame_memory<P> const *ref0_444, struct frame_memory<P> const *ref1_444,
                    int global_flow[2][2],
                    struct frame_memory<P> &warp0, struct frame_memory <P> &warp1,
-                   int ntaps, int motion_blksz_shift, int motion_q)
+                   int ntaps, int motion_blksz_shift, int motion_q
+#if defined(CCDECAPI_AVX2_OPTIONAL)
+                    , bool use_avx2
+#endif
+                    )
 {
-    // work out the 'motion block size'.
+#if defined(CCDECAPI_AVX2) && !defined(CCDECAPI_AVX2_OPTIONAL)
+    bool use_avx2 = true;
+#endif
+
+#if defined(CCDECAPI_AVX2)
+    if (use_avx2)
+    {
+        if (ref1_444 == NULL)
+        {
+            // P
+            // multiplies by alpha, adds residue.
+            warp_ntaps_avx2<P, float>(pred, residual, motion, *ref0_444, global_flow[0], 0, 3, true, ntaps, motion_blksz_shift, motion_q);
+        }
+        else
+        {
+            // B
+            // want to multiply by beta, do not add residue.
+            warp_ntaps_avx2<P, float>(warp0, residual, motion, *ref0_444, global_flow[0], 0, 4, false, ntaps, motion_blksz_shift, motion_q);
+            warp_ntaps_avx2<P, float>(warp1, residual, motion, *ref1_444, global_flow[1], 2, -4, false, ntaps, motion_blksz_shift, motion_q);
+
+            // want to add warp0, warp1, multiply by alpha, and add residue.
+            bpred(pred, residual, warp0, warp1, 3);
+        }
+    }
+    else
+#endif
+    // cpu
     if (ref1_444 == NULL)
     {
         // P
         // multiplies by alpha, adds residue.
-        warp_ntaps<P, float>(pred, residual, motion, *ref0_444, global_flow[0], 0, 3, true, ntaps, motion_blksz_shift, motion_q);
+        warp_ntaps_cpu<P, float>(pred, residual, motion, *ref0_444, global_flow[0], 0, 3, true, ntaps, motion_blksz_shift, motion_q);
     }
     else
     {
         // B
         // want to multiply by beta, do not add residue.
-        warp_ntaps<P, float>(warp0, residual, motion, *ref0_444, global_flow[0], 0, 4, false, ntaps, motion_blksz_shift, motion_q);
-        warp_ntaps<P, float>(warp1, residual, motion, *ref1_444, global_flow[1], 2, -4, false, ntaps, motion_blksz_shift, motion_q);
+        warp_ntaps_cpu<P, float>(warp0, residual, motion, *ref0_444, global_flow[0], 0, 4, false, ntaps, motion_blksz_shift, motion_q);
+        warp_ntaps_cpu<P, float>(warp1, residual, motion, *ref1_444, global_flow[1], 2, -4, false, ntaps, motion_blksz_shift, motion_q);
 
         // want to add warp0, warp1, multiply by alpha, and add residue.
         bpred(pred, residual, warp0, warp1, 3);
@@ -602,7 +635,8 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename, i
         cc_bs_frame *frame_symbols = bs.decode_frame(prev_coded_I_frame_symbols, prev_coded_frame_symbols, verbosity);
         if (frame_symbols == NULL)
         {
-            printf("EOF at frame %d\n", frame_coding_idx);
+            if (verbosity > 0)
+                printf("EOF at frame %d\n", frame_coding_idx);
             break;
         }
 
@@ -668,7 +702,12 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename, i
                     return 1;
                 }
             }
-            process_inter(frame_444, raw_cc_outputs[0], raw_cc_outputs[1], ref_prev, ref_next, frame_header.global_flow, warp0, warp1, frame_header.warp_filter_length, frame_symbols->m_coolchics[1].n_leading_zero_feature_layers, motion_q_shift);
+            process_inter(frame_444, raw_cc_outputs[0], raw_cc_outputs[1], ref_prev, ref_next,
+                          frame_header.global_flow, warp0, warp1, frame_header.warp_filter_length, frame_symbols->m_coolchics[1].n_leading_zero_feature_layers, motion_q_shift
+#if defined(CCDECAPI_AVX2_OPTIONAL)
+                          , use_avx2
+#endif
+                          );
             frame_444p = &frame_444;
         }
 
@@ -676,6 +715,10 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename, i
         struct frame_memory<SYN_INT_FLOAT> *result_444 = get_444_ref_frame(frame_444_buffer);
         // 0 = RGB
         if (frame_decoder.m_frame_data_type != 0) {
+            if (out_filename != "" && !ends_with(out_filename, ".yuv") && frame_header.display_index == 0)
+            {
+                printf("warning: output file name %s does not end with .yuv\n", out_filename.c_str());
+            }
             if (frame_decoder.m_output_chroma_format == 420)
             {
                 if (frame_decoder.m_output_bitdepth == 8)
@@ -726,7 +769,11 @@ int cc_decode_avx2(std::string &bitstream_filename, std::string &out_filename, i
         {
             // rgb
             if (out_filename != "")
+            {
+                if (!ends_with(out_filename, ".ppm"))
+                    printf("warning: %s output file name does not end with .ppm\n", out_filename.c_str());
                 ppm_out(3, frame_decoder.m_output_bitdepth, *frame_444p, fout);
+            }
         }
         ref_frames_444[frame_header.display_index] = result_444;
 
@@ -853,7 +900,7 @@ int main(int argc, const char* argv[])
 {
 
     std::string bitstream_filename;
-    std::string out = "out";
+    std::string out = "out.ppm";
     int output_bitdepth = 0;
     int output_chroma_format = 0;
     bool explicit_instruction_set = false;
@@ -908,7 +955,7 @@ int main(int argc, const char* argv[])
         use_auto = true;
     if (use_auto)
     {
-        if (__builtin_cpu_supports("avx2"))
+        if (__builtin_cpu_supports("avx2") && __builtin_cpu_supports("fma"))
         {
             use_avx2 = true;
         }

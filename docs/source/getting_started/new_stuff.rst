@@ -1,20 +1,23 @@
-What's new in Cool-chic 4.1?
+What's new in Cool-chic 4.2?
 ============================
 
-Cool-chic 4.1 focuses on video coding, improving particularly the temporal
-prediction through better and lighter sub-pixel motion compensation. This
-release is linked to the following paper: `Efficient Sub-pixel Motion
-Compensation in Learned Video Codecs, Ladune et al
-<https://arxiv.org/pdf/2507.21926>`_.
+Cool-chic 4.2 focuses on perceptually-oriented image coding. This release draws
+heavily on the following paper: `Good, Cheap, and Fast: Overfitted Image
+Compression with Wasserstein Distortion, Ballé et al
+<https://arxiv.org/abs/2412.00505>`_.
 
-* Replace 2-tap bilinear filtering with **sinc-based 8-tap filters**
+* **Wasserstein Distance** as a distortion metric: ``--tune=wasserstein``
 
-* **Downsampled motion fields** for lighter decoding
+* Decoder-side **common randomness** for more high-frequency in the decoded image
 
-* Improved video compression performance: **-23.6% rate** versus Cool-chic 4.0
+* Improved image coding performance: around **-50% rate** versus Cool-chic 4.1 for the same visual quality
 
-* Decrease motion-related complexity by 45%, **from 391 to 214 MAC / decoded pixel**
+* Low decoding complexity **1728 MAC / pixel**
 
+
+A pair of bitstreams in ``samples/bitstreams/`` illustrates the benefits of the
+``--tune=wasserstein`` options. See the :ref:`decoding example
+<decoding_example>` to decode them and see the pictures.
 
 Check-out the `release history
 <https://github.com/Orange-OpenSource/Cool-Chic/releases>`_ to see previous

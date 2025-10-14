@@ -30,6 +30,7 @@ int const ARM_MAX_N_FEATURES = 32;
 #define ARM_PRECISION 8
 #define ARM_SCALE (1<<ARM_PRECISION)
 
+#define NOISE_UPS_PAD 2 // we use bicubic for noise.
 #define UPS_PRECISION 12
 
 #define SYN_WEIGHT_PRECISION 12 // biases are 2x this.
