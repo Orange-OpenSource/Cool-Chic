@@ -49,7 +49,7 @@ a low-complexity neural image codec based on overfitting.
 <br>
 <!-- <div align="center"> -->
 
-# 🎲 Cool-chic 4.2.0: Common Randomness & Wasserstein Distance! 🎲
+### 🎲 Cool-chic 4.2.0: Common Randomness & Wasserstein Distance! 🎲
 
 <!-- </div> -->
 
