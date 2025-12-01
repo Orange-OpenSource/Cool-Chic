@@ -253,7 +253,7 @@ def get_manager_from_args(args: argparse.Namespace) -> Dict[str, Any]:
 
         # Value determined empirically, see
         # "Perceptually optimised Cool-chic for CLIC 2025", Philippe et al.
-        dist_weight = {"mse": 0.8, "wasserstein": 0.2}
+        dist_weight = {"mse": 0.2, "wasserstein": 0.8}
 
 
     else:
