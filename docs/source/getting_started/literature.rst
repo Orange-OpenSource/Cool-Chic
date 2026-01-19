@@ -20,7 +20,7 @@ This repository is based on several papers successively enhancing Cool-chic. Che
      - Key contributions
    * - 2025 Sep
      - ``4.2``
-     - `Philippe et al <https://arxiv.org/abs/2401.02156>`_, `Ballé et al, CVPR <https://arxiv.org/abs/2412.00505>`_
+     - `Philippe et al <https://openreview.net/pdf?id=7S19tNWnRO>`_, `Ballé et al, CVPR <https://arxiv.org/abs/2412.00505>`_
      - Wasserstein Distance, Common Randomness
    * - 2025 July
      - ``4.1``
@@ -48,7 +48,7 @@ This repository is based on several papers successively enhancing Cool-chic. Che
      - Quantization approximation during training
    * - 2023 July
      - ``2.0``
-     - `Leguay et al, MMSP <https://arxiv.org/abs/2312.02753>`_
+     - `Leguay et al, MMSP <https://arxiv.org/abs/2307.12706>`_
      - Learnable upsampling / CNN synthesis
    * - 2022 Dec
      - ``1.0``
@@ -68,6 +68,12 @@ have not (yet?) been integrated  in this repository.
    * - Date
      - Paper link
      - Key contributions
+   * - 2025 Dec
+     - `Li et al, NeurIPS <https://openreview.net/pdf?id=IFjjzfkC65>`_
+     - Multiple region-adaptive synthesis transforms
+   * - 2025 Dec
+     - `Benjak et al, VCIP <https://www.tnt.uni-hannover.de/papers/data/1803/Progressive%20COOL-CHIC%20Efficient%20Decoding%20for%20Dual-Resolution%20Images.pdf>`_
+     - Scalable Cool-chic
    * - 2025 July
      - `Wu et al, ICML <https://arxiv.org/abs/2507.01204>`_
      - Random synthesis parameters selecting through masking
@@ -75,7 +81,7 @@ have not (yet?) been integrated  in this repository.
      - `Zhang et al, CVPR <https://openaccess.thecvf.com/content/CVPR2025/papers/Zhang_Fitted_Neural_Lossless_Image_Compression_CVPR_2025_paper.pdf>`_
      - Lossless image coding
    * - 2025 Feb
-     - `Ameen et al, <https://arxiv.org/abs/2507.21926>`_
+     - `Ameen et al, <https://arxiv.org/pdf/2502.14937>`_
      - Use Cool-chic to code a diffusion model feature space
    * - 2024 Oct
      - `Catania et al, ICIP <https://ieeexplore.ieee.org/abstract/document/10647328>`_
@@ -86,9 +92,6 @@ have not (yet?) been integrated  in this repository.
    * - 2024 Jan
      - `Ladune et al <https://arxiv.org/abs/2401.02156>`_
      - Fact sheet of the Cool-chic candidate to the `CLIC24 challenge <https://compression.cc/>`_
-   * - 2023 Dec
-     - `Li et al, VCIP <https://ieeexplore.ieee.org/abstract/document/10402791>`_
-     -  Faster auto-regressive module
    * - 2023 Dec
      - `Li et al, VCIP <https://ieeexplore.ieee.org/abstract/document/10402791>`_
      -  Remove the auto-regressive probability module

@@ -114,6 +114,23 @@ python coolchic/decode.py -i samples/bitstreams/a365_wd.cool -o a365_wd.ppm
 ```
 
 <br>
+
+# Citation
+
+If you use this project, please cite the original Cool-chic paper in your work.
+
+```bibtex
+@InProceedings{Ladune_2023_ICCV,
+    author    = {Ladune, Th\'eo and Philippe, Pierrick and Henry, F\'elix and Clare, Gordon and Leguay, Thomas},
+    title     = {COOL-CHIC: Coordinate-based Low Complexity Hierarchical Image Codec},
+    booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
+    month     = {October},
+    year      = {2023},
+    pages     = {13515-13522}
+}
+```
+
+<br>
 <br>
 
 <picture>
