@@ -156,7 +156,7 @@ if __name__ == "__main__":
         if args.debug:
             config = (
                 f"--debug "
-                f"--dec_cfg_residue={PATH_COOL_CHIC_CFG}dec/{'intra' if is_intra else 'residue'}/vlop.cfg "
+                f"--dec_cfg_residue={PATH_COOL_CHIC_CFG}dec/{'intra' if is_intra else 'residue'}/lop.cfg "
                 f"--dec_cfg_motion={PATH_COOL_CHIC_CFG}dec/motion/lop.cfg "
             )
         else:

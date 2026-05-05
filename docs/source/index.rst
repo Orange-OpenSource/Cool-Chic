@@ -40,6 +40,7 @@
 
 .. image:: assets/logo_orange.png
    :height: 100
+   :width: 100
    :align: center
    :alt: Logo Orange
 

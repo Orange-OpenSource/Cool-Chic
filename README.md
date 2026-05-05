@@ -151,16 +151,17 @@ python cc_decode.py -i samples/bitstreams/example.cool -o example.png
 
 # Citation
 
-If you use this project, please cite the original Cool-chic paper in your work.
+If you use this project, please cite the Cool-chic 5.0 paper in your work.
 
 ```bibtex
-@InProceedings{Ladune_2023_ICCV,
-    author    = {Ladune, Th\'eo and Philippe, Pierrick and Henry, F\'elix and Clare, Gordon and Leguay, Thomas},
-    title     = {COOL-CHIC: Coordinate-based Low Complexity Hierarchical Image Codec},
-    booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
-    month     = {October},
-    year      = {2023},
-    pages     = {13515-13522}
+@article{ladune2026-coolchic5-0-fasterencoding,
+      title={Cool-chic 5.0: Faster Encoding and Inter-Feature Entropy Modeling for Overfitted Image Compression},
+      author={Théo Ladune and Pierrick Philippe and Pierre Jaffuer and Théophile Blard and Sylvain Kervadec and Félix Henry and Gordon Clare},
+      year={2026},
+      eprint={2605.02726},
+      archivePrefix={arXiv},
+      primaryClass={eess.IV},
+      url={https://arxiv.org/abs/2605.02726},
 }
 ```
 <br>
