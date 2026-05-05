@@ -1,3 +1,12 @@
+# Software Name: Cool-Chic
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 Orange
+# SPDX-License-Identifier: BSD 3-Clause "New"
+#
+# This software is distributed under the BSD-3-Clause license.
+#
+# Authors: see CONTRIBUTORS.md
+
+
 import argparse
 import csv
 import io
@@ -6,9 +15,9 @@ import subprocess
 
 from typing import Literal
 
-PATH_COOL_CHIC_ENCODE = f"{os.path.dirname(__file__)}/../coolchic/encode.py"
+PATH_COOL_CHIC_ENCODE = f"{os.path.dirname(__file__)}/../cc_encode.py"
 PATH_COOL_CHIC_CFG = f"{os.path.dirname(__file__)}/../cfg/"
-PATH_GET_CODING_STRUCT = f"{os.path.dirname(__file__)}/../coolchic/getcodingstruct.py"
+PATH_GET_CODING_STRUCT = f"{os.path.dirname(__file__)}/../_getcodingstruct.py"
 
 
 def get_frame_config(frame_type: Literal["I", "P", "B"], depth: int, lmbda: float) -> str:
@@ -20,13 +29,13 @@ def get_frame_config(frame_type: Literal["I", "P", "B"], depth: int, lmbda: floa
 
     if frame_type == "I":
         config = (
-            f"--enc_cfg={PATH_COOL_CHIC_CFG}enc/intra/fast_10k.cfg "
             f"--dec_cfg_residue={PATH_COOL_CHIC_CFG}dec/intra/hop.cfg "
+            f"--start_lr=1e-2 "
+            f"--n_itr=10000 "
             f"--lmbda={lmbda} "
         )
     elif frame_type == "P":
         config = (
-            f"--enc_cfg={PATH_COOL_CHIC_CFG}enc/inter/tunable.cfg "
             f"--dec_cfg_residue={PATH_COOL_CHIC_CFG}dec/residue/mop.cfg "
             f"--dec_cfg_motion={PATH_COOL_CHIC_CFG}dec/motion/mop.cfg "
             f"--start_lr=5e-3 "
@@ -41,7 +50,6 @@ def get_frame_config(frame_type: Literal["I", "P", "B"], depth: int, lmbda: floa
         n_itr_motion = max(5000 - 1000 * depth, 1000)
 
         config = (
-            f"--enc_cfg={PATH_COOL_CHIC_CFG}enc/inter/tunable.cfg "
             f"--n_itr_pretrain_motion={n_itr_motion} "
             f"--n_itr={n_itr} "
             # Lambda adaptive given the depth for B-frame
@@ -78,9 +86,7 @@ if __name__ == "__main__":
         type=str,
         default="",
     )
-    parser.add_argument(
-        "--workdir", help="Path of the working_directory", type=str, default="."
-    )
+    parser.add_argument("--workdir", help="Path of the working_directory", type=str, default=".")
     # ----- I/O args
 
     # Video coding structure -----
@@ -113,15 +119,10 @@ if __name__ == "__main__":
 
     parser.add_argument("--lmbda", help="Rate constraint", type=float, default=1e-3)
     parser.add_argument(
-        "--extra_args",
-        help='Example --extra_args="--tune=wasserstein"',
-        type=str,
-        default=""
+        "--extra_args", help='Example --extra_args="--tune=wasserstein"', type=str, default=""
     )
 
-    parser.add_argument(
-        "--debug", action="store_true", help="Short encodings only for debugging."
-    )
+    parser.add_argument("--debug", action="store_true", help="Short encodings only for debugging.")
     args = parser.parse_args()
 
     # Gather all coding structure related arguments in a single string
@@ -132,9 +133,6 @@ if __name__ == "__main__":
     raw_coding_struct = subprocess.getoutput(
         f"python3 {PATH_GET_CODING_STRUCT} {coding_struct_args} --raw_coding_struct"
     )
-    # coding_config = pd.read_csv(
-    #     io.StringIO(raw_coding_struct), sep="\t", index_col=False
-    # )
 
     list_frame_by_coding_idx = []
     with io.StringIO(raw_coding_struct) as file:
@@ -146,8 +144,6 @@ if __name__ == "__main__":
                 list_frame_by_coding_idx.append({k: v for k, v in zip(header, row)})
 
     # Encode each frame successively
-    # All bitstreams in coding order
-    all_bitstreams = []
     for coding_idx in range(args.n_frames):
         cur_bitstream = (
             os.path.dirname(args.output)
@@ -155,15 +151,12 @@ if __name__ == "__main__":
             + os.path.basename(args.output)
         )
 
+        is_intra = list_frame_by_coding_idx[coding_idx].get("type") == "I"
 
         if args.debug:
-            if list_frame_by_coding_idx[coding_idx].get("type") == "I":
-                intra_or_residue = "intra"
-            else:
-                intra_or_residue = "residue"
             config = (
-                f"--enc_cfg={PATH_COOL_CHIC_CFG}enc/debug.cfg "
-                f"--dec_cfg_residue={PATH_COOL_CHIC_CFG}dec/{intra_or_residue}/vlop.cfg "
+                f"--debug "
+                f"--dec_cfg_residue={PATH_COOL_CHIC_CFG}dec/{'intra' if is_intra else 'residue'}/vlop.cfg "
                 f"--dec_cfg_motion={PATH_COOL_CHIC_CFG}dec/motion/lop.cfg "
             )
         else:
@@ -182,19 +175,9 @@ if __name__ == "__main__":
             f"--workdir={args.workdir} "
             f"{coding_struct_args} "  # Defined above
             # Frame-wise arguments
-            f"--output={cur_bitstream} "
+            f"--output={args.output} "
             f"--coding_idx={coding_idx} "
             # Training duration, decoder architectures
             f"{config} "
         )
         subprocess.call(cmd, shell=True)
-
-        all_bitstreams.append(cur_bitstream)
-
-    # Concatenate all bitstreams together, in coding order
-    cat_cmd = "cat " + " ".join(all_bitstreams) + f" > {args.output}"
-    subprocess.call(cat_cmd, shell=True)
-
-    # Remove all the intermediate bitstreams
-    rm_cmd = "rm " + " ".join(all_bitstreams)
-    subprocess.call(rm_cmd, shell=True)

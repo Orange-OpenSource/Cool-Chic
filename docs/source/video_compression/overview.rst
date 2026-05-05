@@ -4,7 +4,7 @@ Video compression with Cool-chic
 
 
 Cool-chic encodes each video frames successively through the
-``coolchic/encode.py`` script. Each frame has either 0 reference (intra / plain
+``cc_encode.py`` script. Each frame has either 0 reference (intra / plain
 image) frame, 1 reference (P frame) or 2 references (B-frames).
 
 
@@ -21,7 +21,7 @@ random access, low-delay P). It is achieved by specifying:
   * ``--p_pos``: Where to place the P frames
 
 All the other frames are hierarchical B-frames with equidistant (past and
-future) references. Below are a few examples. See :doc:`coding structure doc <./../../code_documentation/encoder/utils/codingstructure>` for more details.
+future) references. Below are a few examples.
 
 .. code-block::
 
@@ -61,21 +61,20 @@ Encoding a video frame
 """"""""""""""""""""""
 
 To encode ``N`` frames of a video, it is required to successively call the
-``coolchic/encode.py`` script ``N`` times. Always with the same coding structure
+``cc_encode.py`` script ``N`` times. Always with the same coding structure
 parameters while only varying the ``--coding_idx`` parameters to indicate which
-frame is currently being encoded. All the references management logic is handle
-by Cool-chic, based on the the coding index and the coding structure parameters.
+frame is currently being encoded. All the references management logic is handled
+by Cool-chic, based on the coding index and the coding structure parameters.
 
 
 .. code:: bash
 
     # In the hierarchical Random Access Configuration with open gop listed above
     # encode the 3rd (--coding_idx=2) frames in **coding** order: the B4 frame
-    (venv) ~/Cool-Chic$ python coolchic/encode.py       \
+    (venv) ~/Cool-Chic$ python cc_encode.py       \
         --input=path_to_my_example                      \
-        --output=bitstream.bin                          \
+        --output=bitstream.cool                         \
         --workdir=./my_temporary_workdir/               \
-        --enc_cfg=cfg/enc/inter/tunable.cfg             \
         --dec_cfg_residue=cfg/dec/residue/mop.cfg       \
         --dec_cfg_motion=cfg/dec/motion/lop.cfg         \
         --n_frames=8                                    \
@@ -86,9 +85,9 @@ by Cool-chic, based on the the coding index and the coding structure parameters.
 
 .. note::
 
-  Check the :ref:`video coding example script. <video_coding_example>`
-  ``samples/encode.py`` to see how successive frames are encoded into frame-wise
-  bitstream, which is subsequently concatenated into a single bitstream for the video.
+  Frames of a video are encoded successively, using the same
+  ``--output=bitstream.cool`` argument. Individual frame bitstreams are appended
+  successively to the same file.
 
 File naming
 """""""""""

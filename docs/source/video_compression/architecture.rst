@@ -47,15 +47,15 @@ Motion fields downsampling
 """"""""""""""""""""""""""
 
 To obtain uniform motion on a block of :math:`B \times B` pixels, we rely on
-``--n_ft_per_res_motion``. As explained :ref:`here <no_high_res_latent>`, having
+``--latent_resolution_motion``. As explained :ref:`here <no_high_res_latent>`, having
 the first :math:`N` latents of the motion Cool-chic with no feature leads to a
 decoding of a motion fields with motion values common to blocks of :math:`2^N
 \times 2^N` pixels.
 
 .. code-block::
 
-    # Each motion vector is common for a block of 8x8 pixels.
-    --n_ft_per_res_motion=0,0,0,1,1
+    # Each motion vector is common for a block of 2^2x2^2 = 4x4 pixels.
+    --latent_resolution_motion=2-6
 
 Frame-wise decoder configuration
 """"""""""""""""""""""""""""""""

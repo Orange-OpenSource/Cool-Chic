@@ -3,24 +3,20 @@
 Image compression with Cool-chic
 ================================
 
-Encoding your own image is achieved by using the script ``coolchic/encode.py``.
+Encoding your own image is achieved by using the script ``cc_encode.py``.
 
 .. code:: bash
 
-    (venv) ~/Cool-Chic$ python coolchic/encode.py \
+    (venv) ~/Cool-Chic$ python cc_encode.py \
         --input=path_to_my_example                \
-        --output=bitstream.bin                    \
+        --output=bitstream.cool                   \
         --workdir=./my_temporary_workdir/         \
-        --enc_cfg=cfg/enc/intra/fast_10k.cfg      \
+        --n_itr=10000                             \
         --dec_cfg_residue=cfg/dec/intra/mop.cfg   \
         --lmbda=0.001 # Typical range is 1e-2 (low rate) to 1e-4 (high rate)
 
 Unlike the decoding script which only takes input and output arguments, the
 encoder has many arguments allowing to tune Cool-chic for your need.
-
-* :ref:`Encoder configuration <encoder_cfg_files>` affects the encoding duration by
-  changing the training parameters. This is set through the argument
-  ``--enc_cfg``. Several encoder configuration files are available in ``cfg/enc/``.
 
 * :ref:`Decoder configuration <decoder_cfg_files>` parametrizes the decoder
   architecture and complexity. This is set through the argument ``--dec_cfg``.
@@ -36,22 +32,18 @@ will be stored. This includes the encoder logs and the PyTorch model
 .. attention::
 
   If present, the PyTorch model inside workdir ``workdir/0000-frame_encoder.pt``
-  is reloaded by the ``coolchic/encode.py`` script. In order to encode a new
+  is reloaded by the ``cc_encode.py`` script. In order to encode a new
   image using the same workdir, you must first clean out the workdir.
 
 I/O format
 """"""""""
 
-Cool-chic is able to encode PPM, PNG, YUV420 & YUV 444 files. The naming of YUV files
-must comply with the following convention
+Cool-chic is able to encode PPM, PNG, YUV420 & YUV 444 files. The naming of YUV
+files must comply with the following convention.
 
 .. code:: bash
 
     --input=<videoname>_<Width>x<Height>_<framerate>p_yuv<chromasampling>_<bitdepth>b.yuv
-
-Note that Cool-Chic outputs either `PPM
-<https://en.wikipedia.org/wiki/Portable_pixmap>`_ (and not PNG!) or `YUV
-<https://en.wikipedia.org/wiki/Y%E2%80%B2UV>`_ files.
 
 Rate constraint
 """""""""""""""

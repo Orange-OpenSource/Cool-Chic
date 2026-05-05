@@ -1,16 +1,17 @@
 import glob
 import os
 import subprocess
-import math
 from typing import Any, Dict, List
 
 import numpy as np
 
-TOOLBOX_PATH = f"{os.path.dirname(__file__)}/../toolbox/toolbox/"
 SAMPLE_PATH = f"{os.path.dirname(__file__)}/../samples/"
 
+
 # To be launched with python3 -m test.sanity_check from the root of the git repo
-def encode(seq_path: str, bitstream_path: str, workdir: str, extra_args: str = "") -> None:
+def encode(
+    seq_path: str, bitstream_path: str, workdir: str, n_frames: int = 1, extra_args: str = ""
+) -> None:
     """Use Cool-chic to encode a sequence into a bitstream."""
 
     subprocess.call(f"mkdir -p {workdir}", shell=True)
@@ -18,56 +19,36 @@ def encode(seq_path: str, bitstream_path: str, workdir: str, extra_args: str = "
     subprocess.call(f"rm -f {workdir}*-frame_encoder.pt", shell=True)
 
     # ---- Get number of frames
-    cmd = (
-        f"python3 {TOOLBOX_PATH}/identify.py "
-        f"--input={seq_path} "
-        f"--noheader "
-    )
-    out_identify = subprocess.getoutput(cmd)
-
-    _, _, n_frames = [int(x) for x in out_identify.split()[:3] if x]
-
     # Train the encoder
     cmd = (
         f"python3 {SAMPLE_PATH}/encode.py "
-        f'--input={seq_path} '
-        f'--output={bitstream_path} '
-        f'--workdir={workdir} '
-        f'--n_frames={n_frames} '
+        f"--input={seq_path} "
+        f"--output={bitstream_path} "
+        f"--workdir={workdir} "
+        f"--n_frames={n_frames} "
         f'--extra_args="{extra_args}" '
-        '--debug '
+        "--debug "
     )
     if n_frames > 1:
         cmd += " --p_pos=-1 "
     subprocess.call(cmd, shell=True)
 
 
-def decode(bitstream_path: str, decoded_path: str) -> None:
-    # Decode the file
-    cmd = (
-        'python3 ./coolchic/decode.py '
-        f'--input={bitstream_path} '
-        f'--output={decoded_path} '
-        '--verbosity=2 '
-    )
-    subprocess.call(cmd, shell=True)
+def parse_log(results_log_path: List[str]) -> Dict[str, Any]:
 
-
-def parse_encoder_log(results_log_path: List[str]) -> Dict[str, Any]:
-
-    res = {"rate_bpp": 0., "mse": 0}
+    res = {"rate_bpp": 0.0, "mse": 0}
     n_frames = len(results_log_path)
 
     # Parse the results one after the other
     for res_log in results_log_path:
         # Check the log at the encoder side
-        encoder_logs = [x.rstrip("\n") for x in open(res_log).readlines()]
-        keys = [x for x in encoder_logs[0].split(' ') if x]
-        vals = [x for x in encoder_logs[1].split(' ') if x]
-        encoder_results = {k: v for k, v in zip(keys, vals)}
+        logs = [x.rstrip("\n") for x in open(res_log).readlines()]
+        keys = [x for x in logs[0].split() if x]
+        vals = [x for x in logs[1].split() if x]
+        results = {k: v for k, v in zip(keys, vals)}
 
-        res["rate_bpp"] += float(encoder_results.get("rate_bpp"))
-        res["mse"] += 10 ** (-float(encoder_results.get("psnr_db")) / 10)
+        res["rate_bpp"] += float(results.get("rate_bpp"))
+        res["mse"] += 10 ** (-float(results.get("psnr_db")) / 10)
 
     res["rate_bpp"] /= n_frames
     res["mse"] /= n_frames
@@ -76,98 +57,29 @@ def parse_encoder_log(results_log_path: List[str]) -> Dict[str, Any]:
     return res
 
 
-def evaluate_decoder_side(seq_path: str, decoded_path: str, bitstream_path: str) -> Dict[str, Any]:
-
-    # ---- Get rate
-    cmd = (
-        f"python3 {TOOLBOX_PATH}/identify.py "
-        f"--input={decoded_path} "
-        f"--noheader "
-    )
-    out_identify = subprocess.getoutput(cmd)
-
-    width, height, n_frames = [int(x) for x in out_identify.split()[:3] if x]
-    n_pixels = width * height * n_frames
-
-    rate_bytes = os.path.getsize(bitstream_path)
-    rate_bpp = rate_bytes * 8 / n_pixels
-
-    decoder_results = {
-        "n_frames": n_frames,
-        "width": width,
-        "height": height,
-        "rate_bpp": rate_bpp
-    }
-
-    # ---- Get PSNR
-    cmd = (
-        f"python3 {TOOLBOX_PATH}/quality_psnr.py "
-        f"--candidate={decoded_path} "
-        f"--ref={seq_path} "
-        f"--noheader "
-        f"--verbosity=1"
-    )
-    out = subprocess.getoutput(cmd)
-
-    if seq_path.endswith(".yuv"):
-        # Get all lines i.e. all frames psnr except the last one (average results)
-        # We're going to recompute the average ourself
-        out = [line for line in out.split("\n")[:-1]]
-
-        assert len(out) == n_frames, (
-            f"We should have one PSNR measurement per frames. Found {n_frames} frames "
-            f"and {len(out)} PSNR measurements"
-        )
-
-        # Mimic cool-chic psnr computation: mse weighted by the number of pixels
-        width_uv, height_uv = map(lambda x: int(x), [x for x in out_identify.split()[4:6] if x])
-        n_pix_y = width * height
-        n_pix_uv = width_uv * height_uv
-
-        weighted_mse = 0
-        for line in out:
-            # For each frame, recompute MSE YUV weighted by the number of
-            # pixels for each channel
-            psnr_db_y, psnr_db_u, psnr_db_v = map(lambda x: float(x), [x for x in line.split()])
-            weighted_mse += (
-                n_pix_y * 10 ** (-psnr_db_y / 10)
-                + n_pix_uv * 10 ** (-psnr_db_u / 10)
-                + n_pix_uv * 10 ** (-psnr_db_v / 10)
-            ) / (n_pix_y + 2 * n_pix_uv)
-
-        # Get the final MSE by dividing by the overall number of frames
-        weighted_mse = weighted_mse / n_frames
-        weighted_psnr = -10 * math.log10(weighted_mse + 1e-10)
-
-        decoder_results.update({"psnr_db": weighted_psnr})
-
-    # image
-    else:
-        psnr_db_rgb = float([x for x in out.split() if x][1])
-        decoder_results.update({"psnr_db": float(psnr_db_rgb)})
-
-    return decoder_results
-
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     print("Starting sanity check...\n")
     os.environ["MKL_SERVICE_FORCE_INTEL"] = "1"
 
     LIST_SEQ_TO_TEST = [
-        {"path": "/data/192x128_kodim15.png", "extra_args": ""},
-        {"path": "/data/192x128_kodim15.png", "extra_args": "--tune=wasserstein"},
-        {"path": "/data/kodim15_192x128_01p_yuv420_8b.yuv", "extra_args": ""},
-        {"path": "/data/kodim15_192x128_01p_yuv420_10b.yuv", "extra_args": ""},
-        {"path": "/data/kodim15_192x128_01p_yuv444_8b.yuv", "extra_args": ""},
-        {"path": "/data/kodim15_192x128_01p_yuv444_10b.yuv", "extra_args": ""},
-        {"path": "/data/D-BQSquare-5frames_224x128_60p_yuv420_8b.yuv", "extra_args": ""},
+        {"path": "/data/192x128_kodim15.png", "extra_args": "", "n_frames": 1},
+        {"path": "/data/192x128_kodim15.png", "extra_args": "--tune=wasserstein", "n_frames": 1},
+        {"path": "/data/kodim15_192x128_01p_yuv420_8b.yuv", "extra_args": "", "n_frames": 1},
+        {"path": "/data/kodim15_192x128_01p_yuv420_10b.yuv", "extra_args": "", "n_frames": 1},
+        {"path": "/data/kodim15_192x128_01p_yuv444_8b.yuv", "extra_args": "", "n_frames": 1},
+        {"path": "/data/kodim15_192x128_01p_yuv444_10b.yuv", "extra_args": "", "n_frames": 1},
+        {
+            "path": "/data/D-BQSquare-5frames_224x128_60p_yuv420_8b.yuv",
+            "extra_args": "",
+            "n_frames": 5,
+        },
     ]
 
     # Absolute path
     for i, seq_i in enumerate(LIST_SEQ_TO_TEST):
         LIST_SEQ_TO_TEST[i]["path"] = os.path.dirname(__file__) + LIST_SEQ_TO_TEST[i]["path"]
 
-    TEST_WORKDIR = os.path.dirname(__file__) + '/test-workdir/'
+    TEST_WORKDIR = os.path.dirname(__file__) + "/test-workdir/"
 
     msg = "Final sanity check results:\n\n'"
     # For each sequence, measure that there is not much deviation between the
@@ -178,32 +90,52 @@ if __name__ == '__main__':
 
         seq_path = seq_to_test.get("path")
         extra_args = seq_to_test.get("extra_args")
+        n_frames = seq_to_test.get("n_frames")
 
         # Get all the path required to encode, decode and evaluate
         seq_name, ext = os.path.splitext(os.path.basename(seq_path))
-        decoded_ext = ".yuv" if ext == ".yuv" else ".ppm"
+        decoded_ext = ".yuv" if ext == ".yuv" else ".png"
         decoded_path = f"{TEST_WORKDIR}decoded-from-bitstream-{seq_name}{decoded_ext}"
-        bitstream_path = f'{TEST_WORKDIR}{seq_name}.cool'
+        bitstream_path = f"{TEST_WORKDIR}{seq_name}.cool"
 
-        encode(seq_path, bitstream_path, TEST_WORKDIR, extra_args=extra_args)
-        decode(bitstream_path, decoded_path)
+        # Encode also decode the bitstream
+        encode(seq_path, bitstream_path, TEST_WORKDIR, n_frames=n_frames, extra_args=extra_args)
 
-        enc_res = parse_encoder_log(
-            glob.glob(f"{TEST_WORKDIR}/*-results_best.tsv")
-        )
-        dec_res = evaluate_decoder_side(seq_path, decoded_path, bitstream_path)
+        enc_res = parse_log(glob.glob(f"{TEST_WORKDIR}/*-results_encoder.tsv"))
+        dec_res = parse_log(glob.glob(f"{TEST_WORKDIR}/*-results_decoder.tsv"))
 
-        enc_psnr_db = enc_res['psnr_db']
-        dec_psnr_db = dec_res['psnr_db']
-        enc_rate_bpp = enc_res['rate_bpp']
-        dec_rate_bpp = dec_res['rate_bpp']
+        enc_psnr_db = enc_res["psnr_db"]
+        dec_psnr_db = dec_res["psnr_db"]
+        enc_rate_bpp = enc_res["rate_bpp"]
+        dec_rate_bpp = dec_res["rate_bpp"]
 
         s = (
-            '\n\n'
-            f'Sequence name: {seq_name} ; extra_args = {extra_args} \n'
-            " " + " " * 12 + "|" + f"{'Encoder estimation':^24}" + "|" + f"{'Actual results':^24}" + "|" + "\n"
-            "|" + f"{'PSNR [dB]':^12}" + "|" + f"{f'{enc_psnr_db:5.3f}':^24}" + "|" + f"{f'{dec_psnr_db:5.3f}':^24}" + "|" + "\n"
-            "|" + f"{'Rate [bpp]':^12}" + "|" + f"{f'{enc_rate_bpp:5.3f}':^24}" + "|" + f"{f'{dec_rate_bpp:5.3f}':^24}" + "|" + "\n"
+            "\n\n"
+            f"Sequence name: {seq_name} ; extra_args = {extra_args} \n"
+            " "
+            + " " * 12
+            + "|"
+            + f"{'Encoder estimation':^24}"
+            + "|"
+            + f"{'Actual results':^24}"
+            + "|"
+            + "\n"
+            "|"
+            + f"{'PSNR [dB]':^12}"
+            + "|"
+            + f"{f'{enc_psnr_db:5.3f}':^24}"
+            + "|"
+            + f"{f'{dec_psnr_db:5.3f}':^24}"
+            + "|"
+            + "\n"
+            "|"
+            + f"{'Rate [bpp]':^12}"
+            + "|"
+            + f"{f'{enc_rate_bpp:5.3f}':^24}"
+            + "|"
+            + f"{f'{dec_rate_bpp:5.3f}':^24}"
+            + "|"
+            + "\n"
         )
         msg += s
 

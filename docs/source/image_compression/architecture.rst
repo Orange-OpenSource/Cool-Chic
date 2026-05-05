@@ -18,12 +18,21 @@ parameters:
    * - Parameter
      - Role
      - Example value
-   * - ``n_ft_per_res_residue``
-     - Number of features per latent resolution
-     - ``1,1,1,1,1,1,1``
+   * - ``latent_resolution_residue``
+     - Maximal and minimal resolution of the latent grids.
+     - ``0-6`` for latent resolution 1:1 to 1::math:`2^6`
+   * - ``hyperlatent_resolution_residue``
+     - Maximal and minimal resolution of the hyperlatent grids.
+     - ``4-6`` for latent resolution 1::math:`2^4` to 1::math:`2^6`
    * - ``arm_residue``
      - ARM architecture
-     - ``16,2``
+     - ``20,2/stabiliser``
+   * - ``output_feature_ifce_residue``
+     - Number of context exctracted by the IFCE
+     - ``6``
+   * - ``ifce_resolution_residue``
+     - Maximal and minimal resolution of latent using the IFCE
+     - ``0-2``
    * - ``layers_synthesis_residue``
      - Synthesis architecture
      - ``48-1-linear-relu,3-1-linear-none,X-3-residual-relu,X-3-residual-none``
@@ -41,7 +50,7 @@ parameters:
 
     .. code:: bash
 
-        (venv) ~/Cool-Chic$ python coolchic/encode.py \
+        (venv) ~/Cool-Chic$ python cc_encode.py \
           --dec_cfg_residue=cfg/dec/intra/lop.cfg # lop.cfg has dim_arm=8,2
           --arm_residue=16,2                      # This override the value present in lop.cfg
 
@@ -59,31 +68,32 @@ Some configuration files are proposed in ``cfg/dec/intra/``:
    * - Name
      - Description
      - Multiplication / decoded pixel
-   * - ``vlop.cfg``
-     - Very Low Operating Point
-     - 330
    * - ``lop.cfg``
      - Low Operating Point
-     - 580
+     - 500
    * - ``mop.cfg``
      - Medium Operating Point
-     - 1110
+     - 1000
    * - ``hop.cfg``
      - High Operating Point
-     - 1430
+     - 2000
+   * - ``vhop.cfg``
+     - Very High Operating Point
+     - 3000
 
-The :doc:`results section <./../results/image/decoding_complexity>` illustrates the performance-complexity continuum of these configurations.
+The `Cool-chic 5.0: paper <https://arxiv.org/abs/2412.00505>`_ presents the
+performance of these different decoder configurations.
 
 .. tip::
 
-    Many useful info are logged inside the workdir specified when encoding an
-    image or video.
+    A good deal of useful info are logged inside the working directory specified
+    when encoding an image or video.
 
     .. code:: bash
 
-        (venv) ~/Cool-Chic$ python coolchic/encode.py   \
+        (venv) ~/Cool-Chic$ python cc_encode.py   \
           --input=path_to_my_example                    \
-          --output=bitstream.bin                        \
+          --output=bitstream.cool                       \
           --workdir=./my_temporary_workdir/
 
     The file ``./my_temporary_workdir/XXXX-archi.txt`` contains the
@@ -91,25 +101,20 @@ The :doc:`results section <./../results/image/decoding_complexity>` illustrates 
     multiplications.
 
 
-Latent dimension
-""""""""""""""""
+Latent dimension ``--latent_resolution_residue``
+""""""""""""""""""""""""""""""""""""""""""""""""
 
 Most of the information about the frame to decode is stored inside a set of
 **hierarchical** latent grids. This is parameterized by indicating the number of
 features for each resolution separated by comas.
 
-.. attention::
 
-    Due to implementation constraints, we currently only support one feature per
-    latent resolution *e.g* ``--n_ft_per_res_residue=1,1,1,1``
-
-
-Using a ``512x768`` image from the Kodak dataset as an exemple gives the
+Using a ``512x768`` image from the Kodak dataset as an example gives the
 following latent dimensions
 
 .. code-block:: none
 
-  (venv) ~/Cool-Chic$ python coolchic/encode.py --input=kodim01.png --n_ft_per_res_residue=1,1,1,1
+  (venv) ~/Cool-Chic$ python cc_encode.py --input=kodim01.png --latent_resolution_residue=0-3
 
   cat ./0000-archi.txt
 
@@ -122,30 +127,66 @@ following latent dimensions
   |   latent_grids.2                        |   (1, 1, 128, 192)     |          |
   |   latent_grids.3                        |   (1, 1, 64, 96)       |          |
 
+.. tip::
+
+  Use ``--latent_resolution_residue=auto`` to automatically change the number of
+  latent grids depending on the image size.
+
 .. _no_high_res_latent:
 
 .. attention::
 
     If there is no higher resolution latent *e.g.*
-    ``--n_ft_per_res_residue=0,0,1,1`` the upsampling stops at the highest
+    ``--latent_resolution_residue=2-3`` the upsampling stops at the highest
     latent resolution (here 1/4). Then, the dense representation goes to the
     synthesis and the output is still at the highest latent resolution (*e.g.*
-    1/4). In that case, a final nearest neighbor upsampling is performed to get
-    to the desired full resolution.
+    1/4). In that case, a final upsampling is performed to get to the desired
+    full resolution.
+
+Hyperlatent dimension ``--hyperlatent_resolution_residue``
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Hyperlatent grids are parameterized similarly to the main latent grids.
+
+Using a ``512x768`` image from the Kodak dataset as an example gives the
+following latent dimensions
+
+.. code-block:: none
+
+  (venv) ~/Cool-Chic$ python cc_encode.py --input=kodim01.png --latent_resolution_residue=0-1 --hyperlatent_resolution_residue=2-3
+
+  cat ./0000-archi.txt
+
+  | module                                  | #parameters or shape   | #flops   |
+  |:----------------------------------------|:-----------------------|:---------|
+  | model                                   |                        |          |
+  |  latent_grids                           |                        |          |
+  |   latent_grids.0                        |   (1, 1, 512, 768)     |          |   # Main latent grids
+  |   latent_grids.1                        |   (1, 1, 256, 384)     |          |   # Main latent grids
+  |   latent_grids.2                        |   (1, 1, 128, 192)     |          |   # Hyperlatent grids
+  |   latent_grids.3                        |   (1, 1, 64, 96)       |          |   # Hyperlatent grids
 
 
-Auto-regressive module (ARM)
-""""""""""""""""""""""""""""
+.. tip::
 
-The auto-regressive probability module (ARM) predict the distribution of a given
+  Use ``--hyperlatent_resolution_residue=auto`` to automatically change the number of
+  hyperlatent grids depending on the image size.
+
+
+Autoregressive module (ARM) ``--arm_residue``
+"""""""""""""""""""""""""""""""""""""""""""""
+
+The autoregressive probability module (ARM) predict the distribution of a given
 latent pixel given its neighboring pixels, driving the entropy coder. It is
-tuned by a single parameter ``--arm_residue=<X>,<Y>`` serving two purposes:
+tuned by a single parameter ``--arm_residue=<X>,<Y>/stabiliser`` serving two purposes:
 
-* The first number ``X`` represents both the number of **context pixels** and
+* The first number ``X`` represents both the number of **spatial context pixels** and
   the number of **hidden features** for all hidden layers.
 
 * The second number ``Y`` sets the number of hidden layer(s). Setting it to 0
   gives a single-layer linear ARM.
+
+* Use ``/stabiliser`` to enable the linear stabiliser residual layer around the ARM.
 
 .. note::
 
@@ -158,32 +199,19 @@ tuned by a single parameter ``--arm_residue=<X>,<Y>`` serving two purposes:
     Due to implementation constraints, we impose the following restrictions on
     the ARM architecture:
 
-    * The number of context pixels and hidden features are identical and must be a **multiple of 8**
-
     * All layers except the output one are **residual** followed with a **ReLU** activation
 
-The different context patterns are as follows:
 
-.. image:: ../assets/arm_context.png
-  :alt: The different ARM contexts
+Inter-Feature Context Extractor (IFCE)
+""""""""""""""""""""""""""""""""""""""
 
-
-Using a ``512x768`` image from the Kodak dataset as an exemple:
-
-.. code-block:: none
-
-  (venv) ~/Cool-Chic$ python coolchic/encode.py --input=kodim01.png --arm_residue=16,2
-
-  ARM 725 MAC/pixel ; 53.5 % of the complexity
-  ============================================
+IFCE are linear layers dedicated to individual latent grids, used to extract
+context vectors from already decoded latent grids. Use
+``--output_feature_ifce_residue`` to specify the dimension of these context
+vectors. Use ``ifce_resolution_residue`` to specify the resolution of the latent
+benefiting from the IFCE.
 
 
-                     +----------------------------+                  +----------------------------+
-                     |                            |                  |                            |
-                     |                            v                  |                            v
-                     |  +-----------------+    +-----+    +------+   |  +-----------------+    +-----+    +------+      +----------------+
-  16-pixel context ---> | Linear 16 -> 16 | -> |  +  | -> | ReLU | ---> | Linear 16 -> 16 | -> |  +  | -> | ReLU | ---> | Linear 16 -> 2 | ---> mu, log scale
-                        +-----------------+    +-----+    +------+      +-----------------+    +-----+    +------+      +----------------+
 
 Upsampling
 """"""""""
@@ -195,7 +223,7 @@ achieved through successive upsampling of the latent using 2d convolutions. The
 size of these convolutive filters are parameterized with ``--ups_k_size_residue`` and
 ``--ups_preconcat_k_size_residue``.
 
-See the :doc:`upsampling doc <./../../code_documentation/encoder/component/core/upsampling>` for more details.
+See the :doc:`upsampling doc <./../../code_documentation/upsampling>` for more details.
 
 
 Synthesis
@@ -209,8 +237,9 @@ on the type of frame:
   case for still image compression.
 
 The synthesis is tuned by a single parameter
-``--layers_synthesis_residue=<layer1>,<layer2>`` which describes all layers, separated
+``--layers_synthesis_residue=<layer1>,<layer2>/stabiliser`` which describes all layers, separated
 by comas. Each layer is decomposed as follows:
+
 
 .. code-block:: none
 
@@ -230,29 +259,5 @@ by comas. Each layer is decomposed as follows:
     The number of input features for each layer is automatically inferred from
     the previous one or from the number of latent features.
 
-.. tip::
+Use ``/stabiliser`` to enable the linear stabiliser residual layer around the ARM.
 
-    The C implementation of Cool-chic decoder is optimized for the most common
-    synthesis architectures. If the first two layers are 1x1 convolutions, they
-    are fused together. 3x3 convolutions at the end of the synthesis have their
-    dedicated faster implementation.
-
-Using a ``512x768`` image from the Kodak dataset and 7 input features as an exemple:
-
-.. code-block:: none
-
-  (venv) ~/Cool-Chic$ python coolchic/encode.py \
-    --input=kodim01.png \
-    --n_ft_per_res_residue=1,1,1,1,1,1,1 \
-    --layers_synthesis_residue=16-1-linear-relu,3-1-linear-relu,X-3-residual-relu,X-3-residual-none
-
-  Synthesis 322 MAC/pixel ; 28.9 % of the complexity
-  ==================================================
-
-
-                                                                                               +------------------------------+                  +------------------------------+
-                                                                                               |                              |                  |                              |
-                                                                                               |                              v                  |                              v
-                  +--------------------+    +------+      +--------------------+    +------+   |  +-------------------+    +-----+    +------+   |  +-------------------+    +-----+
-  7 features ---> | 1x1 Conv2d 7 -> 16 | -> | ReLU | ---> | 1x1 Conv2d 16 -> 3 | -> | ReLU | ---> | 3x3 Conv2d 3 -> 3 | -> |  +  | -> | ReLU | ---> | 3x3 Conv2d 3 -> 3 | -> |  +  | ---> Decoded image
-                  +--------------------+    +------+      +--------------------+    +------+      +-------------------+    +-----+    +------+      +-------------------+    +-----+

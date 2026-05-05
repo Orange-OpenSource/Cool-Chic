@@ -15,5 +15,5 @@ jobs:
         with:
           python-version: '3.10'
           cache: 'pip' # caching pip dependencies
-      - run: pip install -e .
+      - run: pip install --break-system-packages -r ./requirements.txt
       - run: python3 -m test.sanity_check

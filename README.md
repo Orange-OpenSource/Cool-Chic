@@ -27,7 +27,7 @@
     <!-- <br />
     <br /> -->
     .
-    <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/new_stuff.html">What's new in 4.2.0?</a>
+    <a href="https://orange-opensource.github.io/Cool-Chic/getting_started/new_stuff.html">What's new in 5.0?</a>
     ·
     <a href="https://orange-opensource.github.io/Cool-Chic/results/image/compression_performance.html">Image coding performance</a>
     .
@@ -38,35 +38,20 @@
 <!-- # What's Cool-chic? -->
 
 Cool-chic (pronounced <span class="ipa">/kul ʃik/</span> as in French 🥖🧀🍷) is
-a low-complexity neural image codec based on overfitting.
-
-* 🏆 **Coding performance**: Cool-chic offers visual quality similar to H.266/VVC with 30% less rate
-
-* 🪶 **Lightweight decoder**: Cool-chic decoder performs only 1000 multiplications per decoded pixel
-
-* 🚀 **Fast CPU-only decoder**: Decode a 1280x720 image in 100 ms on CPU with our decoder written in C
+a low-complexity neural image and video codec based on overfitting. It achieves state-of-the-art image compression performance, while requiring only 1000 multiplications per decoded pixel.
 
 <br>
 <!-- <div align="center"> -->
 
-### 🎲 Cool-chic 4.2.0: Common Randomness & Wasserstein Distance! 🎲
+### 🚀 Cool-chic 5.0: Better and faster overfitted image compression! 🚀
 
 <!-- </div> -->
 
-Cool-chic 4.2 focuses on perceptually-oriented image coding. This release draws
-heavily on the following paper: [_Good, Cheap, and Fast: Overfitted Image Compression with Wasserstein Distortion_, Ballé et al.](https://arxiv.org/abs/2412.00505).
+Cool-chic 5.0 focuses on image coding, implementing the contributions presented in the following paper: [_Cool-chic 5.0: Faster Encoding and Inter-Feature Entropy Modeling for Overfitted Image Compression_, Ladune et al.](https://arxiv.org/abs/2605.02726).
 
-- **Wasserstein Distance** as a distortion metric: use ``--tune=wasserstein``
-- Decoder-side **common randomness** for additional details in the decoded image
-- Improved image coding performance: around **-50% rate** versus Cool-chic 4.1 for the same visual quality
-- Low decoding complexity **1728 MAC / pixel**
-
-
-A pair of bitstreams in ``samples/bitstreams/`` illustrates the benefits of the
-``--tune=wasserstein`` options. See the [decoding
-example](https://orange-opensource.github.io/Cool-Chic/getting_started/example.html#decoding-a-cool-bitstream)
-to decode them and see the pictures.
-
+- **10x encoding speed-up** vs. Cool-chic 4.2
+- Better image compression: **Rate decrease of -10%** versus Cool-chic 4.2 for identical quality
+- Low decoding complexity of **2000 MAC / pixel**
 
 Check-out the [release history](https://github.com/Orange-OpenSource/Cool-Chic/releases) to see previous versions of Cool-chic.
 
@@ -75,17 +60,16 @@ Check-out the [release history](https://github.com/Orange-OpenSource/Cool-Chic/r
 See the [Cool-chic setup documentation](https://orange-opensource.github.io/Cool-Chic/getting_started/quickstart.html) for additional details
 
 ```bash
-# We need to get these packages to compile the C API and bind it to python.
-sudo add-apt-repository -y ppa:deadsnakes/ppa && sudo apt update
-sudo apt install -y build-essential python3.10-dev pip g++
+# Clone the Cool-chic source code
 git clone https://github.com/Orange-OpenSource/Cool-Chic.git && cd Cool-Chic
 
 # Install create and activate virtual env
-python3.10 -m pip install virtualenv
-python3.10 -m virtualenv venv && source venv/bin/activate
+sudo apt install -y pip
+python3 -m pip install virtualenv
+python3 -m virtualenv venv && source venv/bin/activate
 
-# Install Cool-chic
-pip install -e .
+# Install required packages
+pip install -r requirements.txt
 
 # Sanity check
 python -m test.sanity_check
@@ -97,8 +81,8 @@ See the [example page](https://orange-opensource.github.io/Cool-Chic/getting_sta
 
 
 ```bash
-# Encode an image using the default (fast) configuration
-python coolchic/encode.py -i image.png -o ./bitstream.cool
+# Encode an image using the default configuration
+python cc_encode.py -i image.png -o ./bitstream.cool
 
 # Video requires to successively encode multiples frames.
 python samples/encode.py -i myTestVideo_1920x1080_24p_yuv420_8b.yuv -o bitstream.cool
@@ -106,12 +90,62 @@ python samples/encode.py -i myTestVideo_1920x1080_24p_yuv420_8b.yuv -o bitstream
 
 # Decoding
 
-Call the C decoder through a python wrapper to decode Cool-chic bitstreams.
-
 ```bash
-# Decoder outputs either PPM (image) or YUV (video) files
-python coolchic/decode.py -i samples/bitstreams/a365_wd.cool -o a365_wd.ppm
+# Decoder outputs either PNG (image) or YUV (video) files
+python cc_decode.py -i samples/bitstreams/example.cool -o example.png
 ```
+
+<br>
+
+# Image compression performance
+
+  <table class="tg"><thead>
+    <tr>
+      <th class="tg-86ol" rowspan="2"></th>
+      <th class="tg-86ol" colspan="5">BD-rate of Cool-chic 5.0 vs. [%]</th>
+    </tr>
+    <tr>
+      <th class="tg-86ol"><a href="https://arxiv.org/abs/2001.01568" target="_blank" rel="noopener noreferrer">Cheng</a></th>
+      <th class="tg-86ol"><a href="https://arxiv.org/abs/2203.10886" target="_blank" rel="noopener noreferrer">ELIC</a></th>
+      <th class="tg-86ol"><a href="https://arxiv.org/abs/2307.15421" target="_blank" rel="noopener noreferrer">MLIC++</a></th>
+      <th class="tg-86ol">Cool-chic 4.2 </th>
+      <th class="tg-86ol">VVC (VTM 28.3)</th>
+    </tr></thead>
+  <tbody>
+    <tr>
+      <td class="tg-86ol">kodak (RGB)</td>
+      <td class="tg-qch7">-9.4 %</td>
+      <td class="tg-xd3r">+1.6 %</td>
+      <td class="tg-xd3r">+11.2%</td>
+      <td class="tg-qch7">-5.3 %</td>
+      <td class="tg-qch7">-2.4 % </td>
+    </tr>
+    <tr>
+      <td class="tg-86ol">clic20-pro-valid (RGB)</td>
+      <td class="tg-qch7">-20.7 %</td>
+      <td class="tg-qch7">-8.8 %</td>
+      <td class="tg-xd3r">+1.0 %</td>
+      <td class="tg-qch7">-9.0 %<br></td>
+      <td class="tg-qch7">-11.1 %</td>
+    </tr>
+    <tr>
+      <td class="tg-x9uu">jvet A (YUV420)</td>
+      <td class="tg-1keu">/</td>
+      <td class="tg-1keu">/</td>
+      <td class="tg-1keu">/</td>
+      <td class="tg-1keu">/</td>
+      <td class="tg-qch7">-2.8 %</td>
+    </tr>
+    <tr>
+      <td class="tg-x9uu">jvet B (YUV420) </td>
+      <td class="tg-1keu">/</td>
+      <td class="tg-1keu">/</td>
+      <td class="tg-1keu">/</td>
+      <td class="tg-uflc">-12.6%</td>
+      <td class="tg-xd3r">+8.7 %</td>
+    </tr>
+  </tbody></table>
+
 
 <br>
 
@@ -129,6 +163,13 @@ If you use this project, please cite the original Cool-chic paper in your work.
     pages     = {13515-13522}
 }
 ```
+<br>
+
+# Acknowledgements
+
+We rely on Robert Bamler's [constriction package](https://github.com/bamler-lab/constriction) for range coding. Thanks to the developers for their work!
+
+
 
 <br>
 <br>
