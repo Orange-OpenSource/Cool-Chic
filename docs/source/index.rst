@@ -14,7 +14,7 @@
 .. =========
 
 .. image:: assets/coolchic-logo-light.png
-   :height: 200
+   :width: 500
    :align: center
    :alt: Logo Cool-chic
 
@@ -39,8 +39,7 @@
 
 
 .. image:: assets/logo_orange.png
-   :height: 100
-   :width: 100
+   :width: 150
    :align: center
    :alt: Logo Orange
 

@@ -103,33 +103,3 @@ codec.
       <td class="tg-u3ui">639</td>
   </tr>
   </tbody></table>
-
-
-Rate-distortion graphs
-**********************
-
-C-BasketballDrill
-*****************
-
-.. image:: ../../assets/video-ra-jvet-c/rd-C-BasketballDrill_832x480_50p_yuv420_8b.png
-  :alt: rd-C-BasketballDrill_832x480_50p_yuv420_8b
-
-
-C-BQMall
-********
-
-.. image:: ../../assets/video-ra-jvet-c/rd-C-BQMall_832x480_60p_yuv420_8b.png
-  :alt: rd-C-BQMall_832x480_60p_yuv420_8b
-
-
-C-PartyScene
-************
-
-.. image:: ../../assets/video-ra-jvet-c/rd-C-PartyScene_832x480_50p_yuv420_8b.png
-  :alt: rd-C-PartyScene_832x480_50p_yuv420_8b
-
-C-RaceHorses
-************
-
-.. image:: ../../assets/video-ra-jvet-c/rd-C-RaceHorses_832x480_30p_yuv420_8b.png
-  :alt: rd-C-RaceHorses_832x480_30p_yuv420_8b
