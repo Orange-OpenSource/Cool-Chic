@@ -175,7 +175,7 @@ We rely on Robert Bamler's [constriction package](https://github.com/bamler-lab/
 <br>
 <br>
 
-<div style="text-align: center;">
+<div align="center">
   <!-- User has no color preference: -->
   <img src="docs/source/assets/logo_orange.png" alt="Cool-chic Logo" height="150"/>
 </div>
