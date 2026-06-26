@@ -69,7 +69,7 @@ class ArmLinear(nn.Module):
         * Biases are always set to zero.
 
         * Weights are set to zero if ``residual == True``. Otherwise, sample
-          from the Normal distribution: :math:`\\mathbf{W} \sim \\mathcal{N}(0,
+          from the Normal distribution: :math:`\\mathbf{W} \\sim \\mathcal{N}(0,
           \\tfrac{1}{C_{out}^4})`.
         """
         self.bias = nn.Parameter(torch.zeros_like(self.bias), requires_grad=True)
@@ -118,7 +118,7 @@ class Arm(nn.Module):
 
     .. math::
 
-        p_{\\psi}(\\hat{y}_i \\mid \\mathbf{c}_i) \sim \mathcal{L}(\\mu_i, b_i),
+        p_{\\psi}(\\hat{y}_i \\mid \\mathbf{c}_i) \\sim \\mathcal{L}(\\mu_i, b_i),
         \\text{ where } \\mu_i, b_i =
         f_{\\psi}(\\mathtt{concat}(\\mathbf{s}_i,\\mathbf{f}_i)).
 
@@ -253,21 +253,23 @@ class Arm(nn.Module):
         return mu, scale
 
     def get_param(
-        self, which: Optional[Literal["weight", "bias"]] = None
+        self, which: Optional[Literal["weight", "bias"]] = None, detach_and_clone: bool = True
     ) -> OrderedDict[str, Tensor]:
-        """Return **a copy** of the weights and biases inside the module.
+        """Return the weights and biases inside the module.
 
         Args:
             which (Optional[Literal["weight", "bias"]]): Wether to return only the weights
                  or the biases. If None, return everything. Defaults to None.
+            detach_and_clone (bool): If True, return a copy of the detached parameters.
+                Defaults to True
 
         Returns:
-            A copy of all weights & biases in the layers.
+            A dict of all the required parameters in the layers.
         """
         # Detach & clone to create a copy
         param = OrderedDict(
             {
-                param_name: param_value.detach().clone()
+                param_name: param_value.detach().clone() if detach_and_clone else param_value
                 for param_name, param_value in self.named_parameters()
             }
         )
@@ -288,13 +290,13 @@ class Arm(nn.Module):
 
         return param
 
-    def set_param(self, param: OrderedDict[str, Tensor]) -> None:
+    def set_param(self, param: OrderedDict[str, Tensor], strict: bool = True) -> None:
         """Replace the current parameters of the module with param.
 
         Args:
             param: Parameters to be set.
         """
-        self.load_state_dict(param)
+        self.load_state_dict(param, strict=strict)
 
     def reinitialize_parameters(self) -> None:
         """Re-initialize in place the parameters of all the ArmLinear layers."""
@@ -305,10 +307,10 @@ class Arm(nn.Module):
 
 class Ifce(nn.Module):
     """Inter Feature Context Extractor (IFCE) contains all the IFCE
-    :math:`f_{\chi^(k)}`, each of them dedicated to the :math:`k`-th latent
+    :math:`f_{\\chi^(k)}`, each of them dedicated to the :math:`k`-th latent
     grid.
 
-    The role of each IFCE :math:`f_{\chi^(k)}` is to compute for each pixel of the
+    The role of each IFCE :math:`f_{\\chi^(k)}` is to compute for each pixel of the
     :math:`k`-th latent grid a context vector of :math:`C_f` elements based on the already
     decoded latent grids.
     """
@@ -349,7 +351,7 @@ class Ifce(nn.Module):
 
     def forward(self, x: Tensor, latent_grid_idx: int) -> Tensor:
         """From a raw values extracted from already decoded latent grids :math:`\\mathbf{r}`,
-        compute a feature context :math:`\\mathbf{f} = f_{\chi^(k)}(\\mathbf{r})`.
+        compute a feature context :math:`\\mathbf{f} = f_{\\chi^(k)}(\\mathbf{r})`.
 
         Args:
             x (Tensor): Raw values extracted from already decoded latent grids :math:`\\mathbf{r}`
@@ -363,21 +365,23 @@ class Ifce(nn.Module):
         return self.arms[self.index_to_arm[latent_grid_idx]](x)
 
     def get_param(
-        self, which: Optional[Literal["weight", "bias"]] = None
+        self, which: Optional[Literal["weight", "bias"]] = None, detach_and_clone: bool = True
     ) -> OrderedDict[str, Tensor]:
-        """Return **a copy** of the weights and biases inside the module.
+        """Return the weights and biases inside the module.
 
         Args:
             which (Optional[Literal["weight", "bias"]]): Wether to return only the weights
                  or the biases. If None, return everything. Defaults to None.
+            detach_and_clone (bool): If True, return a copy of the detached parameters.
+                Defaults to True
 
         Returns:
-            A copy of all weights & biases in the layers.
+            A dict of all the required parameters in the layers.
         """
         # Detach & clone to create a copy
         param = OrderedDict(
             {
-                param_name: param_value.detach().clone()
+                param_name: param_value.detach().clone() if detach_and_clone else param_value
                 for param_name, param_value in self.named_parameters()
             }
         )
@@ -398,13 +402,13 @@ class Ifce(nn.Module):
 
         return param
 
-    def set_param(self, param: OrderedDict[str, Tensor]) -> None:
+    def set_param(self, param: OrderedDict[str, Tensor], strict: bool = True) -> None:
         """Replace the current parameters of the module with param.
 
         Args:
             param: Parameters to be set.
         """
-        self.load_state_dict(param)
+        self.load_state_dict(param, strict=strict)
 
     def reinitialize_parameters(self) -> None:
         """Re-initialize in place the parameters of all the ArmLinear layer."""
@@ -457,6 +461,28 @@ def _laplace_cdf(x: Tensor, expectation: Tensor, scale: Tensor) -> Tensor:
     """
     shifted_x = x - expectation
     return 0.5 - 0.5 * (shifted_x).sign() * torch.expm1(-(shifted_x).abs() / scale)
+
+
+def compute_rate(x: Tensor, expectation: Tensor, scale: Tensor) -> Tensor:
+    """Return the per-symbol rate of the tensor x, when entropy coded with a Laplace distribution
+    with per-symbol expectation and scale parameters
+
+    All inputs (x, expectation scale) and the output have the same shape
+
+    Args:
+        x (Tensor): Data whose rate will be measured.
+        expectation (Tensor): Expectation of the Laplace distribution
+        scale (Tensor): Scale of the Laplace distribution
+
+    Returns:
+        Tensor: Per-symbol rate (in bits).
+    """
+    # Compute the rate (i.e. the entropy of flat latent knowing mu and scale)
+    proba = torch.clamp_min(
+        _laplace_cdf(x + 0.5, expectation, scale) - _laplace_cdf(x - 0.5, expectation, scale),
+        min=2**-16,  # No value can cost more than 16 bits.
+    )
+    return -torch.log2(proba)
 
 
 # -------------------------------------------------------------- #

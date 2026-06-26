@@ -187,7 +187,14 @@ def decode_network(
                     q_step = descriptors.get("nn_q_step").get_value(module_name, weight_or_bias)
                     cur_param = cur_param.to(torch.float32) * q_step
 
-                loaded_param[k] = cur_param.clone().reshape_as(v)
+                # # Work from PyTorch 2.3 onwards
+                # loaded_param[k] = cur_param.clone().reshape_as(v)
+
+                # Work around for Pytorch <= 2.2: load_state_dict does not preserve requires_grad value
+                # the requires_grad so we have to explicitely set requires_grad to False
+                loaded_param[k] = torch.nn.Parameter(
+                    cur_param.clone().reshape_as(v), requires_grad=False
+                )
 
             # Can not be strict as we're loading separately the weights and biases
             # assign=True to maintain the type of the data i.e. int32 for ARM

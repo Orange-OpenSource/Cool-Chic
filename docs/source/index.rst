@@ -31,8 +31,8 @@
 
    `Docs <https://orange-opensource.github.io/Cool-Chic/getting_started/quickstart.html>`_
    `Release note <https://orange-opensource.github.io/Cool-Chic/getting_started/new_stuff.html>`_
-   `Image coding performance <https://orange-opensource.github.io/Cool-Chic/results/image/compression_performance.html>`_
-   `Video coding performance <https://orange-opensource.github.io/Cool-Chic/results/video/compression_performance.html>`_
+   `Image coding performance <https://orange-opensource.github.io/Cool-Chic/results/image.html>`_
+   `Video coding performance <https://orange-opensource.github.io/Cool-Chic/results/video.html>`_
 
 
 |

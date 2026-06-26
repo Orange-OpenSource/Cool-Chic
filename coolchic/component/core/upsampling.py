@@ -500,21 +500,23 @@ class Upsampling(nn.Module):
         return upsampled_latent
 
     def get_param(
-        self, which: Optional[Literal["weight", "bias"]] = None
+        self, which: Optional[Literal["weight", "bias"]] = None, detach_and_clone: bool = True
     ) -> OrderedDict[str, Tensor]:
-        """Return **a copy** of the weights and biases inside the module.
+        """Return the weights and biases inside the module.
 
         Args:
             which (Optional[Literal["weight", "bias"]]): Wether to return only the weights
                  or the biases. If None, return everything. Defaults to None.
+            detach_and_clone (bool): If True, return a copy of the detached parameters.
+                Defaults to True
 
         Returns:
-            A copy of all weights & biases in the layers.
+            A dict of all the required parameters in the layers.
         """
         # Detach & clone to create a copy
         param = OrderedDict(
             {
-                param_name: param_value.detach().clone()
+                param_name: param_value.detach().clone() if detach_and_clone else param_value
                 for param_name, param_value in self.named_parameters()
             }
         )
@@ -535,13 +537,13 @@ class Upsampling(nn.Module):
 
         return param
 
-    def set_param(self, param: OrderedDict[str, Tensor]):
+    def set_param(self, param: OrderedDict[str, Tensor], strict: bool = True) -> None:
         """Replace the current parameters of the module with param.
 
         Args:
             param: Parameters to be set.
         """
-        self.load_state_dict(param)
+        self.load_state_dict(param, strict=strict)
 
     def reinitialize_parameters(self) -> None:
         """Re-initialize **in place** the parameters of the upsampling."""
@@ -565,6 +567,8 @@ def fixed_upsampling(
 
     Returns:
         Tensor: Dense representation :math:`(B, \\sum_i C_i, H, W)`.
+        List[Tensor]: all the intermediate upsampling. This is used by the IFCE.
+            intermediate_reconstructions[i] shape is [1, i, H^i, W^i].
     """
     # The main idea is to merge the channel dimension with the batch dimension
     # so that the same convolution is applied independently on the batch dimension.

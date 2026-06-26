@@ -193,6 +193,7 @@ def loss_function(
             The rate is in bit.
         target_image: The target image, either as a Tensor for RGB or YUV444
             data, or as a dictionary of Tensors for YUV420 data.
+        dist_weight: Dictionnary containing the weighting of all distortion metrics e.g., {"mse": 1.0}
         lmbda: Rate constraint. Defaults to 1e-3.
         total_rate_nn_bit: Total rate of the NNs (arm + upsampling + synthesis)
             for all each cool-chic encoder. Rate is in bit. Defaults to 0.

@@ -121,8 +121,8 @@ def train(
             {
                 "params": weight_parameters,
                 "lr": training_phase.lr,
-                "betas": (0.95, 0.95),
-                "precondition_frequency": 10,
+                "betas": training_phase.betas_model,
+                "precondition_frequency": training_phase.precondition_frequency_model,
                 "max_precond_dim": 256,
                 "merge_dims": False,
                 "precondition_1d": False,
@@ -132,7 +132,7 @@ def train(
             {
                 "params": latent_parameters,
                 "lr": training_phase.lr,
-                "betas": (0.9, 0.999),
+                "betas": training_phase.betas_latent,
                 "precondition_frequency": 1,  # irrelevant here
                 "max_precond_dim": 0,  # DISABLE SOAP
                 "merge_dims": False,
@@ -179,8 +179,6 @@ def train(
     all_parameters = [x for x in frame_encoder.parameters()]
 
     for cnt in range(training_phase.max_itr):
-        # print(sum(v.abs().sum() for _, v in best_model.items()))
-
         # ------- Patience mechanism
         if cnt - cnt_record > training_phase.patience:
             if training_phase.schedule_lr:

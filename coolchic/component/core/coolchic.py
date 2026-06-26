@@ -23,6 +23,7 @@ from coolchic.component.core.arm import (
     _get_neighbor,
     _get_non_zero_pixel_ctx_index,
     _laplace_cdf,
+    compute_rate,
 )
 from coolchic.component.core.noise import CommonGaussianNoiseGenerator
 from coolchic.component.core.quantizer import (
@@ -413,130 +414,28 @@ class CoolChicEncoder(nn.Module):
             AC_MAX_VAL=AC_MAX_VAL,
         )
 
-        # ----- ARM to estimate the distribution and the rate of each latent
-        # As for the quantization, we flatten all the latent and their context
-        # so that the ARM network is only called once.
-        # flat_latent: [N, 1] tensor describing N latents
-        # flat_context: [N, context_size] tensor describing each latent context
+        # Extract all the contexts from the latents, including the IFCE
+        flat_latent, flat_context = self.get_latent_context(decoder_side_latent)
 
-        # Get all the context as a single 2D vector of size [B, context size]
-        flat_context_spatial = []
-        flat_latent = []
-        flat_context_inter_ft = []
-
-        if self.param.flag_ifce:
-            _, intermediate_latent_ups = fixed_upsampling(decoder_side_latent, mode="nearest")
-
-        for idx_latent, spatial_latent_i in enumerate(decoder_side_latent):
-            if spatial_latent_i.numel() == 0:
-                continue
-
-            flat_latent.append(spatial_latent_i.view(-1))
-            cur_context_spatial = _get_neighbor(
-                spatial_latent_i, self.non_zero_pixel_ctx_index, self.mask_size
-            )
-            cur_context_spatial = rearrange(cur_context_spatial, "b 1 n_context -> b n_context")
-            flat_context_spatial.append(cur_context_spatial)
-
-            if self.param.flag_ifce and self.param.input_features_ifce[idx_latent] > 0:
-                already_decoded_latent = intermediate_latent_ups[
-                    len(self.latent_grids) - 1 - idx_latent
-                ]
-
-                cur_context_inter_ft = self.ifce(
-                    # Flatten for the ARM forward
-                    rearrange(already_decoded_latent, "1 c h w -> (h w) c"),
-                    idx_latent,
-                )
-
-                cur_context_inter_ft = rearrange(
-                    cur_context_inter_ft,
-                    "(h w) c -> 1 c h w",
-                    h=already_decoded_latent.size()[2],
-                    w=already_decoded_latent.size()[3],
-                )
-
-                # Interpolate one last time to reach the resolution of spatial_latent i
-                h_i, w_i = spatial_latent_i.size()[-2:]
-                cur_context_inter_ft = F.interpolate(
-                    cur_context_inter_ft, scale_factor=2.0, mode="nearest"
-                )[:, :, :h_i, :w_i]
-
-                inter_neighbors = rearrange(cur_context_inter_ft, "b c h w -> (b h w) c")
-
-                # Pad with zeros
-                # padded_inter_neighbors = torch.zeros(h_i*w_i, self.param.n_out_ifce, device=inter_neighbors.device)
-                # padded_inter_neighbors[:, :inter_neighbors.shape[1]] = inter_neighbors
-
-                flat_context_inter_ft.append(inter_neighbors)
-
-            # No inter feature ARM for this level
-            elif self.param.flag_ifce:
-                h_i, w_i = spatial_latent_i.size()[-2:]
-                padded_inter_neighbors = torch.zeros(
-                    h_i * w_i, self.param.output_feature_ifce, device=spatial_latent_i.device
-                )
-                flat_context_inter_ft.append(padded_inter_neighbors)
-
-        flat_context_spatial = torch.cat(flat_context_spatial, dim=0)
-        flat_latent = torch.cat(flat_latent, dim=0)
-
-        if self.param.flag_ifce:
-            flat_context_inter_ft = torch.cat(flat_context_inter_ft, dim=0)
-            flat_context = torch.cat((flat_context_spatial, flat_context_inter_ft), dim=1)
-        else:
-            flat_context = flat_context_spatial
-
-        # Feed the spatial context to the arm MLP and get mu and scale
+        # Feed the context to the arm MLP and get mu and scale
         flat_mu, flat_scale = self.arm.reparameterize_output(self.arm(flat_context))
 
-        # Compute the rate (i.e. the entropy of flat latent knowing mu and scale)
-        proba = torch.clamp_min(
-            _laplace_cdf(flat_latent + 0.5, flat_mu, flat_scale)
-            - _laplace_cdf(flat_latent - 0.5, flat_mu, flat_scale),
-            min=2**-16,  # No value can cost more than 16 bits.
-        )
-        flat_rate = -torch.log2(proba)
+        flat_rate = compute_rate(flat_latent, flat_mu, flat_scale)
 
-        # Discard the hyperlatent
+        # Discard the hyperlatent, get only feature map assigned for the image reconstruction
+        decoder_side_latent_syn = self.discard_hyperlatent(decoder_side_latent)
 
-        # Get only feature map assigned for the image reconstruction
-        decoder_side_latent_syn = [
-            x for x, m in zip(decoder_side_latent, self.param.flag_is_hyperlatent) if not m
-        ]
         ups_latent = self.upsampling(decoder_side_latent_syn)
-
-        # Upsampling and synthesis to get the output
-        if self.param.flag_common_randomness:
-            # ups_noise is [1, C, H, W] where C = len(self.cr) and H, W is the
-            # spatial resolution of the highest resolution in self.cr e.g.
-            # self.cr[0].size()[-2:].
-            # If needed we interpolate once more to reach the resolution of the
-            # image to be decoded.
-            ups_noise, _ = fixed_upsampling(self.cr)
-            ups_noise = F.interpolate(ups_noise, size=self.param.img_size, mode="bicubic")
-
-            if no_common_randomness:
-                ups_noise = ups_noise * 0
-
-            if only_common_randomness:
-                ups_latent = ups_latent * 0
-
-            syn_in = torch.cat([ups_latent, ups_noise], dim=1)
-        else:
-            syn_in = ups_latent
-
-        synth_out = self.synthesis(syn_in)
-
-        # Upsample the output of the synthesis with a bicubic if required
-        synthesis_output = F.interpolate(
-            synth_out, size=self.param.img_size, mode=self.param.final_upsampling_type
+        syn_in = self.get_synthesis_input(
+            ups_latent,
+            no_common_randomness=no_common_randomness,
+            only_common_randomness=only_common_randomness,
         )
 
-        # Trim out additional pixels due to the final upsampling
-        synthesis_output = synthesis_output[
-            :, :, : self.param.img_size[0], : self.param.img_size[1]
-        ]
+        syn_out = self.synthesis(syn_in)
+
+        # Upsample the output of the synthesis if required (e.g., no high resolution for the latent)
+        synthesis_output = self.rescale_output(syn_out)
 
         additional_data = {}
         if flag_additional_outputs:
@@ -576,11 +475,10 @@ class CoolChicEncoder(nn.Module):
                 )
 
             additional_data["detailed_ups_latent"] = ups_latent
-            additional_data["synthesis"] = synth_out
-            # additional_data["fixer"] = fixer_out
+            additional_data["synthesis"] = syn_out
 
-            if self.param.flag_common_randomness:
-                additional_data["detailed_ups_noise"] = ups_noise
+            # if self.param.flag_common_randomness:
+            #     additional_data["detailed_ups_noise"] = ups_noise
 
         res: CoolChicEncoderOutput = {
             "raw_out": synthesis_output,
@@ -597,7 +495,27 @@ class CoolChicEncoder(nn.Module):
         soft_round_temperature: Optional[Tensor] = torch.tensor(0.3),
         noise_parameter: Optional[Tensor] = torch.tensor(1.0),
         AC_MAX_VAL: int = -1,
-    ):
+    ) -> List[Tensor]:
+        """Compute the quantized (i.e., decoder side) latent grids.
+
+        Return a list of tensors [\\hat{y}^0, \\hat{y}^1, ..., \\hat{y}^{L-1}] where the shape
+        of \\hat{y}^i is [1, 1, H^i, W^i].
+
+        Args:
+            quantizer_noise_type: Defaults to ``"gaussian"``.
+            quantizer_type: Defaults to ``"softround"``.
+            soft_round_temperature: Soft round temperature.
+                This is used for softround modes as well as the
+                ste mode to simulate the derivative in the backward.
+                Defaults to 0.35.
+            noise_parameter: noise distribution parameter. Defaults to 0.22.
+            AC_MAX_VAL: If different from -1, clamp the value to be in
+                :math:`[-AC\\_MAX\\_VAL; AC\\_MAX\\_VAL + 1]` to write the actual bitstream.
+                Defaults to -1.
+
+        Returns:
+            List[Tensor]: Quantized decoder-side latent
+        """
         # ------ Encoder-side: quantize the latent
         # Convert the N [1, C, H_i, W_i] 4d latents with different resolutions
         # to a single flat vector. This allows to call the quantization
@@ -633,6 +551,212 @@ class CoolChicEncoder(nn.Module):
 
         return decoder_side_latent
 
+    def get_rate_latent(self, decoder_side_latent: List[Tensor]) -> Tuple[Tensor, Tensor, Tensor]:
+        """Compute the per-element rate of the latent. Also return expectation and scale.
+        Rate, expectation and scale are flattened one-dimensional tensor.
+
+        Args:
+            decoder_side_latent: List of quantized latent grids.
+
+        Returns:
+            Tuple[Tensor, Tensor, Tensor]: 1-dimensional tensor. Rate in bits, expectation, scale
+        """
+        flat_latent, flat_context = self.get_latent_context(decoder_side_latent)
+
+        # Feed the spatial context to the arm MLP and get mu and scale
+        flat_mu, flat_scale = self.arm.reparameterize_output(self.arm(flat_context))
+
+        # Compute the rate (i.e. the entropy of flat latent knowing mu and scale)
+        proba = torch.clamp_min(
+            _laplace_cdf(flat_latent + 0.5, flat_mu, flat_scale)
+            - _laplace_cdf(flat_latent - 0.5, flat_mu, flat_scale),
+            min=2**-16,  # No value can cost more than 16 bits.
+        )
+        flat_rate = -torch.log2(proba)
+
+        return flat_rate, flat_mu, flat_scale
+
+    def get_latent_context(self, decoder_side_latent: List[Tensor]) -> Tuple[Tensor, Tensor]:
+        """Return the context for each latent. Also return the flat latent.
+        Flat latent shape is [B], context shape is [B, C] with C the number of contexts per
+        latent. This C-value context is obtained by concatening the spatial context and the
+        IFCE context (if any).
+
+        Args:
+            decoder_side_latent: List of quantized latent grids.
+
+        Returns:
+            Tuple[Tensor, Tensor]: _description_
+        """
+
+        flat_context_spatial, flat_latent = self.get_spatial_context_flat_latent(
+            decoder_side_latent
+        )
+        if self.param.flag_ifce:
+            _, intermediate_latent_ups = fixed_upsampling(decoder_side_latent, mode="nearest")
+            flat_context_inter_ft = self.get_ifce_output(
+                decoder_side_latent, intermediate_latent_ups
+            )
+            flat_context = torch.cat((flat_context_spatial, flat_context_inter_ft), dim=1)
+        else:
+            flat_context = flat_context_spatial
+
+        return flat_latent, flat_context
+
+    def get_ifce_output(
+        self, decoder_side_latent: List[Tensor], intermediate_latent_ups: List[Tensor]
+    ) -> Tensor:
+        """Forward the quantized latent into the different IFCEs to obtain the
+        inter-feature context.
+
+        Args:
+            decoder_side_latent: List of quantized latent grids
+            intermediate_latent_ups: List of the intermediate upsampling. At each index
+                of the list, there is a dense tensor [1, C^i, H^i, W^i] representing
+                the concatenation of all already decoded (and upsampled) latent grids.
+
+        Returns:
+            Tensor: Inter feature context. Shape is [B, Number of inter-feature context]
+        """
+        flat_context_inter_ft = []
+
+        for idx_latent, spatial_latent_i in enumerate(decoder_side_latent):
+            if spatial_latent_i.numel() == 0:
+                continue
+
+            if self.param.flag_ifce and self.param.input_features_ifce[idx_latent] > 0:
+                already_decoded_latent = intermediate_latent_ups[
+                    len(self.latent_grids) - 1 - idx_latent
+                ]
+
+                cur_context_inter_ft = self.ifce(
+                    # Flatten for the ARM forward
+                    rearrange(already_decoded_latent, "1 c h w -> (h w) c"),
+                    idx_latent,
+                )
+
+                cur_context_inter_ft = rearrange(
+                    cur_context_inter_ft,
+                    "(h w) c -> 1 c h w",
+                    h=already_decoded_latent.size()[2],
+                    w=already_decoded_latent.size()[3],
+                )
+
+                # Interpolate one last time to reach the resolution of spatial_latent i
+                h_i, w_i = spatial_latent_i.size()[-2:]
+                cur_context_inter_ft = F.interpolate(
+                    cur_context_inter_ft, scale_factor=2.0, mode="nearest"
+                )[:, :, :h_i, :w_i]
+
+                inter_neighbors = rearrange(cur_context_inter_ft, "b c h w -> (b h w) c")
+
+                flat_context_inter_ft.append(inter_neighbors)
+
+            # No inter feature ARM for this level
+            elif self.param.flag_ifce:
+                h_i, w_i = spatial_latent_i.size()[-2:]
+                padded_inter_neighbors = torch.zeros(
+                    h_i * w_i, self.param.output_feature_ifce, device=spatial_latent_i.device
+                )
+                flat_context_inter_ft.append(padded_inter_neighbors)
+
+        return torch.cat(flat_context_inter_ft, dim=0)
+
+    def get_spatial_context_flat_latent(
+        self, decoder_side_latent: List[Tensor]
+    ) -> Tuple[Tensor, Tensor]:
+        """Extract the spatial context (causal neighbors). Also return the (flattened) latent
+        to code. Shape of flat_latent is [B], shape of the spatial context is [B, S] with S
+        the number of spatial context per latent.
+        spatial_context[i, :] is the context for flat_latent[i]
+
+        Args:
+            decoder_side_latent: List of quantized latent grids
+
+        Returns:
+            Tuple[Tensor, Tensor]: Spatial context, flat latent.
+        """
+
+        flat_context_spatial = []
+        flat_latent = []
+
+        for idx_latent, spatial_latent_i in enumerate(decoder_side_latent):
+            if spatial_latent_i.numel() == 0:
+                continue
+
+            flat_latent.append(spatial_latent_i.view(-1))
+            cur_context_spatial = _get_neighbor(
+                spatial_latent_i, self.non_zero_pixel_ctx_index, self.mask_size
+            )
+            cur_context_spatial = rearrange(cur_context_spatial, "b 1 n_context -> b n_context")
+            flat_context_spatial.append(cur_context_spatial)
+
+        flat_context_spatial = torch.cat(flat_context_spatial, dim=0)
+        flat_latent = torch.cat(flat_latent, dim=0)
+
+        return flat_context_spatial, flat_latent
+
+    def discard_hyperlatent(self, latents: List[Tensor]) -> List[Tensor]:
+        """Given a list of latents, remove those which are hyperlatent (i.e., they are not
+        used to generate the image) and return them.
+
+
+        Args:
+            latents: List of all transmitted latents
+
+        Returns:
+            List[Tensor]: List of latents which are **not** hyperlatent.
+        """
+
+        return [x for x, m in zip(latents, self.param.flag_is_hyperlatent) if not m]
+
+    def get_synthesis_input(
+        self,
+        upsampled_latent: Tensor,
+        no_common_randomness: bool = False,
+        only_common_randomness: bool = False,
+    ) -> Tensor:
+        if self.param.flag_common_randomness:
+            # ups_noise is [1, C, H, W] where C = len(self.cr) and H, W is the
+            # spatial resolution of the highest resolution in self.cr e.g.
+            # self.cr[0].size()[-2:].
+            # If needed we interpolate once more to reach the resolution of the
+            # image to be decoded.
+            ups_noise, _ = fixed_upsampling(self.cr)
+            ups_noise = F.interpolate(ups_noise, size=self.param.img_size, mode="bicubic")
+
+            if no_common_randomness:
+                ups_noise = ups_noise * 0
+
+            if only_common_randomness:
+                upsampled_latent = upsampled_latent * 0
+
+            syn_in = torch.cat([upsampled_latent, ups_noise], dim=1)
+        else:
+            syn_in = upsampled_latent
+
+        return syn_in
+
+    def rescale_output(self, syn_out: Tensor) -> Tensor:
+        """Perform a final upsampling (non-learned) so that the synthesis
+        output is resized to self.param.img_size
+
+        Args:
+            syn_out: Synthesis output, possibly at lower resolution than self.param.img_size
+
+        Returns:
+            Tensor: Upscaled output. Shape is [1, C, *self.param.img_size]
+        """
+        # Upsample the output of the synthesis with a bicubic if required
+        syn_out = F.interpolate(
+            syn_out, size=self.param.img_size, mode=self.param.final_upsampling_type
+        )
+
+        # Trim out additional pixels due to the final upsampling
+        syn_out = syn_out[:, :, : self.param.img_size[0], : self.param.img_size[1]]
+
+        return syn_out
+
     # ------- Getter / Setter and Initializer
     def get_param(self) -> OrderedDict[str, Tensor]:
         """Return **a copy** of the weights and biases inside the module.
@@ -658,13 +782,13 @@ class CoolChicEncoder(nn.Module):
 
         return param
 
-    def set_param(self, param: OrderedDict[str, Tensor]):
+    def set_param(self, param: OrderedDict[str, Tensor], strict=False):
         """Replace the current parameters of the module with param.
 
         Args:
             param (OrderedDict[str, Tensor]): Parameters to be set.
         """
-        self.load_state_dict(param)
+        self.load_state_dict(param, strict=strict)
 
     def initialize_latent_grids(self) -> None:
         """Initialize the latent grids. The different tensors composing

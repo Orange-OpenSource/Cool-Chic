@@ -92,7 +92,7 @@ python samples/encode.py -i myTestVideo_1920x1080_24p_yuv420_8b.yuv -o bitstream
 
 ```bash
 # Decoder outputs either PNG (image) or YUV (video) files
-python cc_decode.py -i samples/bitstreams/example.cool -o example.png
+python cc_decode.py -i samples/bitstreams/kodim14.cool -o kodim14.png
 ```
 
 <br>
@@ -102,31 +102,34 @@ python cc_decode.py -i samples/bitstreams/example.cool -o example.png
   <table class="tg"><thead>
     <tr>
       <th class="tg-86ol" rowspan="2"></th>
-      <th class="tg-86ol" colspan="5">BD-rate of Cool-chic 5.0 vs. [%]</th>
+      <th class="tg-86ol" colspan="6">BD-rate of Cool-chic 5.0.1 vs. [%]</th>
     </tr>
     <tr>
       <th class="tg-86ol"><a href="https://arxiv.org/abs/2001.01568" target="_blank" rel="noopener noreferrer">Cheng</a></th>
       <th class="tg-86ol"><a href="https://arxiv.org/abs/2203.10886" target="_blank" rel="noopener noreferrer">ELIC</a></th>
       <th class="tg-86ol"><a href="https://arxiv.org/abs/2307.15421" target="_blank" rel="noopener noreferrer">MLIC++</a></th>
       <th class="tg-86ol">Cool-chic 4.2 </th>
+      <th class="tg-86ol">Cool-chic 5.0.0 </th>
       <th class="tg-86ol">VVC (VTM 28.3)</th>
     </tr></thead>
   <tbody>
     <tr>
       <td class="tg-86ol">kodak (RGB)</td>
-      <td class="tg-qch7">-9.4 %</td>
-      <td class="tg-xd3r">+1.6 %</td>
-      <td class="tg-xd3r">+11.2%</td>
-      <td class="tg-qch7">-5.3 %</td>
-      <td class="tg-qch7">-2.4 % </td>
+      <td class="tg-qch7">-10.4 %</td>
+      <td class="tg-xd3r">+0.1 %</td>
+      <td class="tg-xd3r">+10.2%</td>
+      <td class="tg-qch7">-6.1 %</td>
+      <td class="tg-qch7">-1.2 %</td>
+      <td class="tg-qch7">-3.9 % </td>
     </tr>
     <tr>
       <td class="tg-86ol">clic20-pro-valid (RGB)</td>
-      <td class="tg-qch7">-20.7 %</td>
-      <td class="tg-qch7">-8.8 %</td>
-      <td class="tg-xd3r">+1.0 %</td>
-      <td class="tg-qch7">-9.0 %<br></td>
-      <td class="tg-qch7">-11.1 %</td>
+      <td class="tg-qch7">-21.3 %</td>
+      <td class="tg-qch7">-9.5 %</td>
+      <td class="tg-xd3r">+0.5 %</td>
+      <td class="tg-qch7">-9.9 %</td>
+      <td class="tg-qch7">-0.6 %</td>
+      <td class="tg-qch7">-11.6%</td>
     </tr>
     <tr>
       <td class="tg-x9uu">jvet A (YUV420)</td>
@@ -134,6 +137,7 @@ python cc_decode.py -i samples/bitstreams/example.cool -o example.png
       <td class="tg-1keu">/</td>
       <td class="tg-1keu">/</td>
       <td class="tg-1keu">/</td>
+      <td class="tg-qch7">-XX %</td>
       <td class="tg-qch7">-2.8 %</td>
     </tr>
     <tr>
@@ -141,8 +145,9 @@ python cc_decode.py -i samples/bitstreams/example.cool -o example.png
       <td class="tg-1keu">/</td>
       <td class="tg-1keu">/</td>
       <td class="tg-1keu">/</td>
-      <td class="tg-uflc">-12.6%</td>
-      <td class="tg-xd3r">+8.7 %</td>
+      <td class="tg-qch7">-13.7%</td>
+      <td class="tg-qch7">-1.5 %</td>
+      <td class="tg-xd3r">+5.0 %</td>
     </tr>
   </tbody></table>
 

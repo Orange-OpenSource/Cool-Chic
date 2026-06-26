@@ -24,8 +24,8 @@ class SynthesisConv2d(nn.Module):
 
         \\mathbf{y} =
         \\begin{cases}
-            \mathrm{conv}(\\mathbf{x}) + \\mathbf{x} & \\text{if residual,} \\\\
-            \mathrm{conv}(\\mathbf{x}) & \\text{otherwise.} \\\\
+            \\mathrm{conv}(\\mathbf{x}) + \\mathbf{x} & \\text{if residual,} \\\\
+            \\mathrm{conv}(\\mathbf{x}) & \\text{otherwise.} \\\\
         \\end{cases}
     """
 
@@ -82,7 +82,7 @@ class SynthesisConv2d(nn.Module):
         * Biases are always set to zero.
 
         * Weights are set to zero if ``residual`` is ``True``. Otherwise, they
-          follow a Uniform distribution: :math:`\\mathbf{W} \sim
+          follow a Uniform distribution: :math:`\\mathbf{W} \\sim
           \\mathcal{U}(-a, a)`, where :math:`a =
           \\frac{1}{C_{out}^2\\sqrt{C_{in}k^2}}` with :math:`k` the kernel size.
         """
@@ -116,10 +116,10 @@ class Synthesis(nn.Module):
 
     .. math::
 
-        \hat{\mathbf{x}} = f_{\\theta}(\hat{\mathbf{z}}).
+        \\hat{\\mathbf{x}} = f_{\\theta}(\\hat{\\mathbf{z}}).
 
-    Where :math:`\hat{\mathbf{x}}` is the :math:`[B, C_{out}, H, W]`
-    synthesis output, :math:`\hat{\mathbf{z}}` is the :math:`[B, C_{in}, H,
+    Where :math:`\\hat{\\mathbf{x}}` is the :math:`[B, C_{out}, H, W]`
+    synthesis output, :math:`\\hat{\\mathbf{z}}` is the :math:`[B, C_{in}, H,
     W]` synthesis input (i.e. the upsampled latent variable) and
     :math:`\\theta` the synthesis parameters.
 
@@ -138,8 +138,8 @@ class Synthesis(nn.Module):
 
             \\mathbf{y} =
             \\begin{cases}
-                \mathrm{conv}(\\mathbf{x}) + \\mathbf{x} & \\text{if residual,} \\\\
-                \mathrm{conv}(\\mathbf{x}) & \\text{otherwise.} \\\\
+                \\mathrm{conv}(\\mathbf{x}) + \\mathbf{x} & \\text{if residual,} \\\\
+                \\mathrm{conv}(\\mathbf{x}) & \\text{otherwise.} \\\\
             \\end{cases}
 
     * ``non_linearity``: either ``none`` (no non-linearity) or ``relu``.
@@ -188,7 +188,6 @@ class Synthesis(nn.Module):
         """
         super().__init__()
 
-        self.synth_branches = nn.ModuleList()
         self.input_ft = input_ft
 
         # Parse all the synthesis layer to get the number of output features
@@ -271,9 +270,9 @@ class Synthesis(nn.Module):
         return out_ft, k_size, mode, non_linearity
 
     def forward(self, x: Tensor) -> Tensor:
-        """Perform the synthesis forward pass :math:`\hat{\mathbf{x}} =
-        f_{\\theta}(\hat{\mathbf{z}})`, where :math:`\hat{\mathbf{x}}` is the
-        :math:`(B, C_{out}, H, W)` synthesis output, :math:`\hat{\mathbf{z}}` is
+        """Perform the synthesis forward pass :math:`\\hat{\\mathbf{x}} =
+        f_{\\theta}(\\hat{\\mathbf{z}})`, where :math:`\\hat{\\mathbf{x}}` is the
+        :math:`(B, C_{out}, H, W)` synthesis output, :math:`\\hat{\\mathbf{z}}` is
         the :math:`(B, C_{in}, H, W)` synthesis input (i.e. the upsampled latent
         variable) and :math:`\\theta` the synthesis parameters.
 
@@ -295,21 +294,23 @@ class Synthesis(nn.Module):
         return self.output_transform(x)
 
     def get_param(
-        self, which: Optional[Literal["weight", "bias"]] = None
+        self, which: Optional[Literal["weight", "bias"]] = None, detach_and_clone: bool = True
     ) -> OrderedDict[str, Tensor]:
-        """Return **a copy** of the weights and biases inside the module.
+        """Return the weights and biases inside the module.
 
         Args:
             which (Optional[Literal["weight", "bias"]]): Wether to return only the weights
                  or the biases. If None, return everything. Defaults to None.
+            detach_and_clone (bool): If True, return a copy of the detached parameters.
+                Defaults to True
 
         Returns:
-            A copy of all weights & biases in the layers.
+            A dict of all the required parameters in the layers.
         """
         # Detach & clone to create a copy
         param = OrderedDict(
             {
-                param_name: param_value.detach().clone()
+                param_name: param_value.detach().clone() if detach_and_clone else param_value
                 for param_name, param_value in self.named_parameters()
             }
         )
@@ -330,13 +331,13 @@ class Synthesis(nn.Module):
 
         return param
 
-    def set_param(self, param: OrderedDict[str, Tensor]):
+    def set_param(self, param: OrderedDict[str, Tensor], strict: bool = True) -> None:
         """Replace the current parameters of the module with param.
 
         Args:
             param: Parameters to be set.
         """
-        self.load_state_dict(param)
+        self.load_state_dict(param, strict=strict)
 
     def reinitialize_parameters(self) -> None:
         """Re-initialize in place the params of all the ``SynthesisConv2d`` layers."""

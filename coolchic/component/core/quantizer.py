@@ -21,7 +21,7 @@ def softround(x: Tensor, t: Tensor) -> Tensor:
     .. math::
 
         \\mathrm{softround}(x, t) = \\lfloor x \\rfloor +
-        \\frac{\mathrm{tanh}(\\frac{\\Delta}{t})}{2\\ \\mathrm{\\mathrm{tanh}(\\frac{1}{2t})}}
+        \\frac{\\mathrm{tanh}(\\frac{\\Delta}{t})}{2\\ \\mathrm{\\mathrm{tanh}(\\frac{1}{2t})}}
         + \\frac{1}{2}, \\text{ with } \\Delta = x - \\lfloor x \\rfloor - \\frac{1}{2}.
 
     Args:
@@ -30,7 +30,7 @@ def softround(x: Tensor, t: Tensor) -> Tensor:
             to the actual quantization i.e. ``round(x)``. As :math:`t` grows
             bigger, the function approaches identity i.e. :math:`\\lim_{t
             \\rightarrow \\infty} \\mathrm{softround}(x, t) = x`. In practice
-            :math:`t \geq 1` is already quite close to identity.
+            :math:`t \\geq 1` is already quite close to identity.
 
 
     Returns:
@@ -132,7 +132,7 @@ def quantize(
     :math:`t`. Setting :math:`t = 0` corresponds to the actual quantization i.e.
     ``round(x)``. As :math:`t` grows bigger, the function approaches identity
     i.e. :math:`\\lim_{t \\rightarrow \\infty} \\mathrm{softround}(x, t) = x`.
-    In practice :math:`t \geq 1` is already quite close to identity.,
+    In practice :math:`t \\geq 1` is already quite close to identity.,
 
     .. note::
 
@@ -184,12 +184,10 @@ def quantize(
                 soft_round_temperature,
             )
         case "ste":
-            # From the forward point of view (i.e. entering into the torch.no_grad()), we have
-            # y = softround(x) - softround(x) + round(x) = round(x). From the backward point of view
-            # we have y = softround(x) meaning that dy / dx = d softround(x) / dx.
+            # From the forward point of view, y = softround(x) - softround(x) + round(x) = round(x)
+            # From the backward point of view we have y = softround(x) meaning that
+            # dy / dx = d softround(x) / dx.
             y = softround(x, soft_round_temperature)
-            with torch.no_grad():
-                y = y - softround(x, soft_round_temperature) + torch.round(x)
-            return y
+            return y + (torch.round(x) - y).detach()
         case "hardround":
             return torch.round(x)

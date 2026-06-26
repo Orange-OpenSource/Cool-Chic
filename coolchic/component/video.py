@@ -22,6 +22,7 @@ from coolchic.component.intercoding.warp import WarpParameter
 from coolchic.io.framedata import FrameData
 from coolchic.io.io import load_frame_data_from_file, save_frame_data_to_file
 from coolchic.nnquant.quantizemodel import quantize_model
+from coolchic.nnquant.rdoq import rdoq_model
 from coolchic.training.presets import Preset
 from coolchic.training.test import test
 from coolchic.training.train import train
@@ -270,10 +271,17 @@ def encode_one_frame(
         )
 
         if training_phase.quantize_model:
-            # Store full precision parameters inside the
-            # frame_encoder for later use if needed
+            # Store full precision parameters inside the frame_encoder for later use if needed
             frame_encoder._store_full_precision_param()
+            # Quantize NN parameters
             frame_encoder = quantize_model(
+                frame_encoder=frame_encoder,
+                frame=frame,
+                dist_weight=training_phase.dist_weight,
+                lmbda=training_phase.lmbda,
+            )
+            # Test different shifts to find better quantized parameters
+            frame_encoder = rdoq_model(
                 frame_encoder=frame_encoder,
                 frame=frame,
                 dist_weight=training_phase.dist_weight,

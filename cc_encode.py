@@ -151,6 +151,7 @@ if __name__ == "__main__":
         default="mse",
         choices=typing.get_args(DISTORTION_METRIC),
     )
+
     parser.add("--debug", action="store_true", help="Extremely quick training")
 
     # ==== Decoder-side arguments
@@ -379,7 +380,7 @@ if __name__ == "__main__":
         '|    `"Y8888888 P"Y8888P"    P"Y8888P"    8P\'"Y88                  P""Y8888PP88P     `Y88P""Y8P""Y8888PP   |\n'
         "|                                                                                                          |\n"
         "|                                                                                                          |\n"
-        "| version 5.0.0, May 2026                                                               © 2023-2026 Orange |\n"
+        "| version 5.0.1, June 2026                                                              © 2023-2026 Orange |\n"
         "*----------------------------------------------------------------------------------------------------------*\n"
     )
 

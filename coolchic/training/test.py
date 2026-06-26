@@ -457,6 +457,7 @@ def test(
         frame: The original frame to compress. It provides both the
             target (original non compressed frame) as well as the reference(s)
             (list of already decoded images)
+        dist_weight: Dictionnary containing the weighting of all distortion metrics e.g., {"mse": 1.0}
         lambda: Rate constraint lambda. Only requires to compute a meaningfull
             loss :math:`\\mathcal{L} = \\mathrm{D} + \\lambda \\mathrm{R}`
 

@@ -76,6 +76,9 @@ class TrainerPhase:
 
     lmbda: float
     lr: float = 1e-2
+    betas_model: Tuple[float, float] = (0.95, 0.95)
+    betas_latent: Tuple[float, float] = (0.9, 0.999)
+    precondition_frequency_model: int = 10
     max_itr: int = 5000
     freq_valid: int = 100
     patience: int = 10000
@@ -213,6 +216,7 @@ class Preset:
     lmbda: float
     start_lr: float
     itr_main_training: int
+    precondition_frequency_model: int = 10
     preset_name: str = ""
     itr_motion_pretrain: int = 0
 
@@ -358,6 +362,9 @@ class PresetIntra(Preset):
                     lmbda=self.lmbda,
                     # Warm-up is always pure mse
                     dist_weight={"mse": 1.0},
+                    betas_latent=(0.725, 0.97),
+                    betas_model=(0.95, 0.95),
+                    precondition_frequency_model=1,
                 ),
             )
             wu_stages.append(wu)
@@ -376,7 +383,7 @@ class PresetIntra(Preset):
 
         self.training_phases: List[TrainerPhase] = [
             TrainerPhase(
-                lr=0.01,
+                lr=self.start_lr,
                 max_itr=iter_core_training,
                 patience=5000,
                 schedule_lr=True,
@@ -386,6 +393,9 @@ class PresetIntra(Preset):
                 noise_parameter=(0.22, 0.15),
                 lmbda=self.lmbda,
                 dist_weight=self.dist_weight,
+                betas_latent=(0.9, 0.999),
+                betas_model=(0.95, 0.95),
+                precondition_frequency_model=10,
             ),
             TrainerPhase(
                 lr=1.0e-4,
@@ -396,6 +406,9 @@ class PresetIntra(Preset):
                 quantize_model=True,
                 lmbda=self.lmbda,
                 dist_weight=self.dist_weight,
+                betas_latent=(0.9, 0.999),
+                betas_model=(0.95, 0.95),
+                precondition_frequency_model=10,
             ),
         ]
 
@@ -420,6 +433,9 @@ class PresetInter(Preset):
                 quantize_model=True,
                 lmbda=self.lmbda,
                 dist_weight=self.dist_weight,
+                betas_latent=(0.9, 0.999),
+                betas_model=(0.95, 0.95),
+                precondition_frequency_model=10,
             ),
         ]
 
@@ -441,6 +457,9 @@ class PresetInter(Preset):
                         lmbda=self.lmbda,
                         # Warm-up is always pure mse
                         dist_weight={"mse": 1.0},
+                        betas_latent=(0.725, 0.97),
+                        betas_model=(0.95, 0.95),
+                        precondition_frequency_model=1,
                     ),
                 )
             ]
@@ -460,6 +479,9 @@ class PresetInter(Preset):
                 lmbda=20 * self.lmbda,
                 # Motion pre training is always pure mse
                 dist_weight={"mse": 1.0},
+                betas_latent=(0.9, 0.999),
+                betas_model=(0.95, 0.95),
+                precondition_frequency_model=10,
             ),
         ]
 
