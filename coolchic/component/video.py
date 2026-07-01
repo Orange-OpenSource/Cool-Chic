@@ -270,24 +270,6 @@ def encode_one_frame(
             training_phase=training_phase,
         )
 
-        if training_phase.quantize_model:
-            # Store full precision parameters inside the frame_encoder for later use if needed
-            frame_encoder._store_full_precision_param()
-            # Quantize NN parameters
-            frame_encoder = quantize_model(
-                frame_encoder=frame_encoder,
-                frame=frame,
-                dist_weight=training_phase.dist_weight,
-                lmbda=training_phase.lmbda,
-            )
-            # Test different shifts to find better quantized parameters
-            frame_encoder = rdoq_model(
-                frame_encoder=frame_encoder,
-                frame=frame,
-                dist_weight=training_phase.dist_weight,
-                lmbda=training_phase.lmbda,
-            )
-
         phase_results = test(
             frame_encoder=frame_encoder,
             frame=frame,
@@ -298,6 +280,25 @@ def encode_one_frame(
         print("\nResults at the end of the phase:")
         print("--------------------------------")
         print(f"\n{phase_results.pretty_string(show_col_name=True, mode='short')}\n")
+
+    # Disable compilation prior to quantization and rdoq
+    frame_encoder = torch.compile(frame_encoder, disable=True)
+    # Store full precision parameters inside the frame_encoder for later use if needed
+    frame_encoder._store_full_precision_param()
+    # Quantize NN parameters
+    frame_encoder = quantize_model(
+        frame_encoder=frame_encoder,
+        frame=frame,
+        dist_weight=training_phase.dist_weight,
+        lmbda=training_phase.lmbda,
+    )
+    # Test different shifts to find better quantized parameters
+    frame_encoder = rdoq_model(
+        frame_encoder=frame_encoder,
+        frame=frame,
+        dist_weight=training_phase.dist_weight,
+        lmbda=training_phase.lmbda,
+    )
 
     # compute the final loss
     final_results = test(

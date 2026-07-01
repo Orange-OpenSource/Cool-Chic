@@ -40,8 +40,6 @@ class TrainerPhase:
             cosine_scheduling_lr, then it does not end the training. Instead,
             we simply reload the best model so far once we reach the patience,
             and the training continue. Defaults to 1000.
-        quantize_model (bool): If ``True``, quantize the neural networks
-            parameters at the end of the training phase. Defaults to ``False``.
         schedule_lr (bool): If ``True``, the learning rate is no longer
             constant. instead, it varies with a cosine scheduling, as suggested
             in  `C3: High-performance and low-complexity neural compression from
@@ -82,7 +80,6 @@ class TrainerPhase:
     max_itr: int = 5000
     freq_valid: int = 100
     patience: int = 10000
-    quantize_model: bool = False
     schedule_lr: bool = False
     softround_temperature: Tuple[float, float] = (0.3, 0.3)
     noise_parameter: Tuple[float, float] = (1.0, 1.0)
@@ -98,8 +95,6 @@ class TrainerPhase:
         s += f"{self.max_itr:^{9}}|"
         s += f"{self.patience:^{14}}|"
 
-        quantize_model_str = "Yes" if self.quantize_model else "No"
-        s += f"{quantize_model_str:^{13}}|"
         schedule_lr_str = "Yes" if self.schedule_lr else "No"
         s += f"{schedule_lr_str:^{13}}|"
 
@@ -124,7 +119,6 @@ class TrainerPhase:
         s = f"{'Learn rate':^{14}}|"
         s += f"{'Max itr':^{9}}|"
         s += f"{'Patience itr':^{14}}|"
-        s += f"{'Quantize NN':^{13}}|"
         s += f"{'Schedule lr':^{13}}|"
         s += f"{'Quant / Temp':^{22}}|"
         s += f"{'Quant / Noise':^{22}}|"
@@ -138,7 +132,6 @@ class TrainerPhase:
         s = "-" * 14 + "+"
         s += "-" * 9 + "+"
         s += "-" * 14 + "+"
-        s += "-" * 13 + "+"
         s += "-" * 13 + "+"
         s += "-" * 22 + "+"
         s += "-" * 22 + "+"
@@ -227,18 +220,7 @@ class Preset:
     training_phases: List[TrainerPhase] = field(default_factory=lambda: [], init=False)
 
     def __post_init__(self):
-        # Check that we do quantize the model at least once during the training
-        flag_quantize_model = False
-        for training_phase in self.training_phases:
-            if training_phase.quantize_model:
-                flag_quantize_model = True
-
-        # Ignore this assertion if there is no self.training_phases described
-        assert flag_quantize_model or len(self.training_phases) == 0, (
-            f"The selected preset ({self.preset_name}) does not include "
-            f" a training phase with neural network quantization.\n"
-            f"{self.pretty_string()}"
-        )
+        pass
 
     def _get_total_training_iterations(
         self, what: Literal["warmup", "motion-pretrain", "main", "all"] = "all"
@@ -353,7 +335,6 @@ class PresetIntra(Preset):
                     max_itr=wu_n_iter,
                     freq_valid=100,
                     patience=wu_n_iter,
-                    quantize_model=False,
                     schedule_lr=False,
                     softround_temperature=(0.35, 0.35),
                     noise_parameter=(init_noise_level, init_noise_level),
@@ -403,7 +384,6 @@ class PresetIntra(Preset):
                 schedule_lr=True,
                 quantizer_type="hardround",
                 quantizer_noise_type="none",
-                quantize_model=True,
                 lmbda=self.lmbda,
                 dist_weight=self.dist_weight,
                 betas_latent=(0.9, 0.999),
@@ -411,9 +391,6 @@ class PresetIntra(Preset):
                 precondition_frequency_model=10,
             ),
         ]
-
-        # Run post init to carry out some checks
-        super().__post_init__()
 
 
 class PresetInter(Preset):
@@ -430,7 +407,6 @@ class PresetInter(Preset):
                 quantizer_noise_type="gaussian",
                 softround_temperature=(0.3, 0.1),
                 noise_parameter=(0.25, 0.1),
-                quantize_model=True,
                 lmbda=self.lmbda,
                 dist_weight=self.dist_weight,
                 betas_latent=(0.9, 0.999),
@@ -448,7 +424,6 @@ class PresetInter(Preset):
                         max_itr=600,
                         freq_valid=600,
                         patience=100000,
-                        quantize_model=False,
                         schedule_lr=False,
                         softround_temperature=(0.3, 0.3),
                         noise_parameter=(2.0, 2.0),
@@ -511,22 +486,8 @@ class PresetDebug(Preset):
                 patience=10,
                 quantizer_type="ste",
                 quantizer_noise_type="none",
-                quantize_model=True,
                 softround_temperature=(1e-4, 1e-4),
                 noise_parameter=(1.0, 1.0),  # not used since quantizer type is "ste",
-                lmbda=self.lmbda,
-                dist_weight=self.dist_weight,
-            ),
-            # Re-tune the latent
-            TrainerPhase(
-                lr=1.0e-4,
-                max_itr=10,
-                patience=5,
-                quantizer_type="hardround",
-                quantizer_noise_type="none",
-                freq_valid=10,
-                softround_temperature=(1e-4, 1e-4),
-                noise_parameter=(1.0, 1.0),  # not used since quantizer type is "ste"
                 lmbda=self.lmbda,
                 dist_weight=self.dist_weight,
             ),
@@ -558,9 +519,6 @@ class PresetDebug(Preset):
             ),
         ]
 
-        # Run post init to carry out some checks
-        super().__post_init__()
-
 
 class PresetMeasureSpeed(Preset):
     def __post_init__(self):
@@ -577,7 +535,6 @@ class PresetMeasureSpeed(Preset):
                 quantizer_noise_type="gaussian",
                 softround_temperature=(0.3, 0.1),
                 noise_parameter=(0.25, 0.1),
-                quantize_model=True,  # ! This is an important parameter
                 lmbda=self.lmbda,
                 dist_weight=self.dist_weight,
             ),
@@ -592,7 +549,6 @@ class PresetMeasureSpeed(Preset):
                         max_itr=1,
                         freq_valid=1,
                         patience=100000,
-                        quantize_model=False,
                         schedule_lr=False,
                         softround_temperature=(0.3, 0.3),
                         noise_parameter=(2.0, 2.0),
@@ -605,8 +561,6 @@ class PresetMeasureSpeed(Preset):
                 )
             ]
         )
-        # Run post init to carry out some checks
-        super().__post_init__()
 
 
 AVAILABLE_PRESETS: Dict[str, Preset] = {

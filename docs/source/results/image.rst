@@ -90,8 +90,8 @@ Cool-chic 5.0 decoding complexity is set to **2 000 MAC / pixel** for all datase
       <td class="tg-1keu">/</td>
       <td class="tg-1keu">/</td>
       <td class="tg-1keu">/</td>
-      <td class="tg-qch7">-XX %</td>
-      <td class="tg-qch7">-2.8 %</td>
+      <td class="tg-qch7">-1.4 %</td>
+      <td class="tg-qch7">-4.0 %</td>
     </tr>
     <tr>
       <td class="tg-x9uu">jvet B (YUV420) </td>
@@ -99,8 +99,8 @@ Cool-chic 5.0 decoding complexity is set to **2 000 MAC / pixel** for all datase
       <td class="tg-1keu">/</td>
       <td class="tg-1keu">/</td>
       <td class="tg-qch7">-13.7%</td>
-      <td class="tg-qch7">-1.5 %</td>
-      <td class="tg-xd3r">+5.0 %</td>
+      <td class="tg-qch7">-1.9 %</td>
+      <td class="tg-xd3r">+6.6 %</td>
     </tr>
   </tbody></table>
 
