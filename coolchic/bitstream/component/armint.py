@@ -28,7 +28,11 @@ from coolchic.component.core.types import DescriptorNN
 
 
 def arm_to_fixed_point_param(
-    arm: Arm, q_steps: DescriptorNN, subtract_last_layer: bool = True, n_inter_ft_ctx: int = 0
+    arm: Arm,
+    q_steps: DescriptorNN,
+    subtract_last_layer: bool = True,
+    n_inter_ft_ctx: int = 0,
+    no_residual_layer: bool = False,
 ) -> Tuple[List[Tensor], List[Tensor], Tensor, Tensor]:
     """For each layer y = Wx + b, we assume the following accuracy:
         - x: X.8 (X bit of integer part, 8 fractional bits)
@@ -48,6 +52,10 @@ def arm_to_fixed_point_param(
         n_inter_ft_ctx (int, optional): How many inter feature contexts are present
             on the first layer input. This is needed because they have a different scaling
             than the latent, being the output of the IFCE. Defaults to 0.
+        no_residual_layer (bool, optional): If False, all NxN layers are assumed
+            to be residual i.e. y = Wx + b + x. In that case, the residual connexion is factorized
+            inside the weight matrix, i.e., y = (W + I)x + b = W'I + b. If no_residual_layer is set
+            to True, we don't do that i.e., NxN layers are not assumed to be residual.
 
     Returns:
         Tuple[List[Tensor], List[Tensor], Tensor, Tensor]: Return 4 elements:
@@ -104,7 +112,10 @@ def arm_to_fixed_point_param(
             # All N -> N features layer are residual.
             # Put the residual connexion directly into the weights
             if weight_or_bias.name == "weight":
-                if fixed_point_param.size()[0] == fixed_point_param.size()[1]:
+                if (
+                    fixed_point_param.size()[0] == fixed_point_param.size()[1]
+                    and not no_residual_layer
+                ):
                     identity_matrix = torch.eye(fixed_point_param.size()[0])
                     shift = torch.ones_like(identity_matrix) * target_shift
                     if n_inter_ft_ctx > 0 and weight_or_bias.name == "weight" and i == 0:

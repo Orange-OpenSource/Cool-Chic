@@ -118,6 +118,8 @@ def encode_decode_coolchic(
                     header.get_value("nn_q_step").ifce,
                     # We don't subtract -4 to the last layer of the inter feature arm
                     subtract_last_layer=False,
+                    n_inter_ft_ctx=0,
+                    no_residual_layer=True,
                 )
 
                 context_inter_feature = fixed_point_arm(
